@@ -1,0 +1,76 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+const errorMessages: Record<string, string> = {
+  invalid_credentials: "Email ou senha incorretos. Tente novamente.",
+  missing_fields: "Preencha email e senha.",
+  invalid_request: "Requisição inválida.",
+};
+
+const error = Astro.url.searchParams.get("error");
+const errorMessage = error ? errorMessages[error] ?? "Erro ao fazer login." : null;
+---
+
+<Layout title="Login - Edgepress">
+  <main class="min-h-screen flex items-center justify-center bg-base-200 p-4">
+    <div class="card w-full max-w-md bg-base-100 shadow-xl">
+      <div class="card-body">
+        <h1 class="card-title justify-center text-2xl mb-4">Login</h1>
+
+        {errorMessage && (
+          <div class="alert alert-error mb-4" role="alert">
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        <form
+          action="/api/login"
+          method="post"
+          class="space-y-4"
+        >
+          <input type="hidden" name="callbackURL" value="/pt-br/admin" />
+          <div class="form-control w-full">
+            <label class="label" for="email">
+              <span class="label-text">Email</span>
+            </label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              placeholder="seu@email.com"
+              class="input input-bordered w-full"
+              required
+              autocomplete="email"
+            />
+          </div>
+
+          <div class="form-control w-full">
+            <label class="label" for="password">
+              <span class="label-text">Senha</span>
+            </label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              placeholder="••••••••"
+              class="input input-bordered w-full"
+              required
+              autocomplete="current-password"
+            />
+            <label class="label">
+              <a href="/login/forgot-password" class="label-text-alt link link-hover">
+                Esqueci senha
+              </a>
+            </label>
+          </div>
+
+          <div class="form-control mt-6">
+            <button type="submit" class="btn btn-primary">
+              Fazer login
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+</Layout>
