@@ -1,0 +1,336 @@
+---
+import "../assets/app.css";
+import { Icon } from "astro-icon/components";
+import { getRelativeLocaleUrl } from "astro:i18n";
+import { t, locales, type Locale } from "../i18n/index.ts";
+import { resolveMenuOption, type MenuItem } from "../lib/menu.ts";
+
+interface Props {
+  title: string;
+  locale: string;
+  menuItems?: MenuItem[];
+  user?: {
+    email?: string;
+    name?: string;
+    image?: string | null;
+  } | null;
+}
+
+const { title, locale, menuItems = [], user } = Astro.props;
+const currentLocale = locale as Locale;
+const base = (path: string) => getRelativeLocaleUrl(currentLocale, path);
+/** Preserva query string em links do menu (ex: admin/content?post_type=post&action=new). */
+const menuHref = (link: string) => {
+  const i = link.indexOf("?");
+  if (i === -1) return base(link);
+  return base(link.slice(0, i)) + "?" + link.slice(i + 1);
+};
+---
+
+<!DOCTYPE html>
+<html
+  lang={currentLocale === "pt-br" ? "pt-BR" : currentLocale}
+  data-theme="light"
+>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+  </head>
+  <body class="min-h-screen bg-base-200">
+    <div class="flex min-h-screen">
+      <aside
+        class="w-1/12 min-w-[200px] bg-base-100 border-r border-base-300 flex flex-col shrink-0"
+      >
+        <div class="p-4 border-b border-base-300">
+          <a href={base("admin")} class="font-semibold text-lg text-primary"
+            >{t(currentLocale, "admin.brand")}</a
+          >
+        </div>
+        <nav class="flex-1 p-2" aria-label="Menu admin">
+          <ul
+            class="menu menu-lg rounded-none gap-1 bg-transparent p-0 min-w-full"
+          >
+            {
+              menuItems.map((item) => {
+                const parentName =
+                  t(currentLocale, `postType.${item.postTypeSlug}`) ||
+                  item.postTypeName;
+                // Se algum menu_option tem o mesmo nome do slug do post_type, o pai vira link
+                // e esse option não aparece no submenu.
+                const slugMatchingOption = item.menuOptions.find(
+                  (opt) => opt === item.postTypeSlug
+                );
+                const parentLink = slugMatchingOption
+                  ? resolveMenuOption(
+                      slugMatchingOption,
+                      item.postTypeSlug,
+                      item.postTypeName,
+                      currentLocale,
+                      t
+                    ).link
+                  : null;
+                const submenuOptions = item.menuOptions.filter(
+                  (opt) => opt !== item.postTypeSlug
+                );
+                const hasSubmenu = submenuOptions.length > 0;
+
+                if (parentLink !== null && !hasSubmenu) {
+                  // Só o option que bate com o slug (ex: Dashboard) → pai é link direto
+                  return (
+                    <li>
+                      <a
+                        href={menuHref(parentLink)}
+                        class="rounded-md gap-2 py-2 font-medium flex items-center"
+                      >
+                        <Icon name={item.icon} size={20} />
+                        {parentName}
+                      </a>
+                    </li>
+                  );
+                }
+                if (parentLink !== null && hasSubmenu) {
+                  // Pai é link + submenu com os outros options
+                  return (
+                    <li class="menu-item-parent">
+                      <a
+                        href={menuHref(parentLink)}
+                        class="rounded-md gap-2 py-2 font-medium flex items-center"
+                      >
+                        <Icon name={item.icon} size={20} />
+                        {parentName}
+                      </a>
+                      <ul class="menu gap-1 bg-transparent p-0 pl-4 min-w-full border-l border-base-300 ml-2">
+                        {submenuOptions.map((opt) => {
+                          const resolved = resolveMenuOption(
+                            opt,
+                            item.postTypeSlug,
+                            item.postTypeName,
+                            currentLocale,
+                            t
+                          );
+                          return (
+                            <li>
+                              <a
+                                href={menuHref(resolved.link)}
+                                class="rounded-md gap-2 text-sm"
+                              >
+                                {resolved.text}
+                              </a>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </li>
+                  );
+                }
+                if (item.menuOptions.length > 0) {
+                  // Comportamento original: pai sem link + submenu com todos
+                  return (
+                    <li class="menu-item-parent">
+                      <span class="rounded-md gap-2 py-2 font-medium text-base-content/80 flex items-center">
+                        <Icon name={item.icon} size={20} />
+                        {parentName}
+                      </span>
+                      <ul class="menu gap-1 bg-transparent p-0 pl-4 min-w-full border-l border-base-300 ml-2">
+                        {item.menuOptions.map((opt) => {
+                          const resolved = resolveMenuOption(
+                            opt,
+                            item.postTypeSlug,
+                            item.postTypeName,
+                            currentLocale,
+                            t
+                          );
+                          return (
+                            <li>
+                              <a
+                                href={menuHref(resolved.link)}
+                                class="rounded-md gap-2 text-sm"
+                              >
+                                {resolved.text}
+                              </a>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </li>
+                  );
+                }
+                const first = item.menuOptions[0];
+                const resolved = first
+                  ? resolveMenuOption(
+                      first,
+                      item.postTypeSlug,
+                      item.postTypeName,
+                      currentLocale,
+                      t
+                    )
+                  : {
+                      text: parentName,
+                      link: `admin/${item.postTypeSlug}`,
+                      icon: "line-md:document",
+                    };
+                return (
+                  <li>
+                    <a href={menuHref(resolved.link)} class="rounded-md gap-2">
+                      <Icon name={item.icon} size={20} />
+                      {resolved.text}
+                    </a>
+                  </li>
+                );
+              })
+            }
+          </ul>
+        </nav>
+      </aside>
+
+      <div class="flex-1 flex flex-col min-w-0">
+        <header
+          class="bg-base-100 border-b border-base-300 px-6 py-4 flex items-center justify-between shrink-0"
+        >
+          <h1 class="text-xl font-semibold truncate">{title}</h1>
+          <div class="flex items-center gap-3 shrink-0">
+            <div class="dropdown dropdown-end">
+              <label tabindex="0" class="btn btn-ghost btn-sm">
+                {currentLocale === "pt-br" ? "PT" : currentLocale.toUpperCase()}
+              </label>
+              <ul
+                tabindex="0"
+                class="dropdown-content menu bg-base-100 rounded-box z-10 w-32 border border-base-300 p-1 shadow"
+              >
+                {
+                  locales.map((loc) => {
+                    const pathSegments = Astro.url.pathname
+                      .split("/")
+                      .filter(Boolean);
+                    const pathAfterLocale =
+                      pathSegments.slice(1).join("/") || "admin";
+                    const localeUrl =
+                      getRelativeLocaleUrl(loc, pathAfterLocale) +
+                      Astro.url.search;
+                    return (
+                      <li>
+                        <a href={localeUrl}>
+                          {loc === "pt-br"
+                            ? "Português"
+                            : loc === "es"
+                              ? "Español"
+                              : "English"}
+                        </a>
+                      </li>
+                    );
+                  })
+                }
+              </ul>
+            </div>
+            <label
+              class="flex cursor-pointer gap-2 items-center"
+              title={t(currentLocale, "admin.theme.toggle")}
+            >
+              <Icon name="line-md:sunny" size={20} aria-hidden="true" />
+              <input
+                type="checkbox"
+                id="theme-toggle"
+                class="toggle theme-controller"
+                value="dark"
+                aria-label={t(currentLocale, "admin.theme.toggle")}
+              />
+              <Icon name="line-md:moon-alt" size={20} aria-hidden="true" />
+            </label>
+            {user && (
+              <div class="dropdown dropdown-end">
+                <label tabindex="0" class="btn btn-ghost btn-circle avatar">
+                  <div class="w-10 rounded-full">
+                    {user.image ? (
+                      <img src={user.image} alt={user.name || user.email || "User"} />
+                    ) : (
+                      <div class="w-full h-full rounded-full bg-primary text-primary-content flex items-center justify-center text-sm font-semibold">
+                        {(user.name || user.email || "U").charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                </label>
+                <ul
+                  tabindex="0"
+                  class="dropdown-content menu bg-base-100 rounded-box z-10 w-52 border border-base-300 p-2 shadow-lg mt-2"
+                >
+                  <li class="menu-title">
+                    <span>{user.name || user.email}</span>
+                  </li>
+                  <li>
+                    <a id="logout-link" href="/login">
+                      <Icon name="line-md:logout" size={18} aria-hidden="true" />
+                      {t(currentLocale, "admin.signOut")}
+                    </a>
+                  </li>
+                </ul>
+              </div>
+            )}
+            <slot name="header-actions" />
+          </div>
+        </header>
+        <main class="flex-1 overflow-auto">
+          <slot />
+        </main>
+      </div>
+    </div>
+    <script>
+      import "htmx.org";
+    </script>
+    <script>
+      import { authClient } from "../lib/auth-client.ts";
+
+      // Handler para logout - executa quando o DOM estiver pronto
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", () => {
+          const logoutLink = document.getElementById("logout-link");
+          if (logoutLink) {
+            logoutLink.addEventListener("click", async (e) => {
+              e.preventDefault();
+              await authClient.signOut();
+              window.location.href = "/login";
+            });
+          }
+        });
+      } else {
+        const logoutLink = document.getElementById("logout-link");
+        if (logoutLink) {
+          logoutLink.addEventListener("click", async (e) => {
+            e.preventDefault();
+            await authClient.signOut();
+            window.location.href = "/login";
+          });
+        }
+      }
+    </script>
+    <script is:inline>
+      (function () {
+        const KEY = "edgepress-theme";
+        const toggle = document.getElementById("theme-toggle");
+        const html = document.documentElement;
+
+        function applyTheme(theme) {
+          html.setAttribute("data-theme", theme);
+          if (toggle) toggle.checked = theme === "dark";
+        }
+
+        function init() {
+          const stored = localStorage.getItem(KEY);
+          const prefersDark = window.matchMedia(
+            "(prefers-color-scheme: dark)"
+          ).matches;
+          const theme = stored ?? (prefersDark ? "dark" : "light");
+          applyTheme(theme);
+        }
+
+        toggle?.addEventListener("change", function () {
+          const theme = this.checked ? "dark" : "light";
+          html.setAttribute("data-theme", theme);
+          localStorage.setItem(KEY, theme);
+        });
+
+        init();
+      })();
+    </script>
+  </body>
+</html>
