@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+/pnpm-lock.yaml
+
+# Build output
+/dist
+/dist-ssr
+/coverage # for test coverage reports
+
+# Local files
+.env*.local
+.dev.vars
+.npmrc
+.yarn/
+# Optional: TypeScript cache file
+*.tsbuildinfo
+
+# Editor/OS files
+.DS_Store
+.vscode-test
+# Optional: if you choose not to commit auto-generated type definitions
+# components.d.ts 

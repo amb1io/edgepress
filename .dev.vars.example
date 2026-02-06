@@ -1,0 +1,7 @@
+# Copy to .dev.vars for local Workers dev (wrangler dev)
+# .dev.vars is loaded by wrangler and not committed
+BETTER_AUTH_SECRET=your-secret-at-least-32-chars
+BETTER_AUTH_URL=http://localhost:8788
+BETTER_AUTH_TRUSTED_ORIGINS=http://localhost,http://localhost:8788
+
+"# R2: Create the 'edgepress-media' bucket on the Cloudflare dashboard for media uploads (/api/upload)"
