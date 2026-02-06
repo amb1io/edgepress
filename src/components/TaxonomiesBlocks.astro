@@ -1,0 +1,164 @@
+---
+/**
+ * Blocos de taxonomia: lista de filhos com checkboxes, link "adicionar {nome}"
+ * e modal para criar novo termo (htmx). Ao sucesso a página recarrega (HX-Refresh).
+ */
+import { t } from "../i18n/index.ts";
+
+export interface TaxonomyChild {
+  id: number;
+  name: string;
+  slug: string;
+}
+
+export interface TaxonomyBlock {
+  id: number;
+  name: string;
+  slug: string;
+  type: string;
+  children: TaxonomyChild[];
+}
+
+interface Props {
+  taxonomyBlocks: TaxonomyBlock[];
+  selectedTermIds: number[];
+  locale: string;
+  /** name dos inputs radio do accordion (único por página). */
+  accordionName?: string;
+  /** Se true, renderiza só os collapses + modal (irmãos no mesmo join que Overview). */
+  siblings?: boolean;
+}
+
+const { taxonomyBlocks, selectedTermIds, locale, accordionName = "content-taxonomies", siblings = false } =
+  Astro.props;
+const selectedSet = new Set(selectedTermIds);
+---
+
+{siblings ? (
+  <>
+    {taxonomyBlocks.length === 0 ? (
+      <p class="text-sm text-base-content/60 join-item">
+        {t(locale, "admin.taxonomy.noTaxonomyConfigured")}
+      </p>
+    ) : (
+      taxonomyBlocks.map((root, index) => (
+        <div class="collapse collapse-arrow join-item border border-base-300">
+          <input
+            type="radio"
+            name={accordionName}
+            checked={index === 0}
+            aria-label={root.name}
+          />
+          <div class="collapse-title font-semibold text-sm py-2 min-h-0">
+            {root.name}
+          </div>
+          <div class="collapse-content text-sm">
+            <ul class="flex flex-col gap-1.5" id={`taxonomy-list-${root.id}`}>
+              {root.children.map((child) => (
+                <li>
+                  <label class="label cursor-pointer justify-start gap-2 py-1">
+                    <input
+                      type="checkbox"
+                      name="taxonomy_terms[]"
+                      value={child.id}
+                      class="checkbox checkbox-sm checkbox-primary"
+                      checked={selectedSet.has(child.id)}
+                    />
+                    <span class="label-text">{child.name}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <a
+              href="#"
+              class="link link-info link-hover text-xs mt-2 inline-block"
+              data-taxonomy-add
+              data-parent-id={root.id}
+              data-type={root.type}
+              data-modal-label={t(locale, "admin.taxonomy.modalLabel", { name: root.name })}
+            >
+              {t(locale, "admin.taxonomy.addLink", { name: root.name })}
+            </a>
+          </div>
+        </div>
+      ))
+    )}
+  </>
+) : (
+  <div class="flex flex-col gap-4">
+    {taxonomyBlocks.length === 0 ? (
+      <p class="text-sm text-base-content/60">
+        {t(locale, "admin.taxonomy.noTaxonomyConfigured")}
+      </p>
+    ) : (
+      <div class="join join-vertical w-full bg-base-100">
+        {taxonomyBlocks.map((root, index) => (
+          <div class="collapse collapse-arrow join-item border border-base-300">
+            <input
+              type="radio"
+              name={accordionName}
+              checked={index === 0}
+              aria-label={root.name}
+            />
+            <div class="collapse-title font-semibold text-sm py-2 min-h-0">
+              {root.name}
+            </div>
+            <div class="collapse-content text-sm">
+              <ul class="flex flex-col gap-1.5" id={`taxonomy-list-${root.id}`}>
+                {root.children.map((child) => (
+                  <li>
+                    <label class="label cursor-pointer justify-start gap-2 py-1">
+                      <input
+                        type="checkbox"
+                        name="taxonomy_terms[]"
+                        value={child.id}
+                        class="checkbox checkbox-sm checkbox-primary"
+                        checked={selectedSet.has(child.id)}
+                      />
+                      <span class="label-text">{child.name}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <a
+                href="#"
+                class="link link-primary link-hover text-xs mt-2 inline-block"
+                data-taxonomy-add
+                data-parent-id={root.id}
+                data-type={root.type}
+                data-modal-label={t(locale, "admin.taxonomy.modalLabel", { name: root.name })}
+              >
+                {t(locale, "admin.taxonomy.addLink", { name: root.name })}
+              </a>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+)}
+
+<script>
+  document.querySelectorAll("[data-taxonomy-add]").forEach((link) => {
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      const parentId = link.getAttribute("data-parent-id");
+      const type = link.getAttribute("data-type");
+      const modalLabel = link.getAttribute("data-modal-label");
+      if (parentId != null && type != null && modalLabel != null) {
+        const label = document.getElementById("taxonomy-modal-label");
+        const container = document.getElementById("taxonomy-modal-error-container");
+        const nameInput = document.getElementById("taxonomy-form-name");
+        const parentInput = document.getElementById("taxonomy-form-parent-id");
+        const typeInput = document.getElementById("taxonomy-form-type");
+        const toggle = document.getElementById("taxonomy-add-modal-toggle");
+        if (label) label.textContent = modalLabel;
+        if (container) container.innerHTML = "";
+        if (nameInput && "value" in nameInput) (nameInput as HTMLInputElement).value = "";
+        if (parentInput) parentInput.setAttribute("value", parentId);
+        if (typeInput) typeInput.setAttribute("value", type);
+        if (toggle && "checked" in toggle) (toggle as HTMLInputElement).checked = true;
+      }
+    });
+  });
+</script>

@@ -1,0 +1,254 @@
+---
+/**
+ * Template para o domínio "taxonomies".
+ * Duas colunas: esquerda (5/12) formulário Nome/Slug/Descrição + Salvar; direita (6/12) datalist name, slug, type.
+ * type e parent_id vêm da URL e do registro pai do type.
+ */
+import AdminLayout from "../layouts/AdminLayout.astro";
+import DataList from "../components/DataList.astro";
+import { db } from "../db/index.ts";
+import { taxonomies } from "../db/schema.ts";
+import { and, eq, or, isNull } from "drizzle-orm";
+import { t, type Locale } from "../i18n/index.ts";
+import type { MenuItem } from "../lib/menu.ts";
+
+export interface Props {
+  locale: string;
+  /** Segmento da rota atual (ex.: post) para montar a URL da página. */
+  slug: string;
+  domain: string;
+  type: string;
+  menuItems: MenuItem[];
+  params?: Record<string, string>;
+}
+
+const { locale, slug, domain, type, menuItems, params = {} } = Astro.props;
+const currentLocale = locale as Locale;
+const title = t(currentLocale, "taxonomy.type." + type);
+const action = params["action"] ?? "";
+const idParam = params["id"] ?? "";
+const isEdit = action === "edit" && idParam && /^\d+$/.test(idParam);
+
+// Registro pai desse type (raiz: parent_id null) para usar como parent_id no form
+const rootRows = type
+  ? await db
+      .select({ id: taxonomies.id })
+      .from(taxonomies)
+      .where(
+        and(
+          eq(taxonomies.type, type),
+          or(isNull(taxonomies.parent_id), eq(taxonomies.parent_id, 0))
+        )
+      )
+      .limit(1)
+  : [];
+const parentId = rootRows.length > 0 ? rootRows[0]!.id : null;
+
+// Em modo edição, carregar o registro para preencher o formulário
+let editTaxonomy: { id: number; name: string; slug: string; description: string | null; type: string } | null = null;
+if (isEdit && idParam) {
+  const editId = parseInt(idParam, 10);
+  const [row] = await db
+    .select({
+      id: taxonomies.id,
+      name: taxonomies.name,
+      slug: taxonomies.slug,
+      description: taxonomies.description,
+      type: taxonomies.type,
+    })
+    .from(taxonomies)
+    .where(eq(taxonomies.id, editId))
+    .limit(1);
+  if (row) {
+    editTaxonomy = {
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      description: row.description ?? "",
+      type: row.type,
+    };
+  }
+}
+
+// Lista apenas os filhos do type (parent_id = rootId), não a raiz
+const taxonomyRows =
+  type && parentId != null
+    ? await db
+        .select({
+          id: taxonomies.id,
+          name: taxonomies.name,
+          slug: taxonomies.slug,
+          type: taxonomies.type,
+        })
+        .from(taxonomies)
+        .where(and(eq(taxonomies.type, type), eq(taxonomies.parent_id, parentId)))
+        .orderBy(taxonomies.name)
+    : [];
+const taxonomyItems = taxonomyRows.map((r) => ({
+  id: r.id,
+  name: r.name,
+  slug: r.slug,
+  type: r.type,
+}));
+
+const baseUrl = `/${locale}/admin/${slug}?domain=${domain}&type=${encodeURIComponent(type)}`;
+
+const initialName = editTaxonomy?.name ?? "";
+const initialSlug = editTaxonomy?.slug ?? "";
+const initialDescription = editTaxonomy?.description ?? "";
+
+const columns = [
+  { key: "name", label: t(currentLocale, "admin.taxonomy.formName") },
+  { key: "slug", label: t(currentLocale, "admin.taxonomy.formSlug") },
+  { key: "type", label: t(currentLocale, "admin.taxonomy.typeColumn") },
+];
+const emptyColspan = columns.length;
+---
+
+<AdminLayout title={title} locale={locale} menuItems={menuItems}>
+  <script
+    define:vars={{ initialName, initialSlug, initialDescription }}
+  >
+    window.slugify = function (text) {
+      if (typeof text !== "string" || !text.trim()) return "";
+      return text
+        .trim()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]/g, "")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "");
+    };
+    document.addEventListener("alpine:init", () => {
+      window.Alpine.data("taxonomyForm", () => ({
+        name: initialName,
+        slug: initialSlug,
+        description: initialDescription,
+        slugifyFromName() {
+          this.slug = window.slugify(this.name);
+        },
+        resetForm() {
+          this.name = "";
+          this.slug = "";
+          this.description = "";
+        },
+      }));
+    });
+  </script>
+
+  <div class="p-6 flex gap-6">
+    <div class="w-5/12 shrink-0">
+      <form
+        method="post"
+        action={editTaxonomy ? `/api/taxonomies/${editTaxonomy.id}` : "/api/taxonomies"}
+        class="flex flex-col gap-3 taxonomy-form"
+        data-base-url={baseUrl}
+        data-edit-id={editTaxonomy?.id ?? ""}
+        hx-post={editTaxonomy ? undefined : "/api/taxonomies"}
+        hx-put={editTaxonomy ? `/api/taxonomies/${editTaxonomy.id}` : undefined}
+        hx-swap="none"
+        x-data="taxonomyForm"
+        @taxonomy-form-reset.window="resetForm()"
+      >
+        <input type="hidden" name="type" value={type} />
+        {
+          parentId != null && (
+            <input type="hidden" name="parent_id" value={parentId} />
+          )
+        }
+        {editTaxonomy && <input type="hidden" name="id" value={editTaxonomy.id} />}
+        <input type="hidden" name="locale" value={locale} />
+        <div class="form-control">
+          <label for="tax-name" class="label">
+            <span class="label-text"
+              >{t(currentLocale, "admin.taxonomy.formName")}</span
+            >
+          </label>
+          <input
+            type="text"
+            id="tax-name"
+            name="name"
+            required
+            class="input input-bordered input-sm w-full"
+            x-model="name"
+            @input="slugifyFromName()"
+          />
+        </div>
+        <div class="form-control">
+          <label for="tax-slug" class="label">
+            <span class="label-text"
+              >{t(currentLocale, "admin.taxonomy.formSlug")}</span
+            >
+          </label>
+          <input
+            type="text"
+            id="tax-slug"
+            name="slug"
+            class="input input-bordered input-sm w-full font-mono"
+            x-model="slug"
+          />
+        </div>
+        <div class="form-control">
+          <label for="tax-description" class="label">
+            <span class="label-text"
+              >{t(currentLocale, "admin.taxonomy.formDescription")}</span
+            >
+          </label>
+          <textarea
+            id="tax-description"
+            name="description"
+            rows="3"
+            class="textarea textarea-bordered textarea-sm w-full"
+            x-model="description"
+          ></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">
+          {t(currentLocale, "admin.taxonomy.formSave")}
+        </button>
+      </form>
+    </div>
+    <div class="w-6/12 min-w-0 overflow-x-auto">
+      <DataList
+        columns={columns}
+        items={taxonomyItems}
+        emptyMessage={t(currentLocale, "admin.list.noItems")}
+        emptyColspan={emptyColspan}
+        selectable
+        selectAllId="select-all"
+        selectAllLabel={t(locale, "admin.list.selectAll")}
+        actionsColumnLabel={t(locale, "admin.list.actions")}
+        editLabel={t(locale, "admin.list.edit")}
+        deleteLabel={t(locale, "admin.list.delete")}
+        actionConfig={{
+          editLinkTemplate: `/${locale}/admin/${slug}?domain=${domain}&type=${encodeURIComponent(type)}&action=edit&id={id}`,
+          deletePathTemplate: `/api/taxonomies/{id}`,
+          deleteConfirm: t(locale, "admin.list.deleteConfirm"),
+        }}
+      />
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  document.querySelectorAll("form.taxonomy-form").forEach((form) => {
+    form.addEventListener("htmx:afterRequest", (ev) => {
+      const evt = ev;
+      const detail = "detail" in evt ? evt.detail : null;
+      const successful = detail && typeof detail === "object" && "successful" in detail && detail.successful;
+      const xhr = detail && typeof detail === "object" && "xhr" in detail ? detail.xhr : null;
+      const status = xhr && typeof xhr === "object" && "status" in xhr ? xhr.status : 0;
+      const getHeader = xhr && typeof xhr === "object" && "getResponseHeader" in xhr && typeof xhr.getResponseHeader === "function" ? xhr.getResponseHeader.bind(xhr) : null;
+      if (!successful || status !== 200) return;
+      const baseUrl = form.getAttribute("data-base-url");
+      const editId = form.getAttribute("data-edit-id");
+      if (editId) {
+        if (getHeader?.("HX-Refresh") === "true" && baseUrl) window.location.href = baseUrl;
+        return;
+      }
+      window.dispatchEvent(new CustomEvent("taxonomy-form-reset"));
+      if (getHeader?.("HX-Refresh") === "true") window.location.reload();
+    });
+  });
+</script>
