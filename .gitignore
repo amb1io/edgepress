@@ -1,3 +1,6 @@
+.astro
+.wrangler
+tasks.TODO
 # Dependencies
 node_modules/
 /pnpm-lock.yaml
