@@ -1,0 +1,28 @@
+{
+  "main": "dist/_worker.js/index.js",
+  "name": "edgepress",
+  "compatibility_date": "2024-09-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "BETTER_AUTH_URL": "http://localhost:4321"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "edgepress",
+      "database_id": "adf7f002-517e-4e53-8a3f-c870226ad418",
+      "preview_database_id": "DB",
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA_BUCKET",
+      "bucket_name": "edgepress-media"
+    }
+  ],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./dist"
+  }
+}

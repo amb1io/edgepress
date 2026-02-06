@@ -1,0 +1,26 @@
+---
+import { BlockNoteEditor } from "./BlockNoteEditor.tsx";
+
+interface Props {
+  /** Conteúdo inicial em HTML (ex.: body do post). */
+  initialBody?: string | null;
+  /** Nome do input hidden no form (deve ser "body" para a página content). */
+  name?: string;
+  /** Id do input hidden (para acessibilidade e sync). */
+  inputId?: string;
+  /** Locale do admin (en, es, pt-br) para a UI do BlockNote. */
+  locale?: string;
+}
+
+const { initialBody = "", name = "body", inputId = "body", locale = "en" } = Astro.props;
+---
+
+<div class="content-editor h-full min-h-0">
+  <BlockNoteEditor
+    client:only="react"
+    initialBody={initialBody}
+    name={name}
+    inputId={inputId}
+    locale={locale}
+  />
+</div>

@@ -1,0 +1,228 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import DataList from "../../../components/DataList.astro";
+import { db } from "../../../db/index.ts";
+import { user as userTable } from "../../../db/schema.ts";
+import { getListItems } from "../../../lib/list-items.ts";
+import { getMenuItems } from "../../../lib/menu.ts";
+import { t, locales, defaultLocale } from "../../../i18n/index.ts";
+import { and, asc, desc, like, sql } from "drizzle-orm";
+import { USER_ROLE_LABEL_KEYS } from "../../../db/schema.ts";
+import { getTableNames } from "../../../lib/db-utils.ts";
+
+const locale = Astro.params["locale"] ?? defaultLocale;
+if (!locales.includes(locale as "en" | "es" | "pt-br")) {
+  return Astro.redirect(`/${defaultLocale}/admin`);
+}
+const currentUser = Astro.locals.user;
+
+if (!currentUser) {
+  return Astro.redirect("/login");
+}
+
+const menuItems = await getMenuItems(db);
+
+const type = Astro.url.searchParams.get("type") ?? "post";
+const status = Astro.url.searchParams.get("status") ?? undefined;
+const order = Astro.url.searchParams.get("order") ?? "created_at";
+const orderDir = (Astro.url.searchParams.get("orderDir") ?? "desc") as "asc" | "desc";
+const limit = Math.min(100, Math.max(1, parseInt(Astro.url.searchParams.get("limit") ?? "10", 10) || 10));
+const page = Math.max(1, parseInt(Astro.url.searchParams.get("page") ?? "1", 10) || 1);
+
+const filter: Record<string, string> = {};
+for (const [key, value] of Astro.url.searchParams) {
+  if (key.startsWith("filter_") && value) filter[key.replace("filter_", "")] = value;
+}
+
+const tableNames = await getTableNames(db);
+const loadFromTable = tableNames.includes(type);
+
+function buildListUrl(overrides: Record<string, string>) {
+  const params = new URLSearchParams(Astro.url.searchParams);
+  for (const [k, v] of Object.entries(overrides)) params.set(k, v);
+  return `/${locale}/admin/list?${params.toString()}`;
+}
+
+function formatDate(ts: number | null) {
+  if (ts == null) return "—";
+  const loc = locale === "pt-br" ? "pt-BR" : locale === "es" ? "es" : "en";
+  return new Date(ts).toLocaleString(loc);
+}
+
+let result: { items: Record<string, unknown>[]; total: number; page: number; limit: number; totalPages: number };
+let listColumns: { key: string; label: string; sortLink?: string }[];
+let listItems: Record<string, unknown>[];
+let listEmptyColspan: number;
+let deletePathTemplate: string;
+
+if (loadFromTable && type === "user") {
+  const orderColumn = ["id", "name", "email", "role", "created_at", "updated_at"].includes(order) ? order : "created_at";
+  const orderFn = orderDir === "asc" ? asc : desc;
+  const orderByCol =
+    orderColumn === "name"
+      ? orderFn(userTable.name)
+      : orderColumn === "email"
+        ? orderFn(userTable.email)
+        : orderColumn === "role"
+          ? orderFn(userTable.role)
+          : orderColumn === "updated_at"
+            ? orderFn(userTable.updatedAt)
+            : orderColumn === "id"
+              ? orderFn(userTable.id)
+              : orderFn(userTable.createdAt);
+  const offset = (page - 1) * limit;
+  const filterConditions = [];
+  if (filter["name"]) filterConditions.push(like(userTable.name, `%${filter["name"]}%`));
+  if (filter["email"]) filterConditions.push(like(userTable.email, `%${filter["email"]}%`));
+  const whereClause = filterConditions.length > 0 ? and(...filterConditions) : undefined;
+  const rows = await db
+    .select({
+      id: userTable.id,
+      name: userTable.name,
+      email: userTable.email,
+      role: userTable.role,
+      created_at: userTable.createdAt,
+      updated_at: userTable.updatedAt,
+    })
+    .from(userTable)
+    .where(whereClause)
+    .orderBy(orderByCol)
+    .limit(limit)
+    .offset(offset);
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(userTable)
+    .where(whereClause);
+  const total = Number(countRow?.count ?? 0);
+  result = {
+    items: rows.map((r) => ({
+      id: r.id,
+      name: r.name ?? "",
+      email: r.email ?? "",
+      role: r.role != null ? (USER_ROLE_LABEL_KEYS[r.role as number] ?? String(r.role)) : "—",
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    })),
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+  listColumns = [
+    { key: "id", label: t(locale, "admin.list.id"), sortLink: buildListUrl({ order: "id", orderDir: order === "id" && orderDir === "asc" ? "desc" : "asc" }) },
+    { key: "name", label: t(locale, "admin.user.formName"), sortLink: buildListUrl({ order: "name", orderDir: order === "name" && orderDir === "asc" ? "desc" : "asc" }) },
+    { key: "email", label: t(locale, "admin.user.formEmail"), sortLink: buildListUrl({ order: "email", orderDir: order === "email" && orderDir === "asc" ? "desc" : "asc" }) },
+    { key: "role", label: t(locale, "admin.user.formRole"), sortLink: buildListUrl({ order: "role", orderDir: order === "role" && orderDir === "asc" ? "desc" : "asc" }) },
+    { key: "created_at", label: t(locale, "admin.list.createdAt"), sortLink: buildListUrl({ order: "created_at", orderDir: order === "created_at" && orderDir === "asc" ? "desc" : "asc" }) },
+    { key: "updated_at", label: t(locale, "admin.list.updatedAt"), sortLink: buildListUrl({ order: "updated_at", orderDir: order === "updated_at" && orderDir === "asc" ? "desc" : "asc" }) },
+  ];
+  listItems = result.items.map((i) => ({
+    ...i,
+    created_at: formatDate((i["created_at"] as number) ?? null),
+    updated_at: formatDate((i["updated_at"] as number) ?? null),
+  }));
+  listEmptyColspan = 8;
+  deletePathTemplate = "/api/users/{id}";
+} else {
+  const listResult = await getListItems(db, {
+    type,
+    ...(status !== undefined && status !== "" ? { status } : {}),
+    order,
+    orderDir,
+    limit,
+    page,
+    ...(Object.keys(filter).length > 0 ? { filter } : {}),
+  });
+  result = listResult;
+  listColumns = [
+    { key: "id", label: t(locale, "admin.list.id"), sortLink: buildListUrl({ order: "id", orderDir: order === "id" && orderDir === "asc" ? "desc" : "asc" }) },
+    { key: "title", label: t(locale, "admin.list.titleColumn"), sortLink: buildListUrl({ order: "title", orderDir: order === "title" && orderDir === "asc" ? "desc" : "asc" }) },
+    { key: "categories", label: t(locale, "admin.list.categories") },
+    { key: "tags", label: t(locale, "admin.list.tags") },
+    { key: "author", label: t(locale, "admin.list.author"), sortLink: buildListUrl({ order: "author", orderDir: order === "author" && orderDir === "asc" ? "desc" : "asc" }) },
+    { key: "status", label: t(locale, "admin.list.status"), sortLink: buildListUrl({ order: "status", orderDir: order === "status" && orderDir === "asc" ? "desc" : "asc" }) },
+    { key: "created_at", label: t(locale, "admin.list.createdAt"), sortLink: buildListUrl({ order: "created_at", orderDir: order === "created_at" && orderDir === "asc" ? "desc" : "asc" }) },
+    { key: "updated_at", label: t(locale, "admin.list.updatedAt"), sortLink: buildListUrl({ order: "updated_at", orderDir: order === "updated_at" && orderDir === "asc" ? "desc" : "asc" }) },
+  ];
+  listItems = result.items.map((i) => ({
+    ...i,
+    categories: (i as { categories?: string })["categories"] || "—",
+    tags: (i as { tags?: string })["tags"] || "—",
+    author: (i as { author?: string })["author"] || "—",
+    status: (i as { status?: string })["status"] ?? "—",
+    created_at: formatDate((i as { created_at?: number })["created_at"] ?? null),
+    updated_at: formatDate((i as { updated_at?: number })["updated_at"] ?? null),
+  }));
+  listEmptyColspan = 10;
+  deletePathTemplate = "/api/posts/{id}";
+}
+---
+
+<AdminLayout title={t(locale, "admin.list.title")} locale={locale} menuItems={menuItems} user={currentUser}>
+
+  <div class="p-6 overflow-x-auto">
+    <form method="get" action={`/${locale}/admin/list`} class="mb-4 flex flex-wrap items-end gap-2">
+      <input type="hidden" name="type" value={type} />
+      <input type="hidden" name="order" value={order} />
+      <input type="hidden" name="orderDir" value={orderDir} />
+      <input type="hidden" name="limit" value={limit} />
+      <input type="hidden" name="page" value="1" />
+      {type === "user" ? (
+        <>
+          <div class="form-control">
+            <label class="label py-0"><span class="label-text text-xs">{t(locale, "admin.user.formName")}</span></label>
+            <input type="text" name="filter_name" placeholder={t(locale, "admin.list.filter")} class="input input-bordered input-sm w-32" value={filter["name"] ?? ""} />
+          </div>
+          <div class="form-control">
+            <label class="label py-0"><span class="label-text text-xs">{t(locale, "admin.user.formEmail")}</span></label>
+            <input type="text" name="filter_email" placeholder={t(locale, "admin.list.filter")} class="input input-bordered input-sm w-40" value={filter["email"] ?? ""} />
+          </div>
+        </>
+      ) : (
+        <>
+          <div class="form-control">
+            <label class="label py-0"><span class="label-text text-xs">{t(locale, "admin.list.titleColumn")}</span></label>
+            <input type="text" name="filter_title" placeholder={t(locale, "admin.list.filter")} class="input input-bordered input-sm w-32" value={filter["title"] ?? ""} />
+          </div>
+          <div class="form-control">
+            <label class="label py-0"><span class="label-text text-xs">{t(locale, "admin.list.author")}</span></label>
+            <input type="text" name="filter_author" placeholder={t(locale, "admin.list.filter")} class="input input-bordered input-sm w-32" value={filter["author"] ?? ""} />
+          </div>
+          <div class="form-control">
+            <label class="label py-0"><span class="label-text text-xs">{t(locale, "admin.list.status")}</span></label>
+            <input type="text" name="filter_status" placeholder={t(locale, "admin.list.filter")} class="input input-bordered input-sm w-28" value={filter["status"] ?? ""} />
+          </div>
+        </>
+      )}
+      <button type="submit" class="btn btn-primary btn-sm">{t(locale, "admin.list.filterSubmit")}</button>
+    </form>
+
+    <DataList
+      columns={listColumns}
+      items={listItems}
+      emptyMessage={t(locale, "admin.list.noItems")}
+      emptyColspan={listEmptyColspan}
+      selectable
+      selectAllId="select-all"
+      selectAllLabel={t(locale, "admin.list.selectAll")}
+      selectItemLabel={(item) => t(locale, "admin.list.selectItem", { id: String(item["id"]) })}
+      actionsColumnLabel={t(locale, "admin.list.actions")}
+      editLabel={t(locale, "admin.list.edit")}
+      deleteLabel={t(locale, "admin.list.delete")}
+      actionConfig={{
+        editLinkTemplate: `/${locale}/admin/content?post_type=${type}&action=edit&id={id}`,
+        deletePathTemplate,
+        deleteConfirm: t(locale, "admin.list.deleteConfirm"),
+      }}
+      pagination={{
+        page: result.page,
+        totalPages: result.totalPages,
+        total: result.total,
+        buildPageUrl: (p) => buildListUrl({ page: String(p) }),
+      }}
+      previousLabel={t(locale, "admin.list.previous")}
+      nextLabel={t(locale, "admin.list.next")}
+      pageOfText={t(locale, "admin.list.pageOf", { page: String(result.page), totalPages: String(result.totalPages), total: String(result.total) })}
+    />
+  </div>
+</AdminLayout>

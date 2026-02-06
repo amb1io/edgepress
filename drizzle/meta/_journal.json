@@ -1,0 +1,83 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1770149247511,
+      "tag": "0000_outgoing_blink",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1770150315276,
+      "tag": "0001_quiet_dust",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1770150924700,
+      "tag": "0002_parallel_leper_queen",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1770157176681,
+      "tag": "0003_right_jasper_sitwell",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1770214929381,
+      "tag": "0004_red_whirlwind",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1770216006919,
+      "tag": "0005_bitter_thaddeus_ross",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1770300000000,
+      "tag": "0006_add_taxonomies_description",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1770400000000,
+      "tag": "0007_add_user_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1770299089136,
+      "tag": "0008_typical_hellfire_club",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1770500000000,
+      "tag": "0009_user_role_integer",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1770600000000,
+      "tag": "0010_rename_type_id_to_post_type_id",
+      "breakpoints": true
+    }
+  ]
+}

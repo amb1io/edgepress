@@ -1,0 +1,256 @@
+---
+/**
+ * Template para o post_type "user" (formulário de cadastro baseado na tabela user do auth schema).
+ * Campos: name, email, emailVerified, image, role.
+ */
+import AdminLayout from "../layouts/AdminLayout.astro";
+import { db } from "../db/index.ts";
+import { user as userTable, USER_ROLE_IDS, USER_ROLE_LABEL_KEYS } from "../db/schema.ts";
+import { eq } from "drizzle-orm";
+import { t, type Locale } from "../i18n/index.ts";
+import type { MenuItem } from "../lib/menu.ts";
+
+export interface Props {
+  locale: string;
+  postTypeSlug: string;
+  action: string;
+  idParam: string | null;
+  menuItems: MenuItem[];
+  /** Usuário logado (para header) */
+  currentUser: { email: string; name: string };
+}
+
+const { locale, postTypeSlug, action, idParam, menuItems, currentUser } = Astro.props;
+const currentLocale = locale as Locale;
+const errorParam = Astro.url.searchParams.get("error");
+
+const pageTitle =
+  action === "new"
+    ? t(currentLocale, "admin.content.newTitle", { type: t(currentLocale, "postType.user") })
+    : t(currentLocale, "admin.content.editTitle", { type: t(currentLocale, "postType.user") });
+
+let editUser: {
+  id: string;
+  name: string;
+  email: string;
+  emailVerified: boolean;
+  image: string | null;
+  role: number | null;
+} | null = null;
+
+if (action === "edit" && idParam) {
+  const [row] = await db
+    .select({
+      id: userTable.id,
+      name: userTable.name,
+      email: userTable.email,
+      emailVerified: userTable.emailVerified,
+      image: userTable.image,
+      role: userTable.role,
+    })
+    .from(userTable)
+    .where(eq(userTable.id, idParam))
+    .limit(1);
+  if (row) {
+    editUser = {
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      emailVerified: Boolean(row.emailVerified),
+      image: row.image,
+      role: row.role,
+    };
+  }
+}
+
+const initialName = editUser?.name ?? "";
+const initialEmail = editUser?.email ?? "";
+const initialEmailVerified = editUser?.emailVerified ?? false;
+const initialImage = editUser?.image ?? "";
+const initialRole = editUser?.role ?? 3; // 3 = leitor
+---
+
+<AdminLayout title={pageTitle} locale={locale} menuItems={menuItems}>
+  <div slot="header-actions" class="flex gap-4">
+    <span class="text-sm text-base-content/70">{currentUser.email}</span>
+  </div>
+
+  <script
+    define:vars={{
+      initialName,
+      initialEmail,
+      initialEmailVerified,
+      initialImage,
+      initialRole,
+    }}
+  >
+    document.addEventListener("alpine:init", () => {
+      window.Alpine.data("userForm", () => ({
+        name: initialName,
+        email: initialEmail,
+        emailVerified: initialEmailVerified,
+        image: initialImage,
+        role: initialRole,
+      }));
+    });
+  </script>
+
+  <div class="p-6 max-w-2xl">
+    {errorParam && (() => {
+      const errorKey = "admin.user.error." + errorParam;
+      const msg = t(currentLocale, errorKey);
+      const displayMsg = msg === errorKey ? t(currentLocale, "admin.user.error.signup_failed") : msg;
+      return (
+        <div class="alert alert-error mb-4" role="alert">
+          <span>{displayMsg}</span>
+        </div>
+      );
+    })()}
+    <form
+      method="post"
+      action={editUser ? `/api/users/${editUser.id}` : "/api/register"}
+      hx-put={editUser ? `/api/users/${editUser.id}` : undefined}
+      hx-swap={editUser ? "none" : undefined}
+      x-data="userForm"
+      class="flex flex-col gap-4 user-form"
+      data-redirect-url={`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`}
+    >
+      <input type="hidden" name="locale" value={locale} />
+      <input type="hidden" name="callbackURL" value={`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`} />
+      {editUser && <input type="hidden" name="id" value={editUser.id} />}
+
+      <div class="form-control">
+        <label for="user-name" class="label">
+          <span class="label-text">{t(currentLocale, "admin.user.formName")}</span>
+        </label>
+        <input
+          type="text"
+          id="user-name"
+          name="name"
+          required
+          class="input input-bordered w-full"
+          x-model="name"
+        />
+      </div>
+
+      <div class="form-control">
+        <label for="user-email" class="label">
+          <span class="label-text">{t(currentLocale, "admin.user.formEmail")}</span>
+        </label>
+        <input
+          type="email"
+          id="user-email"
+          name="email"
+          required
+          class="input input-bordered w-full"
+          x-model="email"
+          readonly={!!editUser}
+        />
+        {editUser && (
+          <p class="text-xs text-base-content/50 mt-1">
+            {t(currentLocale, "admin.user.emailReadonlyHint")}
+          </p>
+        )}
+      </div>
+
+      {action === "new" && (
+        <div class="form-control">
+          <label for="user-password" class="label">
+            <span class="label-text">{t(currentLocale, "admin.user.formPassword")}</span>
+          </label>
+          <input
+            type="password"
+            id="user-password"
+            name="password"
+            required={action === "new"}
+            minlength={8}
+            class="input input-bordered w-full"
+            autocomplete="new-password"
+          />
+          <p class="text-xs text-base-content/50 mt-1">
+            {t(currentLocale, "admin.user.passwordHint")}
+          </p>
+        </div>
+      )}
+
+      <div class="form-control">
+        <label for="user-image" class="label">
+          <span class="label-text">{t(currentLocale, "admin.user.formImage")}</span>
+        </label>
+        <input
+          type="text"
+          id="user-image"
+          name="image"
+          class="input input-bordered w-full"
+          placeholder="https://..."
+          x-model="image"
+        />
+      </div>
+
+      <div class="form-control">
+        <label for="user-role" class="label">
+          <span class="label-text">{t(currentLocale, "admin.user.formRole")}</span>
+        </label>
+        <select
+          id="user-role"
+          name="role"
+          class="select select-bordered w-full"
+          x-model.number="role"
+        >
+          {USER_ROLE_IDS.map((roleId) => (
+            <option value={roleId} selected={roleId === initialRole}>
+              {t(currentLocale, `admin.user.role.${USER_ROLE_LABEL_KEYS[roleId]}`)}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div class="form-control">
+        <label class="label cursor-pointer justify-start gap-2">
+          <input
+            type="checkbox"
+            name="emailVerified"
+            value="1"
+            class="checkbox checkbox-sm checkbox-primary"
+            x-model="emailVerified"
+            checked={initialEmailVerified}
+          />
+          <span class="label-text">{t(currentLocale, "admin.user.formEmailVerified")}</span>
+        </label>
+      </div>
+
+      <div class="flex gap-2 mt-2">
+        <button type="submit" class="btn btn-primary">
+          {action === "new"
+            ? t(currentLocale, "admin.content.saveNew")
+            : t(currentLocale, "admin.content.saveEdit")}
+        </button>
+        <a
+          href={`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`}
+          class="btn btn-ghost"
+        >
+          {t(currentLocale, "admin.content.cancel")}
+        </a>
+      </div>
+    </form>
+  </div>
+</AdminLayout>
+
+<script>
+  document.querySelectorAll("form.user-form").forEach((form) => {
+    form.addEventListener("htmx:afterRequest", (ev) => {
+      const detail = "detail" in ev ? (ev as CustomEvent).detail : null;
+      const successful = detail && typeof detail === "object" && "successful" in detail && (detail as { successful: boolean }).successful;
+      const xhr = detail && typeof detail === "object" && "xhr" in detail ? (detail as { xhr?: XMLHttpRequest }).xhr : null;
+      const status = xhr?.status ?? 0;
+      const getHeader = xhr?.getResponseHeader?.bind(xhr);
+      if (!successful || status !== 200) return;
+      const redirectUrl = form.getAttribute("data-redirect-url");
+      if (getHeader?.("HX-Refresh") === "true" && redirectUrl) {
+        window.location.href = redirectUrl;
+      } else if (getHeader?.("HX-Refresh") === "true") {
+        window.location.reload();
+      }
+    });
+  });
+</script>
