@@ -1,0 +1,213 @@
+---
+/**
+ * Lista de dados reutilizável (thead + tbody). Usado em list.astro e templates (ex.: taxonomies).
+ */
+export interface DataListColumn {
+  key: string;
+  label: string;
+  /** Link para ordenação (opcional). */
+  sortLink?: string;
+}
+
+export interface DataListActionConfig {
+  editLinkTemplate: string;
+  deletePathTemplate: string;
+  deleteConfirm: string;
+}
+
+interface Props {
+  columns: DataListColumn[];
+  items: Record<string, unknown>[];
+  emptyMessage: string;
+  /** Número de colunas para o colspan da linha vazia. */
+  emptyColspan: number;
+  /** Se definido, renderiza coluna "Ações" com Editar e Deletar (HTMX). */
+  actionConfig?: DataListActionConfig;
+  /** Se true, inclui coluna com checkbox "select all" e checkboxes por linha. */
+  selectable?: boolean;
+  /** ID do checkbox "select all" (para acessibilidade). */
+  selectAllId?: string;
+  /** Chave do item usada como value do checkbox de linha (ex.: "id"). */
+  selectValueKey?: string;
+  /** Label para select all. */
+  selectAllLabel?: string;
+  /** Label para checkbox de linha: "Select item {id}". */
+  selectItemLabel?: (item: Record<string, unknown>) => string;
+  /** Label da coluna Ações. */
+  actionsColumnLabel?: string;
+  /** Label do link Editar. */
+  editLabel?: string;
+  /** Label do link Deletar. */
+  deleteLabel?: string;
+  /** Paginação: quando definido e totalPages > 1, renderiza controles abaixo da tabela. */
+  pagination?: {
+    page: number;
+    totalPages: number;
+    total: number;
+    /** Função que retorna a URL para uma página (ex.: page=2). */
+    buildPageUrl: (page: number) => string;
+  };
+  /** Label do botão "Anterior". */
+  previousLabel?: string;
+  /** Label do botão "Próxima". */
+  nextLabel?: string;
+  /** Texto central da paginação (ex.: "Página 1 de 3 (10 itens)"). */
+  pageOfText?: string;
+}
+
+const {
+  columns,
+  items,
+  emptyMessage,
+  actionConfig,
+  selectable = false,
+  selectAllId = "select-all",
+  selectValueKey = "id",
+  selectAllLabel = "Select all",
+  selectItemLabel = (item) => `Select item ${item["id"]}`,
+  actionsColumnLabel = "Ações",
+  editLabel = "Editar",
+  deleteLabel = "Deletar",
+  pagination,
+  previousLabel = "Anterior",
+  nextLabel = "Próxima",
+  pageOfText = "",
+} = Astro.props;
+
+/** Regra geral: não exibir coluna ID na lista (o id continua nos items para links de edição/deleção). */
+const displayColumns = columns.filter((col) => col.key !== "id");
+const computedEmptyColspan =
+  (selectable ? 1 : 0) + displayColumns.length + (actionConfig ? 1 : 0);
+
+function expandTemplate(template: string, item: Record<string, unknown>): string {
+  return template.replace(/\{(\w+)\}/g, (_, key) => String(item[key] ?? ""));
+}
+---
+
+<table class="table table-zebra">
+  <thead>
+    <tr>
+      {selectable && (
+        <th class="w-10">
+          <label class="label cursor-pointer justify-center p-0">
+            <input
+              type="checkbox"
+              class="checkbox checkbox-sm"
+              id={selectAllId}
+              aria-label={selectAllLabel}
+            />
+          </label>
+        </th>
+      )}
+      {displayColumns.map((col) => (
+        <th>
+          {col.sortLink ? (
+            <a href={col.sortLink} class="link link-hover">{col.label}</a>
+          ) : (
+            col.label
+          )}
+        </th>
+      ))}
+      {actionConfig && <th>{actionsColumnLabel}</th>}
+    </tr>
+  </thead>
+  <tbody>
+    {items.length === 0 ? (
+      <tr>
+        <td colspan={computedEmptyColspan} class="text-center py-8 text-base-content/60">
+          {emptyMessage}
+        </td>
+      </tr>
+    ) : (
+      items.map((item) => (
+        <tr>
+          {selectable && (
+            <td>
+              <label class="label cursor-pointer justify-center p-0">
+                <input
+                  type="checkbox"
+                  class="checkbox checkbox-sm row-select"
+                  value={String(item[selectValueKey])}
+                  aria-label={selectItemLabel(item)}
+                />
+              </label>
+            </td>
+          )}
+          {displayColumns.map((col) => (
+            <td>{String(item[col.key] ?? "—")}</td>
+          ))}
+          {actionConfig && (
+            <td class="flex gap-1">
+              <a
+                href={expandTemplate(actionConfig.editLinkTemplate, item)}
+                class="link link-primary text-sm"
+              >
+                {editLabel}
+              </a>
+              {actionConfig.deletePathTemplate ? (
+                <>
+                  <span class="text-base-content/40">|</span>
+                  <a
+                    href="#"
+                    class="link link-error text-sm"
+                    hx-delete={expandTemplate(actionConfig.deletePathTemplate, item)}
+                    hx-confirm={actionConfig.deleteConfirm}
+                    hx-target="closest tr"
+                    hx-swap="outerHTML swap:300ms"
+                  >
+                    {deleteLabel}
+                  </a>
+                </>
+              ) : null}
+            </td>
+          )}
+        </tr>
+      ))
+    )}
+  </tbody>
+</table>
+
+{pagination && pagination.totalPages > 1 && (
+  <div class="flex justify-center gap-2 mt-4">
+    <a
+      href={pagination.buildPageUrl(pagination.page - 1)}
+      class={`btn btn-sm ${pagination.page <= 1 ? "invisible" : ""}`}
+    >
+      {previousLabel}
+    </a>
+    <span class="flex items-center px-2 text-sm">{pageOfText}</span>
+    <a
+      href={pagination.buildPageUrl(pagination.page + 1)}
+      class={`btn btn-sm ${pagination.page >= pagination.totalPages ? "invisible" : ""}`}
+    >
+      {nextLabel}
+    </a>
+  </div>
+)}
+
+<style>
+  tr.data-list-row-fade-out {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+</style>
+
+<script define:vars={{ selectAllId }}>
+  const selectAll = document.getElementById(selectAllId);
+  const rowSelects = document.querySelectorAll(".row-select");
+  if (selectAll && selectAll instanceof HTMLInputElement) {
+    selectAll.addEventListener("change", () => {
+      rowSelects.forEach((el) => {
+        if (el instanceof HTMLInputElement) el.checked = selectAll.checked;
+      });
+    });
+  }
+  document.body.addEventListener("htmx:beforeRequest", (ev) => {
+    const evt = ev;
+    const el = "detail" in evt && evt.detail?.elt;
+    if (el?.getAttribute?.("hx-delete")) {
+      const tr = el.closest("tr");
+      if (tr) tr.classList.add("data-list-row-fade-out");
+    }
+  });
+</script>
