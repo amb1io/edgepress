@@ -21,7 +21,6 @@ import {
   postsMedia,
   user as userTable,
 } from "../../../db/schema.ts";
-import { getSourceKind, getRecordById } from "../../../lib/content-source.ts";
 
 
 const locale = Astro.params["locale"] ?? defaultLocale;
@@ -36,29 +35,23 @@ if (!user) {
 }
 
 const menuItems = await getMenuItems(db);
+const postTypesWithNew = menuItems
+  .filter((item) => item.menuOptions.includes("new"))
+  .map((item) => item.postTypeSlug);
 
 const postTypeSlug = Astro.url.searchParams.get("post_type") ?? "";
 const action = Astro.url.searchParams.get("action") ?? "";
 const idParam = Astro.url.searchParams.get("id");
 
 const validAction = action === "new" || action === "edit";
-if (!postTypeSlug || !validAction) {
+const allowedType = postTypeSlug && postTypesWithNew.includes(postTypeSlug);
+
+if (!allowedType || !validAction) {
   return Astro.redirect(`/${locale}/admin/list?type=post&limit=10&page=1`);
 }
 
-const sourceKind = await getSourceKind(db, postTypeSlug);
-const supportedTableTypes = ["user", "settings"];
-const allowedType =
-  sourceKind === "table"
-    ? supportedTableTypes.includes(postTypeSlug)
-    : true;
-
-if (!allowedType) {
-  return Astro.redirect(`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`);
-}
-
-const isTableSource = sourceKind === "table";
-const isValidEditId = isTableSource
+const isUserType = postTypeSlug === "user";
+const isValidEditId = isUserType
   ? (id: string | null) => Boolean(id && id.trim().length > 0)
   : (id: string | null) => Boolean(id && /^\d+$/.test(id));
 
@@ -66,19 +59,6 @@ if (action === "edit" && (!idParam || !isValidEditId(idParam))) {
   return Astro.redirect(
     `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`
   );
-}
-
-let editRecordResult: { kind: "table" | "posts"; record: Record<string, unknown> | null } | null = null;
-if (action === "edit" && idParam) {
-  editRecordResult = await getRecordById(db, postTypeSlug, idParam);
-  if (!editRecordResult.record) {
-    return Astro.redirect(
-      `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`
-    );
-  }
-  if (editRecordResult.kind === "table" && postTypeSlug === "settings") {
-    return Astro.redirect(`/${locale}/admin/list?type=settings&limit=10&page=1`);
-  }
 }
 
 const showUserTemplate = postTypeSlug === "user";
@@ -186,35 +166,21 @@ if (!showUserTemplate && !showAttachmentTemplate) {
     .orderBy(userTable.name);
 
   if (action === "edit" && idParam) {
-    if (editRecordResult?.kind === "posts" && editRecordResult?.record) {
-      const r = editRecordResult.record;
-      post = {
-        id: Number(r["id"]),
-        title: String(r["title"] ?? ""),
-        slug: String(r["slug"] ?? ""),
-        excerpt: r["excerpt"] != null ? String(r["excerpt"]) : null,
-        body: r["body"] != null ? String(r["body"]) : null,
-        status: r["status"] != null ? String(r["status"]) : null,
-        author_id: r["author_id"] != null ? String(r["author_id"]) : null,
-        meta_values: r["meta_values"] != null ? String(r["meta_values"]) : null,
-      };
-    } else {
-      const [row] = await db
-        .select({
-          id: posts.id,
-          title: posts.title,
-          slug: posts.slug,
-          excerpt: posts.excerpt,
-          body: posts.body,
-          status: posts.status,
-          author_id: posts.author_id,
-          meta_values: posts.meta_values,
-        })
-        .from(posts)
-        .where(and(eq(posts.id, parseInt(idParam, 10)), eq(posts.post_type_id, typeId)))
-        .limit(1);
-      post = row ?? null;
-    }
+    const [row] = await db
+      .select({
+        id: posts.id,
+        title: posts.title,
+        slug: posts.slug,
+        excerpt: posts.excerpt,
+        body: posts.body,
+        status: posts.status,
+        author_id: posts.author_id,
+        meta_values: posts.meta_values,
+      })
+      .from(posts)
+      .where(and(eq(posts.id, parseInt(idParam, 10)), eq(posts.post_type_id, typeId)))
+      .limit(1);
+    post = row ?? null;
     if (action === "edit" && !post) {
       return Astro.redirect(
         `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`
@@ -982,4 +948,3 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
   </div>
 </AdminLayout>
 )}
-
