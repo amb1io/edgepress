@@ -1,0 +1,108 @@
+---
+/**
+ * Componente reutilizável do Uppy para upload de arquivos.
+ * Suporta dois modos:
+ * - "new": Upload múltiplo, não auto-procede, cria posts automaticamente após upload
+ * - "edit": Upload único, auto-procede, não cria posts automaticamente
+ */
+import type { Locale } from "../i18n/index.ts";
+
+export interface Props {
+  /** ID único do container do Uppy */
+  containerId: string;
+  /** Locale para traduções */
+  locale: Locale;
+  /** Modo de operação: "new" ou "edit" */
+  mode: "new" | "edit";
+  /** Altura do dashboard (padrão: 400 para edit, calculado para new) */
+  height?: number;
+  /** Nome do evento customizado disparado após upload (padrão: "attachment-uploaded") */
+  eventName?: string;
+  /** Se true, oculta o botão de upload no dashboard (útil para edit mode) */
+  hideUploadButton?: boolean;
+  /** Se true, limpa os arquivos após completar upload (padrão: true para new, false para edit) */
+  clearOnComplete?: boolean;
+  /** Classe CSS adicional para o container */
+  containerClass?: string;
+}
+
+const {
+  containerId,
+  locale: localeProp,
+  mode,
+  height,
+  eventName = "attachment-uploaded",
+  hideUploadButton = mode === "edit",
+  clearOnComplete = mode === "new",
+  containerClass = "",
+} = Astro.props;
+
+const currentLocale = localeProp;
+---
+
+<div
+  id={containerId}
+  class={`uppy-container ${containerClass}`}
+  data-container-id={containerId}
+  data-current-locale={currentLocale}
+  data-mode={mode}
+  data-height={height ?? ""}
+  data-event-name={eventName}
+  data-hide-upload-button={hideUploadButton}
+  data-clear-on-complete={clearOnComplete}
+></div>
+
+<style>
+  .uppy-container {
+    width: 100%;
+    max-width: 100%;
+  }
+  .uppy-container :global(.uppy-Dashboard),
+  .uppy-container :global(.uppy-Dashboard-inner) {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+</style>
+
+<script>
+  // Import será processado pelo bundler do Astro automaticamente
+  // O Astro processa scripts sem type="module" e adiciona type="module" automaticamente
+  import { initUppyInstance } from "../lib/uppy-init.ts";
+  
+  // Encontrar todos os elementos uppy-container e inicializar
+  function initAllUppyInstances() {
+    const containers = document.querySelectorAll(".uppy-container[data-container-id]");
+    containers.forEach((container) => {
+      const containerId = container.id || container.getAttribute("data-container-id");
+      if (!containerId) return;
+      
+      const element = document.getElementById(containerId);
+      if (!element) return;
+      // @ts-ignore - propriedade dinâmica adicionada pelo Uppy
+      if (element.__uppy) return;
+
+      const currentLocale = element.dataset["currentLocale"] || "pt-br";
+      const mode = (element.dataset["mode"] || "new") === "edit" ? "edit" : "new";
+      const height = element.dataset["height"] ? parseInt(element.dataset["height"], 10) : null;
+      const eventName = element.dataset["eventName"] || "attachment-uploaded";
+      const hideUploadButton = element.dataset["hideUploadButton"] === "true";
+      const clearOnComplete = element.dataset["clearOnComplete"] === "true";
+
+      initUppyInstance({
+        containerId,
+        currentLocale,
+        mode,
+        height,
+        eventName,
+        hideUploadButton,
+        clearOnComplete,
+      });
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initAllUppyInstances);
+  } else {
+    setTimeout(initAllUppyInstances, 100);
+  }
+</script>
