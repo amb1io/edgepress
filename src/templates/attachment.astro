@@ -1,0 +1,652 @@
+---
+/**
+ * Template para o post_type "attachment" (mídia) — usa Uppy para upload.
+ * postTypeSlug vem do parâmetro da URL (post_type=attachment).
+ * Cada arquivo enviado gera um novo Post; modal edita; modo edit mostra formulário.
+ */
+import AdminLayout from "../layouts/AdminLayout.astro";
+import { Icon } from "astro-icon/components";
+import { db } from "../db/index.ts";
+import { postTypes, posts } from "../db/schema.ts";
+import { eq, and } from "drizzle-orm";
+import { t, type Locale } from "../i18n/index.ts";
+import type { MenuItem } from "../lib/menu.ts";
+import UppyUpload from "../components/UppyUpload.astro";
+
+export interface Props {
+  locale: string;
+  postTypeSlug: string;
+  action: string;
+  idParam: string | null;
+  menuItems: MenuItem[];
+  currentUser: { email: string; name: string };
+}
+
+const { locale, postTypeSlug, action, idParam, menuItems, currentUser } =
+  Astro.props;
+const currentLocale = locale as Locale;
+
+const pageTitle =
+  action === "new"
+    ? t(currentLocale, "admin.content.newTitle", {
+        type: t(currentLocale, "postType.attachment"),
+      })
+    : t(currentLocale, "admin.content.editTitle", {
+        type: t(currentLocale, "postType.attachment"),
+      });
+
+let editPost: {
+  id: number;
+  title: string;
+  slug: string;
+  status: string | null;
+  meta_values: string | null;
+} | null = null;
+
+if (action === "edit" && idParam && /^\d+$/.test(idParam)) {
+  const [typeRow] = await db
+    .select({ id: postTypes.id })
+    .from(postTypes)
+    .where(eq(postTypes.slug, postTypeSlug))
+    .limit(1);
+  if (typeRow) {
+    const [row] = await db
+      .select({
+        id: posts.id,
+        title: posts.title,
+        slug: posts.slug,
+        status: posts.status,
+        meta_values: posts.meta_values,
+      })
+      .from(posts)
+      .where(
+        and(
+          eq(posts.id, parseInt(idParam, 10)),
+          eq(posts.post_type_id, typeRow.id)
+        )
+      )
+      .limit(1);
+    if (row) editPost = row;
+  }
+}
+
+function parseMeta(metaValues: string | null): Record<string, string> {
+  if (!metaValues) return {};
+  try {
+    const o = JSON.parse(metaValues) as Record<string, unknown>;
+    return {
+      mime_type: typeof o["mime_type"] === "string" ? o["mime_type"] : "",
+      attachment_file:
+        typeof o["attachment_file"] === "string" ? o["attachment_file"] : "",
+      attachment_path:
+        typeof o["attachment_path"] === "string" ? o["attachment_path"] : "",
+      attachment_alt:
+        typeof o["attachment_alt"] === "string" ? o["attachment_alt"] : "",
+    };
+  } catch {
+    return {};
+  }
+}
+
+const meta = editPost ? parseMeta(editPost.meta_values) : {};
+const initialTitle = editPost?.title ?? "";
+const initialSlug = editPost?.slug ?? "";
+const initialStatus = "published" as const;
+const initialMimeType = meta["mime_type"] ?? "";
+const initialAttachmentFile = meta["attachment_file"] ?? "";
+const initialAttachmentPath = meta["attachment_path"] ?? "";
+const initialAttachmentAlt = meta["attachment_alt"] ?? "";
+const hasImageInitial = Boolean(initialAttachmentPath);
+// Converter path do R2 para URL acessível
+// Se já é URL completa (http/https), usar diretamente
+// Caso contrário, usar endpoint /api/media/ para acessar R2 (funciona em dev e produção)
+const imageUrlInitial = initialAttachmentPath
+  ? initialAttachmentPath.startsWith("http")
+    ? initialAttachmentPath
+    : initialAttachmentPath.startsWith("/uploads/")
+      ? `/api/media${initialAttachmentPath}`
+      : initialAttachmentPath.startsWith("/")
+        ? `/api/media${initialAttachmentPath}`
+        : `/api/media/uploads/${initialAttachmentPath}`
+  : "";
+const initialPostId = editPost?.id ?? null;
+const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam);
+---
+
+<AdminLayout title={pageTitle} locale={locale} menuItems={menuItems}>
+  <div slot="header-actions" class="flex gap-4">
+    <span class="text-sm text-base-content/70">{currentUser.email}</span>
+  </div>
+
+  <script
+    define:vars={{
+      initialTitle,
+      initialSlug,
+      initialStatus,
+      initialMimeType,
+      initialAttachmentFile,
+      initialAttachmentPath,
+      initialAttachmentAlt,
+      hasImageInitial,
+      imageUrlInitial,
+      initialPostId,
+      isEditMode,
+      locale,
+      postTypeSlug,
+    }}
+  >
+    window.slugify = function (text) {
+      if (typeof text !== "string" || !text.trim()) return "";
+      return text
+        .trim()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]/g, "")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "");
+    };
+    document.addEventListener("alpine:init", () => {
+      window.Alpine.data("attachmentForm", () => ({
+        postId: null,
+        initialPostId: initialPostId ?? null,
+        hasImage: hasImageInitial ?? false,
+        imageUrl: imageUrlInitial ?? "",
+        title: initialTitle ?? "",
+        slug: initialSlug ?? "",
+        status: initialStatus ?? "published",
+        mime_type: initialMimeType ?? "",
+        attachment_file: initialAttachmentFile ?? "",
+        attachment_path: initialAttachmentPath ?? "",
+        attachment_alt: initialAttachmentAlt ?? "",
+        modalOpen: false,
+        modalTitle: initialTitle,
+        modalSlug: initialSlug,
+        modalAlt: initialAttachmentAlt,
+        mediaKind() {
+          const m = (this.mime_type || "").toLowerCase();
+          if (m.startsWith("image/")) return "image";
+          if (m === "application/pdf") return "pdf";
+          if (m.startsWith("audio/")) return "audio";
+          return "file";
+        },
+        openModal() {
+          this.modalTitle = this.title;
+          this.modalSlug = this.slug;
+          this.modalAlt = this.attachment_alt;
+          this.modalOpen = true;
+        },
+        closeModal() {
+          this.modalOpen = false;
+        },
+        saveModal() {
+          this.title = this.modalTitle;
+          this.slug = (this.modalSlug || "").trim() || window.slugify(this.modalTitle);
+          this.attachment_alt = this.modalAlt;
+          this.closeModal();
+          this.$refs.formEl?.submit();
+        },
+        slugifyFromTitle() {
+          this.slug = window.slugify(this.title);
+        },
+        async handleSubmit(e) {
+          e.preventDefault();
+          const form = this.$refs.formEl;
+          if (!form) return;
+
+          // Verificar se há arquivos no Uppy edit que precisam ser enviados
+          const uppyEdit = typeof window !== "undefined" && window.uppyEditInstance;
+          if (uppyEdit) {
+            const files = uppyEdit.getFiles();
+            const uploadingFiles = files.filter((f) => f.progress?.uploadStarted && !f.progress?.uploadComplete);
+            const pendingFiles = files.filter((f) => !f.progress?.uploadStarted);
+
+            // Se houver arquivos pendentes, fazer upload primeiro
+            if (pendingFiles.length > 0) {
+              await uppyEdit.upload();
+            }
+
+            // Aguardar uploads em progresso completarem
+            if (uploadingFiles.length > 0) {
+              await new Promise((resolve) => {
+                const checkComplete = () => {
+                  const stillUploading = uppyEdit.getFiles().filter(
+                    (f) => f.progress?.uploadStarted && !f.progress?.uploadComplete
+                  );
+                  if (stillUploading.length === 0) {
+                    resolve();
+                  } else {
+                    setTimeout(checkComplete, 100);
+                  }
+                };
+                checkComplete();
+              });
+            }
+          }
+
+          // Aguardar um tick para garantir que o Alpine atualizou os campos hidden
+          await new Promise((resolve) => setTimeout(resolve, 0));
+
+          // Criar FormData e submeter - usar valores do Alpine state para garantir sincronização
+          const formData = new FormData();
+          const currentId = this.postId ?? this.initialPostId;
+          const isEdit = currentId != null && currentId !== "";
+          
+          formData.set("post_type", form.querySelector('input[name="post_type"]')?.value || "");
+          formData.set("action", isEdit ? "edit" : "new");
+          formData.set("locale", form.querySelector('input[name="locale"]')?.value || "");
+          formData.set("status", this.status || "published");
+          formData.set("id", isEdit ? String(currentId) : "");
+          formData.set("title", this.title || "");
+          formData.set("slug", this.slug || "");
+          formData.set("meta_mime_type", this.mime_type || "");
+          formData.set("meta_attachment_file", this.attachment_file || "");
+          formData.set("meta_attachment_path", this.attachment_path || "");
+          formData.set("meta_attachment_alt", this.attachment_alt || "");
+
+          try {
+            // Usar getAttribute para evitar conflito com input[name="action"]
+            const formAction = form.getAttribute("action") || "/api/posts";
+            const res = await fetch(formAction, {
+              method: form.method || "POST",
+              body: formData,
+              headers: { Accept: "application/json" },
+            });
+
+            if (res.ok) {
+              window.location.href = `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`;
+            } else {
+              // Em caso de erro, pode mostrar mensagem ou deixar o form submeter normalmente
+              form.submit();
+            }
+          } catch {
+            // Em caso de erro, submeter normalmente
+            form.submit();
+          }
+        },
+        async deleteAttachment() {
+          const id = this.postId ?? this.initialPostId;
+          if (!id) return;
+          try {
+            const res = await fetch(`/api/posts/${id}`, { method: "DELETE" });
+            if (!res.ok) return;
+            this.hasImage = false;
+            this.postId = null;
+            this.imageUrl = "";
+            this.title = "";
+            this.slug = "";
+            this.attachment_path = "";
+            this.attachment_file = "";
+            this.mime_type = "";
+            this.attachment_alt = "";
+            window.dispatchEvent(new CustomEvent("attachment-deleted"));
+            window.location.href = `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`;
+          } catch {
+            // ignore
+          }
+        },
+      }));
+    });
+  </script>
+
+  <form
+    method="post"
+    action="/api/posts"
+    x-data="attachmentForm"
+    x-ref="formEl"
+    class="contents"
+    data-locale={locale}
+    data-code-files-error={t(currentLocale, "admin.attachment.codeFilesNotAllowed")}
+    @submit.prevent="handleSubmit($event)"
+  >
+    <input type="hidden" name="post_type" value={postTypeSlug} />
+    <input
+      type="hidden"
+      name="action"
+      :value="(postId ?? initialPostId) ? 'edit' : 'new'"
+    />
+    <input type="hidden" name="locale" value={locale} />
+    <input type="hidden" name="status" :value="status" />
+    <input
+      type="hidden"
+      name="id"
+      :value="String(postId ?? initialPostId ?? '')"
+    />
+    <input type="hidden" name="title" id="attachment-title" :value="title" />
+    <input type="hidden" name="slug" id="attachment-slug" :value="slug" />
+    <input
+      type="hidden"
+      name="meta_mime_type"
+      id="attachment-mime-type"
+      :value="mime_type"
+    />
+    <input
+      type="hidden"
+      name="meta_attachment_file"
+      id="attachment-file"
+      :value="attachment_file"
+    />
+    <input
+      type="hidden"
+      name="meta_attachment_path"
+      id="attachment-path"
+      :value="attachment_path"
+    />
+    <input
+      type="hidden"
+      name="meta_attachment_alt"
+      id="attachment-alt"
+      :value="attachment_alt"
+    />
+
+    {!isEditMode ? (
+      <UppyUpload
+        containerId="uppy-upload"
+        locale={currentLocale}
+        mode="new"
+        containerClass="w-full max-w-full h-[calc(100vh-4rem)] min-h-[400px]"
+      />
+    ) : null}
+
+    {isEditMode ? (
+      <div class="p-6 max-w-2xl mx-auto flex flex-col gap-5">
+        <div class="form-control">
+          <label for="attachment-title-edit" class="label">
+            <span class="label-text">{t(currentLocale, "admin.list.titleColumn")}</span>
+          </label>
+          <input
+            type="text"
+            id="attachment-title-edit"
+            required
+            class="input input-bordered w-full"
+            x-model="title"
+            @input="slugifyFromTitle()"
+          />
+        </div>
+        <div class="form-control">
+          <label for="attachment-slug-edit" class="label">
+            <span class="label-text">{t(currentLocale, "admin.content.slug")}</span>
+          </label>
+          <input
+            type="text"
+            id="attachment-slug-edit"
+            required
+            class="input input-bordered w-full font-mono"
+            x-model="slug"
+          />
+        </div>
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{t(currentLocale, "admin.attachment.preview")}</span>
+          </label>
+          <div
+            class="rounded-lg border border-base-300 bg-base-200/30 p-4 flex flex-col items-center justify-center gap-2 min-h-[200px]"
+            x-show="imageUrl && mediaKind() === 'image'"
+            x-cloak
+          >
+            <img
+              :src="imageUrl"
+              :alt="attachment_alt"
+              class="max-h-[300px] w-auto object-contain rounded-lg shadow-md pointer-events-none"
+            />
+          </div>
+          <div
+            class="text-sm text-base-content/50 text-center py-8 rounded-lg bg-base-200/50 border border-base-300 border-dashed"
+            x-show="!imageUrl || mediaKind() !== 'image'"
+          >
+            <span x-show="!imageUrl">{t(currentLocale, "admin.attachment.dropzonePlaceholder")}</span>
+            <span x-show="imageUrl && mediaKind() !== 'image'" x-cloak class="text-base-content/60">
+              Preview disponível apenas para imagens
+            </span>
+          </div>
+        </div>
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{t(currentLocale, "admin.attachment.uploadLabel")}</span>
+          </label>
+          <UppyUpload
+            containerId="uppy-edit"
+            locale={currentLocale}
+            mode="edit"
+            height={280}
+            containerClass="uppy-edit-container min-h-[280px] w-full"
+          />
+        </div>
+        <div class="form-control">
+          <label for="attachment-alt-edit" class="label">
+            <span class="label-text">{t(currentLocale, "admin.attachment.attachmentAlt")}</span>
+          </label>
+          <input
+            type="text"
+            id="attachment-alt-edit"
+            class="input input-bordered w-full"
+            x-model="attachment_alt"
+          />
+        </div>
+        <div class="rounded-lg border border-base-300 bg-base-200/30 p-4">
+          <p class="text-sm font-medium text-base-content/70 mb-2">{t(currentLocale, "admin.attachment.metadata")}</p>
+          <dl class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+            <div>
+              <dt class="text-base-content/50">{t(currentLocale, "admin.attachment.attachmentFile")}</dt>
+              <dd class="font-mono truncate" x-text="(attachment_file || '') || '—'"></dd>
+            </div>
+            <div>
+              <dt class="text-base-content/50">{t(currentLocale, "admin.attachment.mimeType")}</dt>
+              <dd class="font-mono truncate" x-text="mime_type || '—'"></dd>
+            </div>
+            <div class="sm:col-span-2">
+              <dt class="text-base-content/50">{t(currentLocale, "admin.attachment.attachmentPath")}</dt>
+              <dd class="font-mono text-xs break-all mt-0.5" x-text="attachment_path || '—'"></dd>
+            </div>
+          </dl>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button type="submit" class="btn btn-primary">
+            {t(currentLocale, "admin.content.update")}
+          </button>
+          <a
+            href={`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`}
+            class="btn btn-ghost"
+          >
+            {t(currentLocale, "admin.content.cancel")}
+          </a>
+          <button
+            type="button"
+            class="btn btn-ghost text-error"
+            @click="deleteAttachment()"
+          >
+            {t(currentLocale, "admin.list.delete")}
+          </button>
+        </div>
+      </div>
+    ) : null}
+
+    <template x-teleport="body">
+      <div
+        x-show="modalOpen"
+        x-cloak
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+        @keydown.escape.window="closeModal()"
+        @click="closeModal()"
+      >
+        <div
+          class="bg-base-100 rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="attachment-modal-title"
+          @click.stop
+        >
+          <h2 id="attachment-modal-title" class="text-lg font-semibold mb-4">
+            {t(currentLocale, "admin.attachment.metadata")}
+          </h2>
+
+          <div class="mb-4 p-3 rounded-lg bg-base-200/50 border border-base-300">
+            <p class="text-xs font-medium text-base-content/60 mb-2">{t(currentLocale, "admin.attachment.preview")}</p>
+            <div class="flex justify-center items-center min-h-[100px]">
+              <template x-if="mediaKind() === 'image'">
+                <img :src="imageUrl" :alt="modalAlt" class="max-h-[120px] w-auto object-contain rounded" />
+              </template>
+              <template x-if="mediaKind() === 'pdf'">
+                <a :href="imageUrl" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-ghost gap-2">
+                  <Icon name="line-md:document" size={24} />
+                  <span x-text="attachment_file || '—'"></span>
+                </a>
+              </template>
+              <template x-if="mediaKind() === 'audio'">
+                <audio :src="imageUrl" controls class="max-w-full max-h-[80px]" />
+              </template>
+              <template x-if="mediaKind() === 'file'">
+                <span class="text-sm font-mono text-base-content/70" x-text="attachment_file || '—'"></span>
+              </template>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-4">
+            <div class="form-control">
+              <label for="modal-title" class="label">
+                <span class="label-text">{t(currentLocale, "admin.list.titleColumn")}</span>
+              </label>
+              <input
+                type="text"
+                id="modal-title"
+                class="input input-bordered w-full"
+                x-model="modalTitle"
+              />
+            </div>
+            <div class="form-control">
+              <label for="modal-slug" class="label">
+                <span class="label-text">{t(currentLocale, "admin.content.slug")}</span>
+              </label>
+              <input
+                type="text"
+                id="modal-slug"
+                class="input input-bordered w-full font-mono text-sm"
+                x-model="modalSlug"
+              />
+            </div>
+            <div class="form-control">
+              <label for="modal-alt" class="label">
+                <span class="label-text">{t(currentLocale, "admin.attachment.attachmentAlt")}</span>
+              </label>
+              <input
+                type="text"
+                id="modal-alt"
+                class="input input-bordered w-full"
+                x-model="modalAlt"
+              />
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div class="p-2 rounded bg-base-200/50">
+                <span class="text-base-content/60">{t(currentLocale, "admin.attachment.attachmentFile")}:</span>
+                <p class="font-mono truncate mt-0.5" x-text="(attachment_file || '') || '—'"></p>
+              </div>
+              <div class="p-2 rounded bg-base-200/50">
+                <span class="text-base-content/60">{t(currentLocale, "admin.attachment.mimeType")}:</span>
+                <p class="font-mono truncate mt-0.5" x-text="mime_type || '—'"></p>
+              </div>
+            </div>
+            <div class="flex gap-2 mt-2">
+              <button type="button" class="btn btn-primary" @click="saveModal()">
+                {t(currentLocale, "admin.content.saveEdit")}
+              </button>
+              <button type="button" class="btn btn-ghost" @click="closeModal()">
+                {t(currentLocale, "admin.content.cancel")}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </form>
+
+</AdminLayout>
+
+<script>
+  // Handler para criar posts automaticamente quando arquivos são enviados no modo "new"
+  async function handleAttachmentUploaded(
+    e: CustomEvent<{ path: string; imageUrl: string; filename: string; originalFilename?: string; mimeType: string }>
+  ) {
+    const alpineRoot = document.querySelector("[x-data*='attachmentForm']");
+    const Alpine = (window as unknown as { Alpine?: { $data: (el: Element) => Record<string, unknown> } }).Alpine;
+    if (!alpineRoot || !Alpine) return;
+    const ctx = Alpine.$data(alpineRoot) as {
+      hasImage?: boolean;
+      imageUrl?: string;
+      attachment_path?: string;
+      attachment_file?: string;
+      mime_type?: string;
+      title?: string;
+      slug?: string;
+      postId?: number | null;
+      initialPostId?: number | null;
+    };
+    if (!ctx) return;
+    ctx.hasImage = true;
+    ctx.imageUrl = e.detail.imageUrl;
+    ctx.attachment_path = e.detail.path;
+    ctx.attachment_file = e.detail.filename;
+    ctx.mime_type = e.detail.mimeType;
+    const slugify = (window as unknown as { slugify?: (t: string) => string }).slugify;
+    // Usar o nome original do arquivo para o título do post
+    const originalFilename = e.detail.originalFilename || e.detail.filename || "Untitled";
+    const title = originalFilename;
+    const baseSlug = slugify?.(originalFilename || "untitled") ?? "file";
+    const slug = `${baseSlug}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    // Atualizar título sempre que uma nova imagem é enviada (usar nome original)
+    // Em modo de edição, se o título estiver vazio ou for o nome antigo do arquivo, atualizar
+    if (typeof ctx.title === "string" && (!ctx.title || ctx.title === ctx.attachment_file)) {
+      ctx.title = title;
+      ctx.slug = slug;
+    } else if (typeof ctx.title !== "string") {
+      ctx.title = title;
+      ctx.slug = slug;
+    }
+    // Não criar post automaticamente se estiver em modo de edição
+    if (ctx.initialPostId) return;
+    const form = alpineRoot as HTMLFormElement;
+    const postType = form.querySelector<HTMLInputElement>('input[name="post_type"]')?.value?.trim() || "attachment";
+    const localeVal = form.querySelector<HTMLInputElement>('input[name="locale"]')?.value ?? "pt-br";
+    const fd = new FormData();
+    // Usar o nome original do arquivo para o título do post (reutilizar variável já declarada)
+    const postTitle = originalFilename;
+    const postBaseSlug = slugify?.(originalFilename || "untitled") ?? "file";
+    const postSlug = `${postBaseSlug}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    fd.set("post_type", postType);
+    fd.set("action", "new");
+    fd.set("locale", localeVal);
+    fd.set("title", postTitle);
+    fd.set("slug", postSlug);
+    fd.set("status", "published");
+    fd.set("meta_mime_type", e.detail.mimeType);
+    fd.set("meta_attachment_file", e.detail.filename);
+    fd.set("meta_attachment_path", e.detail.path);
+    fd.set("meta_attachment_alt", "");
+    try {
+      const res = await fetch("/api/posts", {
+        method: "POST",
+        body: fd,
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { id?: number };
+      if (typeof data?.id === "number") ctx.postId = data.id;
+    } catch {
+      // ignore
+    }
+  }
+
+  function onReady() {
+    window.addEventListener("attachment-uploaded", (ev: Event) => {
+      handleAttachmentUploaded(
+        ev as CustomEvent<{ path: string; imageUrl: string; filename: string; originalFilename?: string; mimeType: string }>
+      );
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", onReady);
+  } else {
+    onReady();
+  }
+</script>
