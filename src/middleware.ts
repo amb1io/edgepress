@@ -2,16 +2,47 @@ import { auth } from "./lib/auth.ts";
 import { defineMiddleware } from "astro:middleware";
 import { defaultLocale } from "./i18n/index.ts";
 import { getTrustedOrigins, isValidOrigin } from "./lib/utils/csrf-protection.ts";
+import { db } from "./db/index.ts";
+import { settings as settingsTable } from "./db/schema.ts";
+import { eq } from "drizzle-orm";
 
 const protectedPaths = ["/admin"];
 const authPaths = ["/login"];
+const setupPath = "/setup";
 
 // Endpoints sensíveis que requerem validação extra de CSRF
 const sensitiveAPIPaths = ["/api/posts", "/api/upload", "/api/media"];
 
+async function isSetupDone(): Promise<boolean> {
+  try {
+    const rows = await db
+      .select({ value: settingsTable.value })
+      .from(settingsTable)
+      .where(eq(settingsTable.name, "setup_done"))
+      .limit(1);
+    return rows[0]?.value === "Y";
+  } catch {
+    return true;
+  }
+}
+
 export const onRequest = defineMiddleware(async (context, next) => {
   const pathname = new URL(context.request.url).pathname;
   const method = context.request.method.toUpperCase();
+
+  const isSetupPage = pathname === setupPath;
+  const isApi = pathname.startsWith("/api");
+  const isLoginPage = authPaths.some((p) => pathname === p || pathname.startsWith(p + "/"));
+
+  if (!isApi && !isLoginPage) {
+    const setupDone = await isSetupDone();
+    if (isSetupPage && setupDone) {
+      return context.redirect(`/${defaultLocale}/admin`);
+    }
+    if (!isSetupPage && !setupDone) {
+      return context.redirect(setupPath);
+    }
+  }
 
   // Validação CSRF para endpoints sensíveis (POST/PUT/DELETE/PATCH)
   const isSensitiveAPI = sensitiveAPIPaths.some((p) => pathname.startsWith(p));
