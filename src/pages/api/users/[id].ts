@@ -2,10 +2,14 @@ import type { APIRoute } from "astro";
 import { db } from "../../../db/index.ts";
 import { user as userTable, account, session, USER_ROLE_IDS } from "../../../db/schema.ts";
 import { eq, and, ne } from "drizzle-orm";
+import { requireMinRole, assertCanSetUserRole } from "../../../lib/api-auth.ts";
 
 export const prerender = false;
 
-export const DELETE: APIRoute = async ({ params }) => {
+export const DELETE: APIRoute = async ({ params, request, locals }) => {
+  const authResult = await requireMinRole(request, 0, locals);
+  if (authResult instanceof Response) return authResult;
+
   const id = params?.id;
   if (!id || id.trim().length === 0) {
     return new Response("Bad Request", { status: 400 });
@@ -39,7 +43,11 @@ export const DELETE: APIRoute = async ({ params }) => {
   }
 };
 
-export const PUT: APIRoute = async ({ params, request }) => {
+export const PUT: APIRoute = async ({ params, request, locals }) => {
+  const authResult = await requireMinRole(request, 0, locals);
+  if (authResult instanceof Response) return authResult;
+  const { user: currentUser } = authResult;
+
   const id = params?.id;
   if (!id || id.trim().length === 0) {
     return new Response("Bad Request", { status: 400 });
@@ -55,6 +63,20 @@ export const PUT: APIRoute = async ({ params, request }) => {
     const roleNum = roleRaw !== undefined && roleRaw !== "" ? parseInt(roleRaw, 10) : NaN;
     const role =
       Number.isNaN(roleNum) || !USER_ROLE_IDS.includes(roleNum as (typeof USER_ROLE_IDS)[number]) ? 3 : roleNum;
+
+    // Prevenir escalação de privilégios: apenas admin pode alterar roles; não pode atribuir role superior ao próprio
+    const privilegeError = assertCanSetUserRole(
+      currentUser.role ?? 3,
+      currentUser.id,
+      id,
+      role
+    );
+    if (privilegeError) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden", message: privilegeError }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      );
+    }
 
     if (!name || !email) {
       return new Response("Bad Request", { status: 400 });

@@ -2,10 +2,14 @@ import type { APIRoute } from "astro";
 import { db } from "../../../db/index.ts";
 import { settings as settingsTable } from "../../../db/schema.ts";
 import { eq } from "drizzle-orm";
+import { requireMinRole } from "../../../lib/api-auth.ts";
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, request, locals }) => {
+  const authResult = await requireMinRole(request, 1, locals);
+  if (authResult instanceof Response) return authResult;
+
   const idRaw = params?.id;
   const id = idRaw ? parseInt(idRaw, 10) : NaN;
   if (Number.isNaN(id)) {
@@ -42,7 +46,10 @@ export const GET: APIRoute = async ({ params }) => {
   );
 };
 
-export const DELETE: APIRoute = async ({ params }) => {
+export const DELETE: APIRoute = async ({ params, request, locals }) => {
+  const authResult = await requireMinRole(request, 0, locals);
+  if (authResult instanceof Response) return authResult;
+
   const idRaw = params?.id;
   const id = idRaw ? parseInt(idRaw, 10) : NaN;
   if (Number.isNaN(id)) {

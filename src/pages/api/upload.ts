@@ -2,9 +2,11 @@
  * Upload de arquivos para Cloudflare R2 (bucket MEDIA_BUCKET).
  * Aceita multipart/form-data com um único arquivo (campo "file" ou primeiro arquivo).
  * Retorna JSON: { key, path, mimeType, filename }.
+ * Requer autenticação (mínimo role autor).
  */
 import type { APIRoute } from "astro";
 import { applyRateLimit, getRateLimits } from "../../lib/utils/rate-limiter.ts";
+import { requireMinRole } from "../../lib/api-auth.ts";
 
 export const prerender = false;
 
@@ -44,11 +46,14 @@ function buildKey(filename: string, _mimeType: string): string {
 }
 
 export const POST: APIRoute = async ({ request, locals }) => {
+  const authResult = await requireMinRole(request, 2, locals);
+  if (authResult instanceof Response) return authResult;
+
   const env = (locals as { runtime?: { env?: Record<string, string> } }).runtime?.env;
-  
+
   // Obter rate limits do ambiente
   const rateLimits = getRateLimits(env);
-  
+
   // Aplicar rate limiting: configurável via env (padrão: 20 uploads / hora)
   const rateLimitResponse = applyRateLimit(request, rateLimits.UPLOAD);
   if (rateLimitResponse) {

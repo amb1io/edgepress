@@ -1,12 +1,14 @@
 /**
  * API de cadastro de usuário via better-auth (email + password).
  * @see https://www.better-auth.com/docs/authentication/email-password
+ * Previne escalação de privilégios: apenas admin autenticado pode definir role diferente de leitor (3).
  */
 import { auth } from "../../lib/auth.ts";
 import { USER_ROLE_IDS } from "../../db/schema.ts";
 import type { APIRoute } from "astro";
 import { applyRateLimit, getRateLimits } from "../../lib/utils/rate-limiter.ts";
 import { sanitizeCallbackURL } from "../../lib/utils/url-validator.ts";
+import { getSession } from "../../lib/api-auth.ts";
 
 export const prerender = false;
 
@@ -56,10 +58,18 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
     );
   }
 
-  const roleNum = role !== undefined && role !== "" ? parseInt(role, 10) : NaN;
-  const roleValue = Number.isNaN(roleNum) || !USER_ROLE_IDS.includes(roleNum as (typeof USER_ROLE_IDS)[number])
-    ? 3
-    : roleNum; // 3 = leitor
+  let roleValue: number;
+  const session = await getSession(request);
+  const isAdmin = session?.user?.role === 0;
+  if (isAdmin) {
+    const roleNum = role !== undefined && role !== "" ? parseInt(role, 10) : NaN;
+    roleValue = Number.isNaN(roleNum) || !USER_ROLE_IDS.includes(roleNum as (typeof USER_ROLE_IDS)[number])
+      ? 3
+      : roleNum;
+  } else {
+    // Prevenir escalação de privilégios: apenas admin pode definir role diferente de leitor
+    roleValue = 3; // leitor
+  }
 
   const url = new URL(request.url);
   const origin = url.origin;

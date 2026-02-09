@@ -3,10 +3,14 @@ import { db } from "../../../db/index.ts";
 import { taxonomies, postsTaxonomies } from "../../../db/schema.ts";
 import { eq, and, ne } from "drizzle-orm";
 import { slugify } from "../../../lib/slugify.ts";
+import { requireMinRole } from "../../../lib/api-auth.ts";
 
 export const prerender = false;
 
-export const PUT: APIRoute = async ({ params, request }) => {
+export const PUT: APIRoute = async ({ params, request, locals }) => {
+  const authResult = await requireMinRole(request, 1, locals);
+  if (authResult instanceof Response) return authResult;
+
   const id = params?.id;
   if (!id || !/^\d+$/.test(id)) {
     return new Response("Bad Request", { status: 400 });
@@ -60,7 +64,10 @@ export const PUT: APIRoute = async ({ params, request }) => {
   }
 };
 
-export const DELETE: APIRoute = async ({ params }) => {
+export const DELETE: APIRoute = async ({ params, request, locals }) => {
+  const authResult = await requireMinRole(request, 1, locals);
+  if (authResult instanceof Response) return authResult;
+
   const id = params?.id;
   if (!id || !/^\d+$/.test(id)) {
     return new Response("Bad Request", { status: 400 });
