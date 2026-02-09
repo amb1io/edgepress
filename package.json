@@ -26,6 +26,7 @@
     "dev:vite": "vite",
     "wrangler-type": "wrangler types -c wrangler.jsonc",
     "build": "wrangler types -c wrangler.jsonc && astro build",
+    "build:run": "wrangler types -c wrangler.jsonc && astro build && wrangler dev",
     "build:vite": "tsc && vite build",
     "preview": "astro preview",
     "preview:vite": "vite preview",
