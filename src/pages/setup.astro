@@ -1,0 +1,121 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Notificacao from "../components/Notificacao.astro";
+
+const errorMessages: Record<string, string> = {
+  invalid_credentials: "Email ou senha incorretos. Tente novamente.",
+  missing_fields: "Preencha todos os campos obrigatórios: nome, email, senha.",
+  invalid_request: "Requisição inválida.",
+  password_too_short: "A senha deve ter no mínimo 8 caracteres.",
+  signup_failed: "Não foi possível criar o usuário. Tente outro email.",
+  email_already_exists: "Este email já está em uso.",
+};
+
+const error = Astro.url.searchParams.get("error");
+const errorMessage = error ? errorMessages[error] ?? "Erro ao concluir o setup." : null;
+---
+
+<Layout title="Setup - Edgepress">
+  <main class="min-h-screen flex items-center justify-center bg-base-200 p-4">
+    <div class="card w-full max-w-md bg-base-100 shadow-xl">
+      <div class="card-body">
+        <h1 class="card-title justify-center text-2xl mb-2">Configuração inicial</h1>
+        <p class="text-center text-base-content/70 text-sm mb-4">
+          Crie o primeiro usuário e defina os dados do site.
+        </p>
+
+        {errorMessage && (
+          <Notificacao type="error" message={errorMessage} dismissible className="mb-4" />
+        )}
+
+        <form
+          action="/api/setup"
+          method="post"
+          class="space-y-4"
+        >
+          <div class="form-control w-full">
+            <label class="label" for="name">
+              <span class="label-text">Nome do usuário</span>
+            </label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              placeholder="Seu nome"
+              class="input input-bordered w-full"
+              required
+              autocomplete="name"
+            />
+          </div>
+
+          <div class="form-control w-full">
+            <label class="label" for="email">
+              <span class="label-text">Email</span>
+            </label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              placeholder="seu@email.com"
+              class="input input-bordered w-full"
+              required
+              autocomplete="email"
+            />
+          </div>
+
+          <div class="form-control w-full">
+            <label class="label" for="password">
+              <span class="label-text">Senha</span>
+            </label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              placeholder="Mínimo 8 caracteres"
+              class="input input-bordered w-full"
+              required
+              minlength="8"
+              autocomplete="new-password"
+            />
+          </div>
+
+          <div class="divider text-sm text-base-content/70">Dados do site</div>
+
+          <div class="form-control w-full">
+            <label class="label" for="site_name">
+              <span class="label-text">Nome do site</span>
+            </label>
+            <input
+              type="text"
+              id="site_name"
+              name="site_name"
+              placeholder="Meu site"
+              class="input input-bordered w-full"
+              value="demo site"
+            />
+          </div>
+
+          <div class="form-control w-full">
+            <label class="label" for="site_description">
+              <span class="label-text">Descrição do site</span>
+            </label>
+            <input
+              type="text"
+              id="site_description"
+              name="site_description"
+              placeholder="Uma breve descrição"
+              class="input input-bordered w-full"
+              value="demo_description"
+            />
+          </div>
+
+          <div class="form-control mt-6">
+            <button type="submit" class="btn btn-primary">
+              Salvar alterações
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+</Layout>
