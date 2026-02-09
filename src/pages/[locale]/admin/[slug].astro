@@ -1,0 +1,66 @@
+---
+/**
+ * Rota dinâmica admin/[slug].
+ * - Se a URL tiver o parâmetro "domain", carrega o template src/templates/{domain}.astro
+ *   (ex.: admin/post?domain=taxonomies&type=category → templates/taxonomies.astro).
+ * - Caso contrário, redireciona: post/page → list; dashboard → admin; settings → settings.
+ */
+import { locales, defaultLocale } from "../../../i18n/index.ts";
+import { db } from "../../../db/index.ts";
+import { getMenuItems } from "../../../lib/menu.ts";
+import type { MenuItem } from "../../../lib/menu.ts";
+import TaxonomiesTemplate from "../../../templates/taxonomies.astro";
+
+const locale = Astro.params["locale"] ?? defaultLocale;
+const slug = Astro.params["slug"];
+const domain = Astro.url.searchParams.get("domain");
+const type = Astro.url.searchParams.get("type") ?? "";
+
+const templateMap: Record<string, typeof TaxonomiesTemplate> = {
+  taxonomies: TaxonomiesTemplate,
+};
+const TemplateComponent = domain ? templateMap[domain] : null;
+
+let menuItems: MenuItem[] = [];
+let params: Record<string, string> = {};
+
+if (!locales.includes(locale as "en" | "es" | "pt-br")) {
+  return Astro.redirect(`/${defaultLocale}/admin`);
+}
+if (!slug) return Astro.redirect(`/${locale}/admin`);
+
+if (TemplateComponent) {
+  const user = Astro.locals.user;
+  if (!user) {
+    return Astro.redirect("/login");
+  }
+  menuItems = await getMenuItems(db);
+  Astro.url.searchParams.forEach((value, key) => {
+    params[key] = value;
+  });
+} else {
+  if (slug === "post" || slug === "page") {
+    return Astro.redirect(`/${locale}/admin/list?type=${slug}&limit=10&page=1`);
+  }
+  if (slug === "dashboard") {
+    return Astro.redirect(`/${locale}/admin`);
+  }
+  if (slug === "settings") {
+    return Astro.redirect(`/${locale}/admin/settings?page=general`);
+  }
+  return Astro.redirect(`/${locale}/admin`);
+}
+---
+
+{
+  TemplateComponent && domain && (
+    <TemplateComponent
+      locale={locale}
+      slug={slug}
+      domain={domain}
+      type={type}
+      menuItems={menuItems}
+      params={params}
+    />
+  )
+}

@@ -1,0 +1,5 @@
+---
+const { locale } = Astro.params;
+if (!locale) return Astro.redirect("/pt-br/admin");
+return Astro.redirect(`/${locale}/admin`);
+---

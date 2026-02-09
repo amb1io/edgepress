@@ -1,0 +1,24 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { t, locales, defaultLocale } from "../../../i18n/index.ts";
+import { db } from "../../../db/index.ts";
+import { getMenuItems } from "../../../lib/menu.ts";
+
+const locale = Astro.params.locale ?? defaultLocale;
+if (!locales.includes(locale as "en" | "es" | "pt-br")) {
+  return Astro.redirect(`/${defaultLocale}/admin`);
+}
+
+const user = Astro.locals.user;
+if (!user) {
+  return Astro.redirect("/login");
+}
+
+const menuItems = await getMenuItems(db);
+---
+
+<AdminLayout title={t(locale, "admin.menu.settings")} locale={locale} menuItems={menuItems} user={user}>
+  <div class="p-6">
+    <p class="text-base-content/70">Settings — coming soon.</p>
+  </div>
+</AdminLayout>

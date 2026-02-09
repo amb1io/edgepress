@@ -3,12 +3,12 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
 import DataList from "../../../components/DataList.astro";
 import { db } from "../../../db/index.ts";
 import { user as userTable } from "../../../db/schema.ts";
-import { getListItems } from "../../../lib/list-items.ts";
+import { getListItems, getSettingsListItems } from "../../../lib/list-items.ts";
 import { getMenuItems } from "../../../lib/menu.ts";
 import { t, locales, defaultLocale } from "../../../i18n/index.ts";
 import { and, asc, desc, like, sql } from "drizzle-orm";
 import { USER_ROLE_LABEL_KEYS } from "../../../db/schema.ts";
-import { getTableNames } from "../../../lib/db-utils.ts";
+import { getSourceKind } from "../../../lib/content-source.ts";
 
 const locale = Astro.params["locale"] ?? defaultLocale;
 if (!locales.includes(locale as "en" | "es" | "pt-br")) {
@@ -34,8 +34,8 @@ for (const [key, value] of Astro.url.searchParams) {
   if (key.startsWith("filter_") && value) filter[key.replace("filter_", "")] = value;
 }
 
-const tableNames = await getTableNames(db);
-const loadFromTable = tableNames.includes(type);
+const sourceKind = await getSourceKind(db, type);
+const loadFromTable = sourceKind === "table";
 
 function buildListUrl(overrides: Record<string, string>) {
   const params = new URLSearchParams(Astro.url.searchParams);
@@ -123,6 +123,24 @@ if (loadFromTable && type === "user") {
   }));
   listEmptyColspan = 8;
   deletePathTemplate = "/api/users/{id}";
+} else if (loadFromTable && type === "settings") {
+  const listResult = await getSettingsListItems(db, {
+    order,
+    orderDir,
+    limit,
+    page,
+    ...(Object.keys(filter).length > 0 ? { filter } : {}),
+  });
+  result = listResult;
+  listColumns = [
+    { key: "id", label: t(locale, "admin.list.id"), sortLink: buildListUrl({ order: "id", orderDir: order === "id" && orderDir === "asc" ? "desc" : "asc" }) },
+    { key: "name", label: "Nome", sortLink: buildListUrl({ order: "name", orderDir: order === "name" && orderDir === "asc" ? "desc" : "asc" }) },
+    { key: "value", label: "Valor", sortLink: buildListUrl({ order: "value", orderDir: order === "value" && orderDir === "asc" ? "desc" : "asc" }) },
+    { key: "autoload", label: "Autoload", sortLink: buildListUrl({ order: "autoload", orderDir: order === "autoload" && orderDir === "asc" ? "desc" : "asc" }) },
+  ];
+  listItems = result.items;
+  listEmptyColspan = 6;
+  deletePathTemplate = "/api/settings/{id}";
 } else {
   const listResult = await getListItems(db, {
     type,
@@ -176,6 +194,17 @@ if (loadFromTable && type === "user") {
           <div class="form-control">
             <label class="label py-0"><span class="label-text text-xs">{t(locale, "admin.user.formEmail")}</span></label>
             <input type="text" name="filter_email" placeholder={t(locale, "admin.list.filter")} class="input input-bordered input-sm w-40" value={filter["email"] ?? ""} />
+          </div>
+        </>
+      ) : type === "settings" ? (
+        <>
+          <div class="form-control">
+            <label class="label py-0"><span class="label-text text-xs">Nome</span></label>
+            <input type="text" name="filter_name" placeholder={t(locale, "admin.list.filter")} class="input input-bordered input-sm w-32" value={filter["name"] ?? ""} />
+          </div>
+          <div class="form-control">
+            <label class="label py-0"><span class="label-text text-xs">Valor</span></label>
+            <input type="text" name="filter_value" placeholder={t(locale, "admin.list.filter")} class="input input-bordered input-sm w-32" value={filter["value"] ?? ""} />
           </div>
         </>
       ) : (

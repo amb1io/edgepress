@@ -8,9 +8,11 @@ import {
   taxonomies,
   postsTaxonomies,
   user,
+  settings,
   defaultMetaSchema,
 } from "../../db/schema.ts";
-import { getListItems } from "../list-items.ts";
+import { getListItems, getSettingsListItems } from "../list-items.ts";
+import { getTableNames } from "../db-utils.ts";
 
 describe("getListItems", () => {
   let client: ReturnType<typeof createClient>;
@@ -26,6 +28,7 @@ describe("getListItems", () => {
         taxonomies,
         postsTaxonomies,
         user,
+        settings,
       },
     });
     await migrate(db, { migrationsFolder: "./drizzle" });
@@ -121,5 +124,73 @@ describe("getListItems", () => {
     expect(result.items).toHaveLength(0);
     expect(result.total).toBe(0);
     expect(result.totalPages).toBe(1);
+  });
+});
+
+describe("list dynamic: type as table name vs post_type", () => {
+  let client: ReturnType<typeof createClient>;
+  let db: ReturnType<typeof drizzle>;
+
+  beforeAll(async () => {
+    client = createClient({ url: ":memory:" });
+    db = drizzle(client, {
+      schema: {
+        postTypes,
+        posts,
+        taxonomies,
+        postsTaxonomies,
+        user,
+        settings,
+      },
+    });
+    // Create only the settings table (avoids migration 0011 which can fail in libsql)
+    await client.execute(
+      "CREATE TABLE IF NOT EXISTS settings (id integer PRIMARY KEY AUTOINCREMENT NOT NULL, name text NOT NULL, value text NOT NULL, autoload integer DEFAULT 1 NOT NULL)"
+    );
+    await client.execute("CREATE INDEX IF NOT EXISTS settings_name_idx ON settings (name)");
+    await db.insert(settings).values([
+      { name: "site_name", value: "My Site", autoload: true },
+      { name: "setup_done", value: "Y", autoload: true },
+    ]);
+  });
+
+  it("getTableNames includes 'settings' when table exists", async () => {
+    const names = await getTableNames(db);
+    expect(names).toContain("settings");
+  });
+
+  it("when type=settings and table exists, getSettingsListItems returns settings rows (e.g. /pt-br/admin/list?type=settings&limit=10&page=1)", async () => {
+    const result = await getSettingsListItems(db, { limit: 10, page: 1 });
+    expect(result.items.length).toBe(2);
+    expect(result.total).toBe(2);
+    expect(result.page).toBe(1);
+    expect(result.limit).toBe(10);
+    expect(result.totalPages).toBe(1);
+    const first = result.items[0];
+    expect(first).toHaveProperty("id");
+    expect(first).toHaveProperty("name");
+    expect(first).toHaveProperty("value");
+    expect(first).toHaveProperty("autoload");
+    expect(typeof first.id).toBe("number");
+    expect(["Sim", "Não"]).toContain(first.autoload);
+    const names = result.items.map((i) => i.name);
+    expect(names).toContain("site_name");
+    expect(names).toContain("setup_done");
+  });
+
+  it("getSettingsListItems paginates (limit=1, page=1 and page=2)", async () => {
+    const page1 = await getSettingsListItems(db, { limit: 1, page: 1 });
+    const page2 = await getSettingsListItems(db, { limit: 1, page: 2 });
+    expect(page1.items.length).toBe(1);
+    expect(page2.items.length).toBe(1);
+    expect(page1.total).toBe(2);
+    expect(page2.total).toBe(2);
+    expect(page1.totalPages).toBe(2);
+  });
+
+  it("getSettingsListItems filters by name (LIKE)", async () => {
+    const result = await getSettingsListItems(db, { limit: 10, page: 1, filter: { name: "setup" } });
+    expect(result.total).toBe(1);
+    expect(result.items[0]?.name).toBe("setup_done");
   });
 });
