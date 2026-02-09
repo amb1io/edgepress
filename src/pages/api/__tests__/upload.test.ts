@@ -1,7 +1,13 @@
 /**
  * Testes do endpoint /api/upload (upload para Cloudflare R2).
+ * Autenticação é mockada: requireMinRole retorna usuário autor.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const mockAuthUser = { user: { id: "test-user", role: 2 }, session: { id: "s1", userId: "test-user" } };
+vi.mock("../../../lib/api-auth.ts", () => ({
+  requireMinRole: vi.fn().mockResolvedValue(mockAuthUser),
+}));
 
 describe("upload API", () => {
   beforeEach(() => {

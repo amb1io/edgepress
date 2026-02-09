@@ -1,12 +1,13 @@
 /**
  * API de configurações (settings).
- * GET: retorna opções por nome (query: names=site_name,site_description) ou todas autoload.
- * PATCH: atualiza site_name, site_description, setup_done (body JSON).
+ * GET: retorna opções por nome (query: names=site_name,site_description) ou todas autoload. Público para leitura.
+ * PATCH: atualiza site_name, site_description, setup_done (body JSON). Requer admin.
  */
 import type { APIRoute } from "astro";
 import { db } from "../../db/index.ts";
 import { settings as settingsTable } from "../../db/schema.ts";
 import { eq, inArray } from "drizzle-orm";
+import { requireMinRole } from "../../lib/api-auth.ts";
 
 export const prerender = false;
 
@@ -46,7 +47,10 @@ export const GET: APIRoute = async ({ url }) => {
 
 const ALLOWED_KEYS = ["site_name", "site_description", "setup_done"] as const;
 
-export const PATCH: APIRoute = async ({ request }) => {
+export const PATCH: APIRoute = async ({ request, locals }) => {
+  const authResult = await requireMinRole(request, 0, locals);
+  if (authResult instanceof Response) return authResult;
+
   try {
     const body = await request.json().catch(() => ({})) as Record<string, string>;
     if (typeof body !== "object" || body === null) {
