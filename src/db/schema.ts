@@ -4,6 +4,7 @@ import { posts, postRelations } from "./schema/post.ts";
 import { taxonomies, taxonomyRelations } from "./schema/taxonomies.ts";
 import { postsTaxonomies, postsTaxonomiesRelations } from "./schema/posts_taxonomies.ts";
 import { postsMedia, postsMediaRelations } from "./schema/posts_media.ts";
+import { settings } from "./schema/settings.ts";
 
 // Auth
 import {
@@ -22,7 +23,7 @@ import {
 export { defaultMetaSchema, buildMetaSchema, type MetaSchemaItem } from "./schema/meta_schema.ts";
 
 // Export tables
-export { postTypes, posts, taxonomies, postsTaxonomies, postsMedia };
+export { postTypes, posts, taxonomies, postsTaxonomies, postsMedia, settings };
 
 // Export relations
 export {
