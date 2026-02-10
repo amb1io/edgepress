@@ -2,10 +2,14 @@ import type { APIRoute } from "astro";
 import { db } from "../../db/index.ts";
 import { user as userTable, USER_ROLE_IDS } from "../../db/schema.ts";
 import { eq } from "drizzle-orm";
+import { requireMinRole } from "../../lib/api-auth.ts";
 
 export const prerender = false;
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request, locals }) => {
+  const authResult = await requireMinRole(request, 0, locals);
+  if (authResult instanceof Response) return authResult;
+
   try {
     const formData = await request.formData();
     const name = (formData.get("name") as string)?.trim();

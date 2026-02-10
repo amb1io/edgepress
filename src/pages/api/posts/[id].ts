@@ -7,6 +7,9 @@ import { posts, postsMedia, postsTaxonomies } from "../../../db/schema.ts";
 // ORM
 import { eq } from "drizzle-orm";
 
+// Auth: apenas editor ou admin podem deletar posts
+import { requireMinRole } from "../../../lib/api-auth.ts";
+
 export const prerender = false;
 
 /**
@@ -35,12 +38,15 @@ export const prerender = false;
  *   "error": "Bad Request"
  * }
  */
-export const DELETE: APIRoute = async ({ params }) => {
+export const DELETE: APIRoute = async ({ params, request, locals }) => {
+  const authResult = await requireMinRole(request, 1, locals);
+  if (authResult instanceof Response) return authResult;
+
   const id = params?.id;
   if (!id || !/^\d+$/.test(id)) {
-    return new Response(JSON.stringify({ success: false, error: "Bad Request" }), { 
+    return new Response(JSON.stringify({ success: false, error: "Bad Request" }), {
       status: 400,
-      headers: { "Content-Type": "application/json" }
+      headers: { "Content-Type": "application/json" },
     });
   }
   const postId = parseInt(id, 10);

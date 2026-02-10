@@ -3,10 +3,20 @@ import { taxonomies } from "../../db/schema.ts";
 import { eq } from "drizzle-orm";
 import { slugify } from "../../lib/slugify.ts";
 import { t } from "../../i18n/index.ts";
+import { requireMinRole } from "../../lib/api-auth.ts";
 
 export const prerender = false;
 
-export async function POST({ request }: { request: Request }): Promise<Response> {
+export async function POST({
+  request,
+  locals,
+}: {
+  request: Request;
+  locals: App.Locals;
+}): Promise<Response> {
+  const authResult = await requireMinRole(request, 1, locals);
+  if (authResult instanceof Response) return authResult;
+
   try {
     const formData = await request.formData();
     const name = (formData.get("name") as string)?.trim();

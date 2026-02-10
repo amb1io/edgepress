@@ -78,6 +78,13 @@
       "when": 1770600000000,
       "tag": "0010_rename_type_id_to_post_type_id",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1770648342869,
+      "tag": "0011_steep_mockingbird",
+      "breakpoints": true
     }
   ]
 }

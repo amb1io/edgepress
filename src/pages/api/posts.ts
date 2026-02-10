@@ -36,6 +36,9 @@ import { buildAbsoluteUrl, buildContentUrl, buildListUrl } from "../../lib/utils
 // Constants
 import { getErrorMessage } from "../../lib/constants/error-messages.ts";
 
+// Auth
+import { requireMinRole, resolveAuthorIdForRole } from "../../lib/api-auth.ts";
+
 export const prerender = false;
 
 /**
@@ -66,10 +69,20 @@ export const prerender = false;
  * - blocknote_attachment_ids[]: number[]
  * - meta_*: campos customizados (ex: meta_custom_field)
  */
-export async function POST({ request }: { request: Request }): Promise<Response> {
+export async function POST({
+  request,
+  locals,
+}: {
+  request: Request;
+  locals: App.Locals;
+}): Promise<Response> {
   try {
+    const authResult = await requireMinRole(request, 2, locals);
+    if (authResult instanceof Response) return authResult;
+    const { user: currentUser } = authResult;
+
     const formData = await request.formData();
-    
+
     // Extrair dados básicos do formulário
     const post_type = getString(formData, "post_type");
     const action = getString(formData, "action");
@@ -80,13 +93,16 @@ export async function POST({ request }: { request: Request }): Promise<Response>
     const excerpt = getString(formData, "excerpt", "");
     const body = getString(formData, "body", "");
     const status = normalizePostStatus(getString(formData, "status"));
-    
-    // Extrair author_id
+
+    // Extrair author_id e aplicar regra de privilégio (autor só pode ser ele mesmo)
     const authorIdRaw = formData.get("author_id");
-    const author_id =
-      typeof authorIdRaw === "string" && authorIdRaw.trim()
-        ? authorIdRaw.trim()
-        : null;
+    const requestedAuthorId =
+      typeof authorIdRaw === "string" && authorIdRaw.trim() ? authorIdRaw.trim() : null;
+    const author_id = resolveAuthorIdForRole(
+      requestedAuthorId,
+      currentUser.id,
+      currentUser.role ?? 3
+    );
     
     // Extrair IDs de taxonomias
     const termIds = getNumberArray(formData, "taxonomy_terms[]", true);

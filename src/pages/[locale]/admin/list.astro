@@ -5,6 +5,7 @@ import { db } from "../../../db/index.ts";
 import { user as userTable } from "../../../db/schema.ts";
 import { getListItems, getSettingsListItems } from "../../../lib/list-items.ts";
 import { getMenuItems } from "../../../lib/menu.ts";
+import { getTableList, TABLE_DELETE_TEMPLATE } from "../../../lib/list-table-dynamic.ts";
 import { t, locales, defaultLocale } from "../../../i18n/index.ts";
 import { and, asc, desc, like, sql } from "drizzle-orm";
 import { USER_ROLE_LABEL_KEYS } from "../../../db/schema.ts";
@@ -49,64 +50,39 @@ function formatDate(ts: number | null) {
   return new Date(ts).toLocaleString(loc);
 }
 
+function formatCellValue(val: unknown, key: string): string {
+  if (val == null) return "—";
+  if (typeof val === "number" && (key.endsWith("_at") || key.endsWith("At") || key === "expires_at")) {
+    return formatDate(val);
+  }
+  if (typeof val === "boolean" || (typeof val === "number" && (val === 0 || val === 1))) {
+    return val ? "Y" : "N";
+  }
+  return String(val);
+}
+
 let result: { items: Record<string, unknown>[]; total: number; page: number; limit: number; totalPages: number };
 let listColumns: { key: string; label: string; sortLink?: string }[];
 let listItems: Record<string, unknown>[];
 let listEmptyColspan: number;
 let deletePathTemplate: string;
+let tableColumns: string[] = [];
 
-if (loadFromTable && type === "user") {
-  const orderColumn = ["id", "name", "email", "role", "created_at", "updated_at"].includes(order) ? order : "created_at";
-  const orderFn = orderDir === "asc" ? asc : desc;
-  const orderByCol =
-    orderColumn === "name"
-      ? orderFn(userTable.name)
-      : orderColumn === "email"
-        ? orderFn(userTable.email)
-        : orderColumn === "role"
-          ? orderFn(userTable.role)
-          : orderColumn === "updated_at"
-            ? orderFn(userTable.updatedAt)
-            : orderColumn === "id"
-              ? orderFn(userTable.id)
-              : orderFn(userTable.createdAt);
-  const offset = (page - 1) * limit;
-  const filterConditions = [];
-  if (filter["name"]) filterConditions.push(like(userTable.name, `%${filter["name"]}%`));
-  if (filter["email"]) filterConditions.push(like(userTable.email, `%${filter["email"]}%`));
-  const whereClause = filterConditions.length > 0 ? and(...filterConditions) : undefined;
-  const rows = await db
-    .select({
-      id: userTable.id,
-      name: userTable.name,
-      email: userTable.email,
-      role: userTable.role,
-      created_at: userTable.createdAt,
-      updated_at: userTable.updatedAt,
-    })
-    .from(userTable)
-    .where(whereClause)
-    .orderBy(orderByCol)
-    .limit(limit)
-    .offset(offset);
-  const [countRow] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(userTable)
-    .where(whereClause);
-  const total = Number(countRow?.count ?? 0);
-  result = {
-    items: rows.map((r) => ({
-      id: r.id,
-      name: r.name ?? "",
-      email: r.email ?? "",
-      role: r.role != null ? (USER_ROLE_LABEL_KEYS[r.role as number] ?? String(r.role)) : "—",
-      created_at: r.created_at,
-      updated_at: r.updated_at,
-    })),
-    total,
-    page,
+if (loadFromTable) {
+  const tableResult = await getTableList(db, type, {
+    order,
+    orderDir,
     limit,
-    totalPages: Math.ceil(total / limit) || 1,
+    page,
+    filter,
+  });
+  tableColumns = tableResult.columns;
+  result = {
+    items: tableResult.items,
+    total: tableResult.total,
+    page: tableResult.page,
+    limit: tableResult.limit,
+    totalPages: tableResult.totalPages,
   };
   listColumns = [
     { key: "id", label: t(locale, "admin.list.id"), sortLink: buildListUrl({ order: "id", orderDir: order === "id" && orderDir === "asc" ? "desc" : "asc" }) },
@@ -185,11 +161,11 @@ if (loadFromTable && type === "user") {
       <input type="hidden" name="orderDir" value={orderDir} />
       <input type="hidden" name="limit" value={limit} />
       <input type="hidden" name="page" value="1" />
-      {type === "user" ? (
-        <>
+      {loadFromTable ? (
+        tableColumns.slice(0, 5).map((col) => (
           <div class="form-control">
-            <label class="label py-0"><span class="label-text text-xs">{t(locale, "admin.user.formName")}</span></label>
-            <input type="text" name="filter_name" placeholder={t(locale, "admin.list.filter")} class="input input-bordered input-sm w-32" value={filter["name"] ?? ""} />
+            <label class="label py-0"><span class="label-text text-xs">{col.replace(/_/g, " ")}</span></label>
+            <input type="text" name={`filter_${col}`} placeholder={t(locale, "admin.list.filter")} class="input input-bordered input-sm w-32" value={filter[col] ?? ""} />
           </div>
           <div class="form-control">
             <label class="label py-0"><span class="label-text text-xs">{t(locale, "admin.user.formEmail")}</span></label>
@@ -234,7 +210,7 @@ if (loadFromTable && type === "user") {
       selectable
       selectAllId="select-all"
       selectAllLabel={t(locale, "admin.list.selectAll")}
-      selectItemLabel={(item) => t(locale, "admin.list.selectItem", { id: String(item["id"]) })}
+      selectItemLabel={(item) => t(locale, "admin.list.selectItem", { id: String(item["id"] ?? "") })}
       actionsColumnLabel={t(locale, "admin.list.actions")}
       editLabel={t(locale, "admin.list.edit")}
       deleteLabel={t(locale, "admin.list.delete")}
