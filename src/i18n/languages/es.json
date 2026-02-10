@@ -97,5 +97,8 @@
   "admin.attachment.codeFilesNotAllowed": "No se permiten archivos de código.",
   "admin.attachment.preview": "Vista previa",
   "admin.attachment.openPdf": "Abrir PDF",
-  "admin.attachment.metadata": "Metadatos"
+  "admin.attachment.metadata": "Metadatos",
+  "admin.settings.name": "Nombre",
+  "admin.settings.value": "Valor",
+  "admin.settings.autoload": "Autoload"
 }
