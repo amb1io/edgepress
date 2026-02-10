@@ -18,7 +18,7 @@ import m6 from "../../drizzle/0006_add_taxonomies_description.sql?raw";
 import m7 from "../../drizzle/0007_add_user_role.sql?raw";
 import m8 from "../../drizzle/0008_typical_hellfire_club.sql?raw";
 import m9 from "../../drizzle/0009_user_role_integer.sql?raw";
-import m10 from "../../drizzle/0010_rename_type_id_to_post_type_id.sql?raw";
+import m10 from "../../drizzle/0010_rename_type_id_and_indexes.sql?raw";
 import m11 from "../../drizzle/0011_steep_mockingbird.sql?raw";
 
 const STATEMENT_BREAKPOINT = "--> statement-breakpoint";

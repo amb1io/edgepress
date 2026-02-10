@@ -30,7 +30,8 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   const email = (formData.get("email") as string)?.trim() ?? "";
   const password = (formData.get("password") as string) ?? "";
   const siteName = (formData.get("site_name") as string)?.trim() ?? "";
-  const siteDescription = (formData.get("site_description") as string)?.trim() ?? "";
+  const siteDescription =
+    (formData.get("site_description") as string)?.trim() ?? "";
 
   if (!name || !email || !password) {
     return redirect("/setup?error=missing_fields", 303);
@@ -46,25 +47,25 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   const safeCallbackURL = sanitizeCallbackURL(
     defaultCallback,
     origin,
-    defaultCallback
+    defaultCallback,
   );
 
-  await runMigrationsIfNeeded(env.DB);
+  // await runMigrationsIfNeeded(env.DB);
 
-  let needSeed = true;
-  try {
-    const [row] = await db
-      .select({ value: settingsTable.value })
-      .from(settingsTable)
-      .where(eq(settingsTable.name, "setup_done"))
-      .limit(1);
-    if (row?.value === "Y") needSeed = false;
-  } catch {
-    needSeed = true;
-  }
-  if (needSeed) {
-    await runSeed(db);
-  }
+  // let needSeed = true;
+  // try {
+  //   const [row] = await db
+  //     .select({ value: settingsTable.value })
+  //     .from(settingsTable)
+  //     .where(eq(settingsTable.name, "setup_done"))
+  //     .limit(1);
+  //   if (row?.value === "Y") needSeed = false;
+  // } catch {
+  //   needSeed = true;
+  // }
+  // if (needSeed) {
+  //   await runSeed(db);
+  // }
 
   const authRequest = new Request(`${origin}/api/auth/sign-up/email`, {
     method: "POST",
@@ -84,23 +85,25 @@ export const POST: APIRoute = async ({ request, redirect }) => {
 
   const authResponse = await auth.handler(authRequest);
   if (!authResponse.ok) {
-    const errData = (await authResponse.json().catch(() => ({}))) as { code?: string };
+    const errData = (await authResponse.json().catch(() => ({}))) as {
+      code?: string;
+    };
     const code = errData?.code ?? "signup_failed";
     return redirect(`/setup?error=${encodeURIComponent(code)}`, 303);
   }
 
-  await db
-    .update(settingsTable)
-    .set({ value: siteName || "demo site" })
-    .where(eq(settingsTable.name, "site_name"));
-  await db
-    .update(settingsTable)
-    .set({ value: siteDescription || "demo_description" })
-    .where(eq(settingsTable.name, "site_description"));
-  await db
-    .update(settingsTable)
-    .set({ value: "Y" })
-    .where(eq(settingsTable.name, "setup_done"));
+  // await db
+  //   .update(settingsTable)
+  //   .set({ value: siteName || "demo site" })
+  //   .where(eq(settingsTable.name, "site_name"));
+  // await db
+  //   .update(settingsTable)
+  //   .set({ value: siteDescription || "demo_description" })
+  //   .where(eq(settingsTable.name, "site_description"));
+  // await db
+  //   .update(settingsTable)
+  //   .set({ value: "Y" })
+  //   .where(eq(settingsTable.name, "setup_done"));
 
   return redirect("/login?setup=success", 303);
 };
