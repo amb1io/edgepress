@@ -89,7 +89,8 @@ export const POST: APIRoute = async ({ request, redirect }) => {
       code?: string;
     };
     const code = errData?.code ?? "signup_failed";
-    return redirect(`/setup?error=${encodeURIComponent(code)}`, 303);
+    console.error(code, errData);
+    // return redirect(`/setup?error=${encodeURIComponent(code)}`, 303);
   }
 
   // await db
@@ -105,5 +106,6 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   //   .set({ value: "Y" })
   //   .where(eq(settingsTable.name, "setup_done"));
 
-  return redirect("/login?setup=success", 303);
+  // return redirect("/login?setup=success", 303);
+  return "";
 };
