@@ -62,6 +62,10 @@ export async function getListItems(db: Database, params: GetListItemsParams = {}
   const orderFn = orderDir === "asc" ? asc : desc;
 
   const conditions = [eq(postTypes.slug, typeSlug)];
+  // Excluir o post \"pai\" de menu (meta_values.show_in_menu = 1), listando apenas os filhos do type
+  conditions.push(
+    sql`coalesce(json_extract(${posts.meta_values}, '$.show_in_menu'), 0) = 0`
+  );
   if (status) {
     conditions.push(eq(posts.status, status as "published" | "draft" | "archived"));
   }
