@@ -28,12 +28,17 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
     resolve: {
-      // Cloudflare Workers não expõe MessageChannel no contexto em que react-dom/server roda.
-      // Usar o build "edge" do React evita a dependência (ver react-dom/server.edge).
-      alias:
-        import.meta.env.PROD
-          ? { "react-dom/server": "react-dom/server.edge" }
-          : undefined,
+      alias: {
+        // Cloudflare Workers não expõe node:async_hooks; better-auth (e deps) usam e quebram em runtime.
+        // Resolver para shim que é bundled e funciona em Workers.
+        "node:async_hooks": "./src/lib/shim-node-async-hooks.ts",
+        async_hooks: "./src/lib/shim-node-async-hooks.ts",
+        ...(import.meta.env.PROD
+          ? {
+              "react-dom/server": "react-dom/server.edge",
+            }
+          : {}),
+      },
     },
   },
 
