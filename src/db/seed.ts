@@ -101,12 +101,12 @@ export async function runSeed(db: any): Promise<void> {
 
   const typeIds = Object.fromEntries(bySlug) as Record<string, number>;
 
-  // Taxonomias: Categoria (raiz) e Notícias (filha)
+  // Taxonomias: Categoria (raiz) e Uncategorized (filha)
   const nowTax = Date.now();
   const existingTax = await db
     .select({ id: taxonomies.id, slug: taxonomies.slug })
     .from(taxonomies)
-    .where(inArray(taxonomies.slug, ["categoria", "noticias", "tag"]));
+    .where(inArray(taxonomies.slug, ["categoria", "uncategorized", "tag"]));
   const taxBySlug = new Map<string, number>(
     (existingTax as { id: number; slug: string }[]).map((r) => [r.slug, r.id]),
   );
@@ -128,10 +128,10 @@ export async function runSeed(db: any): Promise<void> {
       taxBySlug.set("categoria", categoriaId);
     }
   }
-  if (categoriaId != null && taxBySlug.get("noticias") == null) {
+  if (categoriaId != null && taxBySlug.get("uncategorized") == null) {
     await db.insert(taxonomies).values({
-      name: "Notícias",
-      slug: "noticias",
+      name: "Uncategorized",
+      slug: "uncategorized",
       type: "category",
       parent_id: categoriaId,
       created_at: nowTax,
