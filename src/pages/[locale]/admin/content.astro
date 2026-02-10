@@ -1,0 +1,985 @@
+---
+/** @see https://docs.astro.build/en/reference/configuration-reference/#output */
+export const prerender = false;
+
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import ContentEditor from "../../../components/ContentEditor.astro";
+import UserTemplate from "../../../templates/user.astro";
+import AttachmentTemplate from "../../../templates/attachment.astro";
+import { db } from "../../../db/index.ts";
+import TaxonomiesBlocks from "../../../components/TaxonomiesBlocks.astro";
+import TaxonomyAddModal from "../../../components/TaxonomyAddModal.astro";
+import UppyUpload from "../../../components/UppyUpload.astro";
+import { getMenuItems } from "../../../lib/menu.ts";
+import { t, locales, defaultLocale, type Locale } from "../../../i18n/index.ts";
+import { eq, and, inArray, or, isNull } from "drizzle-orm";
+import {
+  postTypes,
+  posts,
+  taxonomies,
+  postsTaxonomies,
+  postsMedia,
+  user as userTable,
+} from "../../../db/schema.ts";
+import { getSourceKind, getRecordById } from "../../../lib/content-source.ts";
+
+
+const locale = Astro.params["locale"] ?? defaultLocale;
+if (!locales.includes(locale as "en" | "es" | "pt-br")) {
+  return Astro.redirect(`/${defaultLocale}/admin`);
+}
+
+const user = Astro.locals.user;
+
+if (!user) {
+  return Astro.redirect("/login");
+}
+
+const menuItems = await getMenuItems(db);
+
+const postTypeSlug = Astro.url.searchParams.get("post_type") ?? "";
+const action = Astro.url.searchParams.get("action") ?? "";
+const idParam = Astro.url.searchParams.get("id");
+
+const validAction = action === "new" || action === "edit";
+if (!postTypeSlug || !validAction) {
+  return Astro.redirect(`/${locale}/admin/list?type=post&limit=10&page=1`);
+}
+
+const sourceKind = await getSourceKind(db, postTypeSlug);
+const supportedTableTypes = ["user", "settings"];
+const allowedType =
+  sourceKind === "table"
+    ? supportedTableTypes.includes(postTypeSlug)
+    : true;
+
+if (!allowedType) {
+  return Astro.redirect(`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`);
+}
+
+const isTableSource = sourceKind === "table";
+const isValidEditId = isTableSource
+  ? (id: string | null) => Boolean(id && id.trim().length > 0)
+  : (id: string | null) => Boolean(id && /^\d+$/.test(id));
+
+if (action === "edit" && (!idParam || !isValidEditId(idParam))) {
+  return Astro.redirect(
+    `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`
+  );
+}
+
+let editRecordResult: { kind: "table" | "posts"; record: Record<string, unknown> | null } | null = null;
+if (action === "edit" && idParam) {
+  editRecordResult = await getRecordById(db, postTypeSlug, idParam);
+  if (!editRecordResult.record) {
+    return Astro.redirect(
+      `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`
+    );
+  }
+  if (editRecordResult.kind === "table" && postTypeSlug === "settings") {
+    return Astro.redirect(`/${locale}/admin/list?type=settings&limit=10&page=1`);
+  }
+}
+
+const showUserTemplate = postTypeSlug === "user";
+const showAttachmentTemplate = postTypeSlug === "attachment";
+
+let typeRow: { id: number; name: string; meta_schema: unknown } | undefined;
+let typeId: number;
+let typeName: string;
+let taxonomyBlocks: { id: number; name: string; slug: string; type: string; children: { id: number; name: string; slug: string }[] }[] = [];
+let selectedTermIds: number[] = [];
+let users: { id: string; name: string }[] = [];
+let post: {
+  id: number;
+  title: string;
+  slug: string;
+  excerpt: string | null;
+  body: string | null;
+  status: string | null;
+  author_id: string | null;
+  meta_values: string | null;
+} | null = null;
+let pageTitle = "";
+let initialTitle = "";
+let initialSlug = "";
+let initialExcerpt = "";
+let initialStatus = "draft";
+let initialAuthorId = "";
+let asideAccordionName = "content-aside";
+let thumbnailPath = "";
+let thumbnailUrl = "";
+let thumbnailAttachmentId: number | null = null;
+let hasPostThumbnail = false;
+
+if (!showUserTemplate && !showAttachmentTemplate) {
+  const [typeRowResult] = await db
+    .select({
+      id: postTypes.id,
+      name: postTypes.name,
+      meta_schema: postTypes.meta_schema,
+    })
+    .from(postTypes)
+    .where(eq(postTypes.slug, postTypeSlug))
+    .limit(1);
+
+  typeRow = typeRowResult;
+
+  if (!typeRow) {
+    return Astro.redirect(`/${locale}/admin`);
+  }
+
+  typeId = typeRow.id;
+  typeName = typeRow.name;
+
+  const taxonomyTypes: string[] = (() => {
+    const schema = typeRow!.meta_schema ?? [];
+    const item = (schema as { key: string }[]).find((s) => s.key === "taxonomy");
+    const def = item && "default" in item ? (item as { default?: unknown }).default : undefined;
+    return Array.isArray(def) ? (def as string[]) : ["category"];
+  })();
+
+  hasPostThumbnail = (() => {
+    const schema = typeRow!.meta_schema ?? [];
+    const item = (schema as { key: string }[]).find((s) => s.key === "post_thumbnail");
+    const def = item && "default" in item ? (item as { default?: unknown }).default : undefined;
+    return typeof def === "boolean" ? def : false;
+  })();
+
+  const taxonomyRoots =
+    taxonomyTypes.length > 0
+      ? await db
+          .select({
+            id: taxonomies.id,
+            name: taxonomies.name,
+            slug: taxonomies.slug,
+            type: taxonomies.type,
+          })
+          .from(taxonomies)
+          .where(
+            and(
+              inArray(taxonomies.type, taxonomyTypes),
+              or(isNull(taxonomies.parent_id), eq(taxonomies.parent_id, 0))
+            )
+          )
+          .orderBy(taxonomies.name)
+      : [];
+
+  taxonomyBlocks = await Promise.all(
+    taxonomyRoots.map(async (root) => {
+      const children = await db
+        .select({
+          id: taxonomies.id,
+          name: taxonomies.name,
+          slug: taxonomies.slug,
+        })
+        .from(taxonomies)
+        .where(eq(taxonomies.parent_id, root.id))
+        .orderBy(taxonomies.name);
+      return { ...root, children };
+    })
+  );
+
+  users = await db
+    .select({ id: userTable.id, name: userTable.name })
+    .from(userTable)
+    .orderBy(userTable.name);
+
+  if (action === "edit" && idParam) {
+    if (editRecordResult?.kind === "posts" && editRecordResult?.record) {
+      const r = editRecordResult.record;
+      post = {
+        id: Number(r["id"]),
+        title: String(r["title"] ?? ""),
+        slug: String(r["slug"] ?? ""),
+        excerpt: r["excerpt"] != null ? String(r["excerpt"]) : null,
+        body: r["body"] != null ? String(r["body"]) : null,
+        status: r["status"] != null ? String(r["status"]) : null,
+        author_id: r["author_id"] != null ? String(r["author_id"]) : null,
+        meta_values: r["meta_values"] != null ? String(r["meta_values"]) : null,
+      };
+    } else {
+      const [row] = await db
+        .select({
+          id: posts.id,
+          title: posts.title,
+          slug: posts.slug,
+          excerpt: posts.excerpt,
+          body: posts.body,
+          status: posts.status,
+          author_id: posts.author_id,
+          meta_values: posts.meta_values,
+        })
+        .from(posts)
+        .where(and(eq(posts.id, parseInt(idParam, 10)), eq(posts.post_type_id, typeId)))
+        .limit(1);
+      post = row ?? null;
+    }
+    if (action === "edit" && !post) {
+      return Astro.redirect(
+        `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`
+      );
+    }
+    if (post) {
+      const links = await db
+        .select({ term_id: postsTaxonomies.term_id })
+        .from(postsTaxonomies)
+        .where(eq(postsTaxonomies.post_id, post.id));
+      selectedTermIds = links.map((l) => l.term_id);
+      
+      // Buscar thumbnail do meta_values e da relação posts_media
+      if (post.meta_values) {
+        try {
+          const meta = JSON.parse(post.meta_values) as Record<string, unknown>;
+          
+          // Buscar post_thumbnail_id (ID do attachment) do meta_values
+          const postThumbnailId = typeof meta["post_thumbnail_id"] === "string" 
+            ? parseInt(meta["post_thumbnail_id"], 10) 
+            : typeof meta["post_thumbnail_id"] === "number" 
+              ? meta["post_thumbnail_id"] 
+              : null;
+          
+          if (postThumbnailId && Number.isInteger(postThumbnailId) && postThumbnailId > 0) {
+            thumbnailAttachmentId = postThumbnailId;
+            
+            // Buscar o attachment para obter o path
+            const [attachmentType] = await db
+              .select({ id: postTypes.id })
+              .from(postTypes)
+              .where(eq(postTypes.slug, "attachment"))
+              .limit(1);
+            
+            if (attachmentType) {
+              const [attachmentPost] = await db
+                .select({ meta_values: posts.meta_values })
+                .from(posts)
+                .where(and(eq(posts.id, postThumbnailId), eq(posts.post_type_id, attachmentType.id)))
+                .limit(1);
+              
+              if (attachmentPost?.meta_values) {
+                try {
+                  const attachmentMeta = JSON.parse(attachmentPost.meta_values) as Record<string, unknown>;
+                  const thumbPath = typeof attachmentMeta["attachment_path"] === "string" 
+                    ? attachmentMeta["attachment_path"] 
+                    : null;
+                  if (thumbPath) {
+                    thumbnailPath = thumbPath;
+                    thumbnailUrl = thumbPath.startsWith("http")
+                      ? thumbPath
+                      : thumbPath.startsWith("/uploads/")
+                        ? `/api/media${thumbPath}`
+                        : thumbPath.startsWith("/")
+                          ? `/api/media${thumbPath}`
+                          : `/api/media/uploads/${thumbPath}`;
+                  }
+                } catch {
+                  // ignore
+                }
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+      
+      // Buscar attachment_id da relação posts_media como fallback (caso não esteja no meta_values)
+      if (!thumbnailAttachmentId) {
+        const [mediaRelation] = await db
+          .select({ media_id: postsMedia.media_id })
+          .from(postsMedia)
+          .where(eq(postsMedia.post_id, post.id))
+          .limit(1);
+        if (mediaRelation) {
+          thumbnailAttachmentId = mediaRelation.media_id;
+        }
+      }
+    }
+  }
+
+  pageTitle =
+    action === "new"
+      ? t(locale, "admin.content.newTitle", { type: typeName })
+      : t(locale, "admin.content.editTitle", { type: typeName });
+
+  initialTitle = String(post?.title ?? "");
+  initialSlug = String(post?.slug ?? "");
+  initialExcerpt = String(post?.excerpt ?? "");
+  initialStatus = String(post?.status ?? "draft");
+  initialAuthorId = String(post?.author_id ?? "");
+}
+
+// Garantir que todas as variáveis sejam strings válidas antes de usar no define:vars
+thumbnailPath = String(thumbnailPath || "");
+thumbnailUrl = String(thumbnailUrl || "");
+const initialThumbnailAttachmentId = thumbnailAttachmentId;
+---
+
+{showUserTemplate ? (
+  <UserTemplate
+    locale={locale}
+    postTypeSlug={postTypeSlug}
+    action={action}
+    idParam={idParam}
+    menuItems={menuItems}
+    currentUser={user}
+  />
+) : showAttachmentTemplate ? (
+  <AttachmentTemplate
+    locale={locale}
+    postTypeSlug={postTypeSlug}
+    action={action}
+    idParam={idParam}
+    menuItems={menuItems}
+    currentUser={user}
+  />
+) : (
+<AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={user}>
+  <style>
+    .content-editor-fullheight,
+    .content-editor-fullheight .content-editor,
+    .content-editor-fullheight .content-editor-wrapper {
+      height: 100%;
+      min-height: 0;
+    }
+    .content-editor-fullheight .content-editor-wrapper .bn-editor {
+      min-height: 100%;
+    }
+    /* Borda do editor igual aos inputs (visível em tema claro e escuro) */
+    .content-editor-wrapper {
+      border: 1px solid oklch(var(--bc) / 0.2);
+    }
+    .content-editor-wrapper .bn-container {
+      border: none;
+    }
+  </style>
+  <script
+    define:vars={{
+      initialTitle: String(initialTitle || ""),
+      initialSlug: String(initialSlug || ""),
+      initialExcerpt: String(initialExcerpt || ""),
+      initialStatus: String(initialStatus || "draft"),
+      initialAuthorId: String(initialAuthorId || ""),
+      thumbnailPath: String(thumbnailPath || ""),
+      thumbnailUrl: String(thumbnailUrl || ""),
+      initialThumbnailAttachmentId: initialThumbnailAttachmentId !== null && initialThumbnailAttachmentId !== undefined ? Number(initialThumbnailAttachmentId) : 0,
+    }}
+  >
+    window.slugify = function (text) {
+      if (typeof text !== "string" || !text.trim()) return "";
+      return text
+        .trim()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]/g, "")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "");
+    };
+    document.addEventListener("alpine:init", () => {
+      window.Alpine.data("contentForm", () => ({
+        title: String(initialTitle || ""),
+        slug: String(initialSlug || ""),
+        excerpt: String(initialExcerpt || ""),
+        status: String(initialStatus || "draft"),
+        author_id: String(initialAuthorId || ""),
+        thumbnail_path: String(thumbnailPath || ""),
+        thumbnail_url: String(thumbnailUrl || ""),
+        thumbnail_attachment_id: initialThumbnailAttachmentId && initialThumbnailAttachmentId > 0 ? Number(initialThumbnailAttachmentId) : null,
+        blocknote_attachment_ids: [],
+        notification: {
+          show: false,
+          type: "error",
+          message: "",
+          title: ""
+        },
+        slugifyFromTitle() {
+          this.slug = window.slugify(this.title);
+        },
+        showNotification(type, message, title = "") {
+          this.notification = {
+            show: true,
+            type,
+            message,
+            title
+          };
+        },
+        hideNotification() {
+          this.notification.show = false;
+        }
+      }));
+    });
+
+    // Handler para evento blocknote-image-uploaded - armazena IDs dos attachments criados
+    window.addEventListener("blocknote-image-uploaded", (ev) => {
+      const customEvent = ev;
+      const form = document.querySelector('form[action="/api/posts"]');
+      const Alpine = window.Alpine;
+      if (!form || !Alpine) return;
+      const ctx = Alpine.$data(form);
+      if (!ctx || !customEvent.detail || !customEvent.detail.attachmentId) return;
+      
+      // Adicionar ID do attachment ao array (evitar duplicatas)
+      if (!ctx.blocknote_attachment_ids) {
+        ctx.blocknote_attachment_ids = [];
+      }
+      if (!ctx.blocknote_attachment_ids.includes(customEvent.detail.attachmentId)) {
+        ctx.blocknote_attachment_ids.push(customEvent.detail.attachmentId);
+      }
+    });
+
+    // Handler para evento thumbnail-uploaded - cria post do tipo attachment
+    window.addEventListener("thumbnail-uploaded", async (ev) => {
+      const customEvent = ev;
+      const form = document.querySelector('form[action="/api/posts"]');
+      const Alpine = window.Alpine;
+      
+      if (!form || !Alpine) {
+        console.error("Form ou Alpine não encontrado");
+        return;
+      }
+      
+      const ctx = Alpine.$data(form);
+      if (!ctx) {
+        console.error("Contexto Alpine não encontrado no form");
+        return;
+      }
+      
+      // Atualizar caminho e URL do thumbnail
+      ctx.thumbnail_path = customEvent.detail.path;
+      ctx.thumbnail_url = customEvent.detail.imageUrl;
+      
+      const localeVal = form.querySelector('input[name="locale"]')?.value ?? "pt-br";
+      const originalFilename = customEvent.detail.originalFilename || customEvent.detail.filename || "untitled";
+      const postTitle = originalFilename;
+      const postBaseSlug = window.slugify?.(originalFilename) ?? "file";
+      const postSlug = `${postBaseSlug}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+      
+      const fd = new FormData();
+      fd.set("post_type", "attachment");
+      fd.set("action", "new");
+      fd.set("locale", localeVal);
+      fd.set("title", postTitle);
+      fd.set("slug", postSlug);
+      fd.set("status", "published");
+      fd.set("meta_mime_type", customEvent.detail.mimeType);
+      fd.set("meta_attachment_file", customEvent.detail.filename);
+      fd.set("meta_attachment_path", customEvent.detail.path);
+      fd.set("meta_attachment_alt", "");
+      
+      try {
+        const res = await fetch("/api/posts", {
+          method: "POST",
+          body: fd,
+          headers: { Accept: "application/json" },
+        });
+        
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error("Erro ao criar attachment:", res.status, errorText);
+          return;
+        }
+        
+        const data = await res.json();
+        
+        if (typeof data?.id === "number") {
+          ctx.thumbnail_attachment_id = data.id;
+        } else {
+          console.error("Resposta não contém ID válido");
+        }
+      } catch (err) {
+        console.error("Erro ao processar upload do thumbnail:", err);
+      }
+    });
+
+    // Interceptar submit do formulário para incluir thumbnail
+    function setupFormSubmit() {
+      const formElement = document.querySelector('form[action="/api/posts"]');
+      
+      if (!formElement) {
+        console.error("Form não encontrado - submit não será interceptado");
+        return;
+      }
+      
+      formElement.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const Alpine = window.Alpine;
+      
+      if (!form || !Alpine) {
+        console.error("Form ou Alpine não encontrados");
+        return;
+      }
+      
+      const ctx = Alpine.$data(form);
+      
+      if (!ctx) {
+        console.error("Contexto Alpine não encontrado");
+        return;
+      }
+      
+      // Esconder notificação anterior
+      if (typeof ctx.hideNotification === 'function') {
+        ctx.hideNotification();
+      }
+      
+      // Aguardar upload do thumbnail se houver arquivo pendente
+      const uppyThumbnailInstance = window.uppyThumbnailInstance;
+      
+      if (uppyThumbnailInstance) {
+        const files = uppyThumbnailInstance.getFiles();
+        const pendingFiles = files.filter((f) => !f.progress?.uploadStarted);
+        const uploadingFiles = files.filter((f) => f.progress?.uploadStarted && !f.progress?.uploadComplete);
+        
+        if (pendingFiles.length > 0) {
+          await uppyThumbnailInstance.upload();
+        }
+        if (uploadingFiles.length > 0) {
+          await new Promise((resolve) => {
+            const checkComplete = () => {
+              const currentFiles = uppyThumbnailInstance.getFiles();
+              const stillUploading = currentFiles.filter((f) => f.progress?.uploadStarted && !f.progress?.uploadComplete);
+              if (stillUploading.length === 0) {
+                resolve(undefined);
+              } else {
+                setTimeout(checkComplete, 100);
+              }
+            };
+            checkComplete();
+          });
+        }
+      }
+
+      // Adicionar campo hidden para thumbnail_attachment_id apenas se existir
+      const existingAttachmentIdInput = form.querySelector('input[name="thumbnail_attachment_id"]');
+      if (existingAttachmentIdInput) {
+        existingAttachmentIdInput.remove();
+      }
+      
+      if (ctx.thumbnail_attachment_id && ctx.thumbnail_attachment_id > 0) {
+        const attachmentIdInput = document.createElement("input");
+        attachmentIdInput.type = "hidden";
+        attachmentIdInput.name = "thumbnail_attachment_id";
+        attachmentIdInput.value = String(ctx.thumbnail_attachment_id);
+        form.appendChild(attachmentIdInput);
+      }
+      
+      // Adicionar campos hidden para blocknote_attachment_ids se existirem
+      if (ctx.blocknote_attachment_ids && Array.isArray(ctx.blocknote_attachment_ids) && ctx.blocknote_attachment_ids.length > 0) {
+        // Remover inputs anteriores
+        form.querySelectorAll('input[name="blocknote_attachment_ids[]"]').forEach((el) => el.remove());
+        
+        // Adicionar novos inputs para cada ID
+        ctx.blocknote_attachment_ids.forEach((id) => {
+          const attachmentIdInput = document.createElement("input");
+          attachmentIdInput.type = "hidden";
+          attachmentIdInput.name = "blocknote_attachment_ids[]";
+          attachmentIdInput.value = String(id);
+          form.appendChild(attachmentIdInput);
+        });
+      }
+      
+      // Enviar formulário
+      try {
+        const formData = new FormData(form);
+        
+        // IMPORTANTE: Usar getAttribute ao invés de .action porque há um input com name="action"
+        const formAction = form.getAttribute('action');
+        
+        const response = await fetch(formAction, {
+          method: "POST",
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          // Tentar obter mensagem de erro da resposta
+          let errorMessage = "Ocorreu um erro ao salvar. Por favor, tente novamente.";
+          let errorTitle = "Erro ao salvar";
+          try {
+            const errorData = await response.json();
+            // A API retorna { success: false, error: "mensagem", details: {...} }
+            if (errorData.error) {
+              errorMessage = errorData.error;
+            }
+            // Se houver detalhes de validação, incluir na mensagem
+            if (errorData.details && typeof errorData.details === 'object') {
+              const detailsArray = Object.entries(errorData.details).map(([key, value]) => `${key}: ${value}`);
+              if (detailsArray.length > 0) {
+                errorMessage += "\n\nDetalhes:\n" + detailsArray.join("\n");
+              }
+            }
+          } catch {
+            // Se não conseguir parsear JSON, usar mensagem padrão
+          }
+          
+          ctx.showNotification("error", errorMessage, errorTitle);
+          // Rolar para o topo para ver a notificação
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          return;
+        }
+        
+        // Se sucesso, redirecionar
+        if (response.redirected) {
+          window.location.href = response.url;
+        } else {
+          // Fallback: tentar obter URL do JSON
+          try {
+            const data = await response.json();
+            if (data.id) {
+              const postType = formData.get("post_type");
+              const locale = formData.get("locale");
+              window.location.href = `/${locale}/admin/list?type=${postType}&limit=10&page=1`;
+            }
+          } catch {
+            // Se não conseguir parsear, recarregar página
+            window.location.reload();
+          }
+        }
+      } catch (error) {
+        ctx.showNotification("error", "Erro de conexão. Verifique sua internet e tente novamente.", "Erro de Conexão");
+      }
+      });
+    }
+    
+    // Aguardar Alpine e DOM estarem prontos
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', setupFormSubmit);
+    } else {
+      setupFormSubmit();
+    }
+  </script>
+
+  <div class="h-full flex flex-col min-h-0 py-6 pl-6 pr-0">
+    <form
+      method="post"
+      action="/api/posts"
+      class="flex flex-col gap-4 w-full min-h-0 flex-1"
+      x-data="contentForm"
+      x-init="slugifyFromTitle()"
+      @blocknote-excerpt.window="excerpt = $event.detail.text"
+    >
+      <!-- Notificação -->
+      <div 
+        x-show="notification.show"
+        class="mr-6"
+        x-transition
+      >
+        <div 
+          :class="`alert alert-${notification.type}`"
+          role="alert"
+        >
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            class="stroke-current shrink-0 h-6 w-6" 
+            fill="none" 
+            viewBox="0 0 24 24"
+            x-show="notification.type === 'error'"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            class="stroke-current shrink-0 h-6 w-6" 
+            fill="none" 
+            viewBox="0 0 24 24"
+            x-show="notification.type === 'success'"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div class="flex-1">
+            <h3 class="font-bold" x-show="notification.title" x-text="notification.title"></h3>
+            <div class="text-sm whitespace-pre-line" x-text="notification.message"></div>
+          </div>
+          <button 
+            type="button"
+            class="btn btn-sm btn-circle btn-ghost"
+            @click="hideNotification()"
+            aria-label="Fechar notificação"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex gap-6 w-full min-h-0 flex-1">
+      <input type="hidden" name="post_type" value={postTypeSlug} />
+      <input type="hidden" name="action" value={action} />
+      {
+        action === "edit" && post && (
+          <input type="hidden" name="id" value={post.id} />
+        )
+      }
+      <input type="hidden" name="locale" value={locale} />
+
+      <div class="flex-1 min-w-0 flex flex-col gap-4 min-h-0">
+        <div class="form-control shrink-0">
+          <label for="title" class="label">
+            <span class="label-text">{t(locale, "admin.list.titleColumn")}</span
+            >
+          </label>
+          <input
+            type="text"
+            id="title"
+            name="title"
+            required
+            class="input input-bordered w-full"
+            x-model="title"
+            @input="slugifyFromTitle()"
+          />
+        </div>
+
+        <div class="form-control flex-1 min-h-0 flex flex-col shrink-0">
+          <div class="flex-1 min-h-0 content-editor-fullheight">
+            <ContentEditor
+              initialBody={post?.body ?? ""}
+              name="body"
+              inputId="body"
+              locale={locale}
+            />
+          </div>
+        </div>
+      </div>
+
+      <aside
+        class="w-3/12 min-w-[180px] shrink-0 flex flex-col gap-4 border-l border-base-300 bg-base-100 py-4 -my-6 text-sm"
+      >
+        <div class="mx-6">
+          <button type="submit" class="btn btn-primary btn-md w-full">
+            {
+              action === "new"
+                ? t(locale, "admin.content.saveNew")
+                : t(locale, "admin.content.saveEdit")
+            }
+          </button>
+        </div>
+
+        <div class="flex flex-col gap-4">
+          <div class="join join-vertical w-full bg-base-100">
+            <!-- Overview (irmão dos blocos de taxonomia) -->
+            <div
+              class="collapse collapse-arrow join-item border border-base-300"
+            >
+              <input
+                type="radio"
+                name={asideAccordionName}
+                checked
+                aria-label="Overview"
+              />
+              <div class="collapse-title font-semibold text-sm py-2 min-h-0">
+                Overview
+              </div>
+              <div class="collapse-content text-sm">
+                <div class="flex flex-col gap-3">
+                  <div class="form-control">
+                    <label for="status" class="label py-0">
+                      <span class="label-text text-xs"
+                        >{t(locale, "admin.list.status")}</span
+                      >
+                    </label>
+                    <select
+                      id="status"
+                      name="status"
+                      class="select select-bordered select-sm w-full"
+                      x-model="status"
+                    >
+                      <option value="draft"
+                        >{t(locale, "admin.content.statusDraft")}</option
+                      >
+                      <option value="published"
+                        >{t(locale, "admin.content.statusPublished")}</option
+                      >
+                      <option value="archived"
+                        >{t(locale, "admin.content.statusArchived")}</option
+                      >
+                    </select>
+                  </div>
+
+                  <div class="form-control">
+                    <label for="slug" class="label py-0">
+                      <span class="label-text text-xs"
+                        >{t(locale, "admin.content.slug")}</span
+                      >
+                    </label>
+                    <input
+                      type="text"
+                      id="slug"
+                      name="slug"
+                      required
+                      class="input input-bordered input-sm w-full font-mono text-sm"
+                      x-model="slug"
+                    />
+                  </div>
+
+                  <div class="form-control">
+                    <label for="author_id" class="label py-0">
+                      <span class="label-text text-xs"
+                        >{t(locale, "admin.list.author")}</span
+                      >
+                    </label>
+                    <select
+                      id="author_id"
+                      name="author_id"
+                      class="select select-bordered select-sm w-full"
+                      x-model="author_id"
+                    >
+                      <option value="">—</option>
+                      {
+                        users.map((u) => (
+                          <option value={u["id"]}>{u["name"]}</option>
+                        ))
+                      }
+                    </select>
+                  </div>
+
+                  <div class="form-control">
+                    <label for="excerpt" class="label py-0">
+                      <span class="label-text text-xs">
+                        {t(locale, "admin.content.excerpt")}
+                        <span class="text-base-content/50">(250)</span>
+                      </span>
+                    </label>
+                    <textarea
+                      id="excerpt"
+                      name="excerpt"
+                      rows="4"
+                      maxlength="250"
+                      class="textarea textarea-bordered textarea-sm w-full text-sm resize-y"
+                      placeholder={t(locale, "admin.content.excerpt")}
+                      x-model="excerpt"></textarea>
+                    <p
+                      class="text-xs text-base-content/50 mt-1"
+                      x-text="excerpt.length + '/250'"
+                    >
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <TaxonomiesBlocks
+              taxonomyBlocks={taxonomyBlocks}
+              selectedTermIds={selectedTermIds}
+              locale={locale}
+              accordionName={asideAccordionName}
+              siblings
+            />
+
+            {hasPostThumbnail && (
+              <div class="collapse collapse-arrow join-item border border-base-300">
+                <input
+                  type="radio"
+                  name={asideAccordionName}
+                  aria-label={t(locale, "admin.content.thumbnail")}
+                />
+                <div class="collapse-title font-semibold text-sm py-2 min-h-0">
+                  {t(locale, "admin.content.thumbnail")}
+                </div>
+                <div class="collapse-content text-sm">
+                  <div class="flex flex-col gap-3">
+                    <div 
+                      class="rounded-lg border border-base-300 bg-base-200/30 p-4 relative" 
+                      x-show="thumbnail_url && thumbnail_url.trim() !== ''"
+                      style={thumbnailUrl ? "display: block;" : "display: none;"}
+                    >
+                      <div class="flex justify-between items-start mb-2">
+                        <p class="text-sm font-medium text-base-content/70">{t(locale, "admin.content.currentThumbnail")}</p>
+                        <button
+                          type="button"
+                          class="btn btn-sm btn-circle btn-ghost btn-error"
+                          x-data="{ deleting: false }"
+                          :disabled="deleting"
+                          @click="async function() {
+                            if (!confirm('Tem certeza que deseja remover o thumbnail?')) return;
+                            
+                            deleting = true;
+                            const attachmentId = thumbnail_attachment_id;
+                            
+                            console.log('🗑️ Deletando thumbnail com ID:', attachmentId);
+                            
+                            // Deletar o attachment do banco de dados primeiro
+                            if (attachmentId && attachmentId > 0) {
+                              try {
+                                const response = await fetch(`/api/posts/${attachmentId}`, {
+                                  method: 'DELETE',
+                                  headers: { 'Content-Type': 'application/json' }
+                                });
+                                
+                                const result = await response.json();
+                                
+                                if (response.ok && result.success) {
+                                  console.log('✅ Thumbnail deletado com sucesso do banco de dados');
+                                  
+                                  // Limpar estado do Alpine após sucesso
+                                  thumbnail_attachment_id = null;
+                                  thumbnail_path = '';
+                                  thumbnail_url = '';
+                                } else {
+                                  console.error('❌ Erro ao deletar thumbnail:', result.error);
+                                  alert('Erro ao deletar thumbnail: ' + (result.error || 'Erro desconhecido'));
+                                  deleting = false;
+                                  return;
+                                }
+                              } catch (err) {
+                                console.error('❌ Erro ao deletar thumbnail:', err);
+                                alert('Erro de conexão ao deletar thumbnail');
+                                deleting = false;
+                                return;
+                              }
+                            } else {
+                              // Se não tem ID, apenas limpar o estado local
+                              console.log('⚠️ Nenhum ID de attachment para deletar, apenas limpando estado local');
+                              thumbnail_attachment_id = null;
+                              thumbnail_path = '';
+                              thumbnail_url = '';
+                            }
+                            
+                            deleting = false;
+                          }"
+                          title="Remover thumbnail"
+                        >
+                          <span x-show="!deleting">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </span>
+                          <span x-show="deleting" class="loading loading-spinner loading-xs"></span>
+                        </button>
+                      </div>
+                      <img 
+                        src={thumbnailUrl || ""} 
+                        :src="thumbnail_url || ''" 
+                        alt="Thumbnail" 
+                        class="max-w-full h-auto rounded" 
+                      />
+                    </div>
+                    <div class="form-control">
+                      <label class="label py-0">
+                        <span class="label-text text-xs">{t(locale, "admin.content.uploadThumbnail")}</span>
+                      </label>
+                      <UppyUpload
+                        containerId="uppy-thumbnail"
+                        locale={locale as Locale}
+                        mode="edit"
+                        height={280}
+                        eventName="thumbnail-uploaded"
+                        containerClass="uppy-edit-container min-h-[280px] w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+      </div>
+    </form>
+    <!-- Modal fora do form principal para evitar form aninhado (HTML inválido) -->
+    <TaxonomyAddModal locale={locale} />
+  </div>
+</AdminLayout>
+)}
+
