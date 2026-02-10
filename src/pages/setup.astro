@@ -3,11 +3,10 @@ import Layout from "../layouts/Layout.astro";
 import Notificacao from "../components/Notificacao.astro";
 
 const errorMessages: Record<string, string> = {
-  invalid_credentials: "Email ou senha incorretos. Tente novamente.",
-  missing_fields: "Preencha todos os campos obrigatórios: nome, email, senha.",
-  invalid_request: "Requisição inválida.",
+  invalid_request: "Requisição inválida. Use o formulário para enviar os dados.",
+  missing_fields: "Preencha todos os campos obrigatórios: nome, email e senha.",
   password_too_short: "A senha deve ter no mínimo 8 caracteres.",
-  signup_failed: "Não foi possível criar o usuário. Tente outro email.",
+  signup_failed: "Não foi possível criar o usuário. Tente novamente ou use outro email.",
   email_already_exists: "Este email já está em uso.",
 };
 
@@ -21,7 +20,7 @@ const errorMessage = error ? errorMessages[error] ?? "Erro ao concluir o setup."
       <div class="card-body">
         <h1 class="card-title justify-center text-2xl mb-2">Configuração inicial</h1>
         <p class="text-center text-base-content/70 text-sm mb-4">
-          Crie o primeiro usuário e defina os dados do site.
+          Crie o primeiro usuário (administrador) e defina os dados do site.
         </p>
 
         {errorMessage && (
@@ -110,8 +109,8 @@ const errorMessage = error ? errorMessages[error] ?? "Erro ao concluir o setup."
           </div>
 
           <div class="form-control mt-6">
-            <button type="submit" class="btn btn-primary">
-              Salvar alterações
+            <button type="submit" class="btn btn-primary w-full">
+              Concluir configuração
             </button>
           </div>
         </form>

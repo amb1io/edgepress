@@ -13,6 +13,11 @@ const setupPath = "/setup";
 // Endpoints sensíveis que requerem validação extra de CSRF
 const sensitiveAPIPaths = ["/api/posts", "/api/upload", "/api/media"];
 
+/**
+ * Verifica se o setup inicial já foi concluído.
+ * Retorna false se: o banco não estiver configurado, a tabela settings não existir,
+ * ou setup_done não for "Y". Nesses casos o usuário deve ser redirecionado para /setup.
+ */
 async function isSetupDone(): Promise<boolean> {
   try {
     const rows = await db
@@ -22,7 +27,7 @@ async function isSetupDone(): Promise<boolean> {
       .limit(1);
     return rows[0]?.value === "Y";
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -34,8 +39,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const isApi = pathname.startsWith("/api");
   const isLoginPage = authPaths.some((p) => pathname === p || pathname.startsWith(p + "/"));
 
+  const setupDone = await isSetupDone();
+
   if (!isApi && !isLoginPage) {
-    const setupDone = await isSetupDone();
     if (isSetupPage && setupDone) {
       return context.redirect(`/${defaultLocale}/admin`);
     }
@@ -83,17 +89,25 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return context.redirect(newPath + search);
   }
 
-  const session = await auth.api.getSession({
-    headers: context.request.headers,
-  });
-
-  if (session) {
-    context.locals.user = session.user;
-    context.locals.session = session.session;
-  } else {
+  if (!setupDone) {
     context.locals.user = null;
     context.locals.session = null;
+  } else {
+    const session = await auth.api.getSession({
+      headers: context.request.headers,
+    });
+    if (session) {
+      context.locals.user = session.user;
+      context.locals.session = session.session;
+    } else {
+      context.locals.user = null;
+      context.locals.session = null;
+    }
   }
+
+  const session = context.locals.session
+    ? { user: context.locals.user!, session: context.locals.session }
+    : null;
 
   const isProtected = protectedPaths.some(
     (p) => pathname === p || pathname.startsWith(p + "/"),

@@ -1,13 +1,18 @@
 /**
  * API de conclusão do setup inicial.
- * POST: cria o primeiro usuário (better-auth), atualiza site_name, site_description e seta setup_done=Y.
+ * POST: aplica migrações se necessário (cria tabelas se não existirem), cria o primeiro usuário (better-auth),
+ * executa seed apenas quando não havia tabelas ou setup_done = "N", atualiza site_name, site_description e seta setup_done=Y.
+ * A função de seed não é exposta como API; só é chamada neste fluxo.
  */
 import type { APIRoute } from "astro";
+import { env } from "cloudflare:workers";
 import { auth } from "../../lib/auth.ts";
 import { db } from "../../db/index.ts";
 import { settings as settingsTable } from "../../db/schema.ts";
 import { eq } from "drizzle-orm";
 import { sanitizeCallbackURL } from "../../lib/utils/url-validator.ts";
+import { runSeed } from "../../db/seed.ts";
+import { runMigrationsIfNeeded } from "../../db/run-migrations-d1.ts";
 
 export const prerender = false;
 
@@ -44,6 +49,23 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     defaultCallback
   );
 
+  await runMigrationsIfNeeded(env.DB);
+
+  let needSeed = true;
+  try {
+    const [row] = await db
+      .select({ value: settingsTable.value })
+      .from(settingsTable)
+      .where(eq(settingsTable.name, "setup_done"))
+      .limit(1);
+    if (row?.value === "Y") needSeed = false;
+  } catch {
+    needSeed = true;
+  }
+  if (needSeed) {
+    await runSeed(db);
+  }
+
   const authRequest = new Request(`${origin}/api/auth/sign-up/email`, {
     method: "POST",
     headers: {
@@ -62,8 +84,8 @@ export const POST: APIRoute = async ({ request, redirect }) => {
 
   const authResponse = await auth.handler(authRequest);
   if (!authResponse.ok) {
-    const errData = await authResponse.json().catch(() => ({}));
-    const code = (errData?.code as string) ?? "signup_failed";
+    const errData = (await authResponse.json().catch(() => ({}))) as { code?: string };
+    const code = errData?.code ?? "signup_failed";
     return redirect(`/setup?error=${encodeURIComponent(code)}`, 303);
   }
 
