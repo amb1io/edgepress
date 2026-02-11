@@ -27,7 +27,7 @@ const menuHref = (link: string) => {
 };
 ---
 
-<!DOCTYPE html>
+<!doctype html>
 <html
   lang={currentLocale === "pt-br" ? "pt-BR" : currentLocale}
   data-theme="light"
@@ -59,7 +59,7 @@ const menuHref = (link: string) => {
                 // Se algum menu_option tem o mesmo nome do slug do post_type, o pai vira link
                 // e esse option não aparece no submenu.
                 const slugMatchingOption = item.menuOptions.find(
-                  (opt) => opt === item.postTypeSlug
+                  (opt) => opt === item.postTypeSlug,
                 );
                 const parentLink = slugMatchingOption
                   ? resolveMenuOption(
@@ -67,11 +67,11 @@ const menuHref = (link: string) => {
                       item.postTypeSlug,
                       item.postTypeName,
                       currentLocale,
-                      t
+                      t,
                     ).link
                   : null;
                 const submenuOptions = item.menuOptions.filter(
-                  (opt) => opt !== item.postTypeSlug
+                  (opt) => opt !== item.postTypeSlug,
                 );
                 const hasSubmenu = submenuOptions.length > 0;
 
@@ -107,7 +107,7 @@ const menuHref = (link: string) => {
                             item.postTypeSlug,
                             item.postTypeName,
                             currentLocale,
-                            t
+                            t,
                           );
                           return (
                             <li>
@@ -139,7 +139,7 @@ const menuHref = (link: string) => {
                             item.postTypeSlug,
                             item.postTypeName,
                             currentLocale,
-                            t
+                            t,
                           );
                           return (
                             <li>
@@ -163,7 +163,7 @@ const menuHref = (link: string) => {
                       item.postTypeSlug,
                       item.postTypeName,
                       currentLocale,
-                      t
+                      t,
                     )
                   : {
                       text: parentName,
@@ -237,35 +237,46 @@ const menuHref = (link: string) => {
               />
               <Icon name="line-md:moon-alt" size={20} aria-hidden="true" />
             </label>
-            {user && (
-              <div class="dropdown dropdown-end">
-                <label tabindex="0" class="btn btn-ghost btn-circle avatar">
-                  <div class="w-10 rounded-full">
-                    {user.image ? (
-                      <img src={user.image} alt={user.name || user.email || "User"} />
-                    ) : (
-                      <div class="w-full h-full rounded-full bg-primary text-primary-content flex items-center justify-center text-sm font-semibold">
-                        {(user.name || user.email || "U").charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                </label>
-                <ul
-                  tabindex="0"
-                  class="dropdown-content menu bg-base-100 rounded-box z-10 w-52 border border-base-300 p-2 shadow-lg mt-2"
-                >
-                  <li class="menu-title">
-                    <span>{user.name || user.email}</span>
-                  </li>
-                  <li>
-                    <a id="logout-link" href="/login">
-                      <Icon name="line-md:logout" size={18} aria-hidden="true" />
-                      {t(currentLocale, "admin.signOut")}
-                    </a>
-                  </li>
-                </ul>
-              </div>
-            )}
+            {
+              user && (
+                <div class="dropdown dropdown-end">
+                  <label tabindex="0" class="btn btn-ghost btn-circle avatar">
+                    <div class="w-10 rounded-full">
+                      {user.image ? (
+                        <img
+                          src={user.image}
+                          alt={user.name || user.email || "User"}
+                        />
+                      ) : (
+                        <div class="w-full h-full rounded-full bg-primary text-primary-content flex items-center justify-center text-sm font-semibold">
+                          {(user.name || user.email || "U")
+                            .charAt(0)
+                            .toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                  <ul
+                    tabindex="0"
+                    class="dropdown-content menu bg-base-100 rounded-box z-10 w-52 border border-base-300 p-2 shadow-lg mt-2"
+                  >
+                    <li class="menu-title">
+                      <span>{user.name || user.email}</span>
+                    </li>
+                    <li>
+                      <a id="logout-link" href="/login">
+                        <Icon
+                          name="line-md:logout"
+                          size={18}
+                          aria-hidden="true"
+                        />
+                        {t(currentLocale, "admin.signOut")}
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+              )
+            }
             <slot name="header-actions" />
           </div>
         </header>
@@ -274,9 +285,6 @@ const menuHref = (link: string) => {
         </main>
       </div>
     </div>
-    <script>
-      import "htmx.org";
-    </script>
     <script>
       import { authClient } from "../lib/auth-client.ts";
 
@@ -317,7 +325,7 @@ const menuHref = (link: string) => {
         function init() {
           const stored = localStorage.getItem(KEY);
           const prefersDark = window.matchMedia(
-            "(prefers-color-scheme: dark)"
+            "(prefers-color-scheme: dark)",
           ).matches;
           const theme = stored ?? (prefersDark ? "dark" : "light");
           applyTheme(theme);
