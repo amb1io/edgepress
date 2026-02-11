@@ -30,7 +30,8 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   const email = (formData.get("email") as string)?.trim() ?? "";
   const password = (formData.get("password") as string) ?? "";
   const siteName = (formData.get("site_name") as string)?.trim() ?? "";
-  const siteDescription = (formData.get("site_description") as string)?.trim() ?? "";
+  const siteDescription =
+    (formData.get("site_description") as string)?.trim() ?? "";
 
   if (!name || !email || !password) {
     return redirect("/setup?error=missing_fields", 303);
@@ -46,7 +47,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   const safeCallbackURL = sanitizeCallbackURL(
     defaultCallback,
     origin,
-    defaultCallback
+    defaultCallback,
   );
 
   await runMigrationsIfNeeded(env.DB);
@@ -84,7 +85,9 @@ export const POST: APIRoute = async ({ request, redirect }) => {
 
   const authResponse = await auth.handler(authRequest);
   if (!authResponse.ok) {
-    const errData = (await authResponse.json().catch(() => ({}))) as { code?: string };
+    const errData = (await authResponse.json().catch(() => ({}))) as {
+      code?: string;
+    };
     const code = errData?.code ?? "signup_failed";
     return redirect(`/setup?error=${encodeURIComponent(code)}`, 303);
   }
@@ -102,5 +105,12 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     .set({ value: "Y" })
     .where(eq(settingsTable.name, "setup_done"));
 
-  return redirect("/login?setup=success", 303);
+  // Criar resposta de redirect com cookie para session storage server-side
+  const response = redirect(`/${locale}/login?setup=success`, 303);
+  // Definir cookie que pode ser lido pelo middleware (equivalente ao session storage)
+  response.headers.set(
+    "Set-Cookie",
+    "setup_done=Y; Path=/; HttpOnly; SameSite=Lax",
+  );
+  return response;
 };

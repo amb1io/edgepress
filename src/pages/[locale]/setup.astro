@@ -1,37 +1,46 @@
 ---
-import Layout from "../layouts/Layout.astro";
-import Notificacao from "../components/Notificacao.astro";
+import Layout from "../../layouts/Layout.astro";
+import Notificacao from "../../components/Notificacao.astro";
 
 const errorMessages: Record<string, string> = {
-  invalid_request: "Requisição inválida. Use o formulário para enviar os dados.",
+  invalid_request:
+    "Requisição inválida. Use o formulário para enviar os dados.",
   missing_fields: "Preencha todos os campos obrigatórios: nome, email e senha.",
   password_too_short: "A senha deve ter no mínimo 8 caracteres.",
-  signup_failed: "Não foi possível criar o usuário. Tente novamente ou use outro email.",
+  signup_failed:
+    "Não foi possível criar o usuário. Tente novamente ou use outro email.",
   email_already_exists: "Este email já está em uso.",
 };
 
 const error = Astro.url.searchParams.get("error");
-const errorMessage = error ? errorMessages[error] ?? "Erro ao concluir o setup." : null;
+const errorMessage = error
+  ? (errorMessages[error] ?? "Erro ao concluir o setup.")
+  : null;
 ---
 
 <Layout title="Setup - Edgepress">
   <main class="min-h-screen flex items-center justify-center bg-base-200 p-4">
     <div class="card w-full max-w-md bg-base-100 shadow-xl">
       <div class="card-body">
-        <h1 class="card-title justify-center text-2xl mb-2">Configuração inicial</h1>
+        <h1 class="card-title justify-center text-2xl mb-2">
+          Configuração inicial
+        </h1>
         <p class="text-center text-base-content/70 text-sm mb-4">
           Crie o primeiro usuário (administrador) e defina os dados do site.
         </p>
 
-        {errorMessage && (
-          <Notificacao type="error" message={errorMessage} dismissible className="mb-4" />
-        )}
+        {
+          errorMessage && (
+            <Notificacao
+              type="error"
+              message={errorMessage}
+              dismissible
+              className="mb-4"
+            />
+          )
+        }
 
-        <form
-          action="/api/setup"
-          method="post"
-          class="space-y-4"
-        >
+        <form action="/api/setup" method="post" class="space-y-4">
           <div class="form-control w-full">
             <label class="label" for="name">
               <span class="label-text">Nome do usuário</span>
