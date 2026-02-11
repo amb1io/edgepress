@@ -56,25 +56,65 @@ async function ensureMigrationsTable(d1: D1Database): Promise<void> {
  * Retorna o último created_at aplicado ou 0.
  */
 async function getLastMigrationTime(d1: D1Database): Promise<number> {
-  const r = await d1
+  const r = (await d1
     .prepare(
       `SELECT created_at FROM ${MIGRATIONS_TABLE} ORDER BY created_at DESC LIMIT 1`
     )
-    .first<{ created_at: number }>();
+    .first()) as { created_at: number } | null;
   return r?.created_at ?? 0;
+}
+
+/**
+ * Verifica se o schema já foi aplicado (ex.: por wrangler d1 migrations apply).
+ * Se tabelas como post_types ou settings existirem, consideramos que as migrações já rodaram.
+ */
+async function isSchemaAlreadyApplied(d1: D1Database): Promise<boolean> {
+  try {
+    const r = await d1
+      .prepare(
+        `SELECT 1 FROM sqlite_master WHERE type='table' AND name IN ('post_types','settings') LIMIT 1`
+      )
+      .first();
+    return r != null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Marca todas as migrações do journal como aplicadas em __drizzle_migrations.
+ * Usado quando o schema já existe (ex.: migrado via wrangler) para evitar reexecução.
+ */
+async function markAllMigrationsApplied(d1: D1Database): Promise<void> {
+  const maxWhen = Math.max(...entries.map((e) => e.when));
+  const lastEntry = entries[entries.length - 1];
+  const hash = `${lastEntry?.tag ?? "unknown"}-${maxWhen}`;
+  await d1
+    .prepare(
+      `INSERT INTO ${MIGRATIONS_TABLE} (hash, created_at) VALUES (?, ?)`
+    )
+    .bind(hash, maxWhen)
+    .run();
 }
 
 /**
  * Aplica as migrações pendentes no D1.
  * Idempotente: só aplica migrações com when > último aplicado.
+ * Se o schema já existir (ex.: migrado via wrangler d1 migrations apply), apenas sincroniza
+ * a tabela de controle e não tenta recriar tabelas.
  */
 export async function runMigrationsIfNeeded(d1: D1Database): Promise<void> {
   await ensureMigrationsTable(d1);
-  const lastWhen = await getLastMigrationTime(d1);
+  let lastWhen = await getLastMigrationTime(d1);
+
+  if (lastWhen === 0 && (await isSchemaAlreadyApplied(d1))) {
+    await markAllMigrationsApplied(d1);
+    return;
+  }
 
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
-    if (entry.when <= lastWhen) continue;
+    if (!entry || entry.when <= lastWhen) continue;
 
     const sql = migrationSql[i];
     if (!sql) continue;
