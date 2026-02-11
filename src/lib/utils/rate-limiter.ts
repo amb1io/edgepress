@@ -33,24 +33,19 @@ interface RateLimitRecord {
 const rateLimitStore = new Map<string, RateLimitRecord>();
 
 /**
- * Limpa registros expirados do store (garbage collection)
- * Executado periodicamente para evitar memory leaks
+ * Limpa registros expirados do store (garbage collection).
+ * Chamada dentro do handler (nunca no escopo global) para ser compatível com
+ * Cloudflare Workers, onde setInterval/setTimeout não são permitidos no global scope.
  */
 function cleanupExpiredRecords() {
   const now = Date.now();
   const oneHour = 60 * 60 * 1000;
 
   for (const [key, record] of rateLimitStore.entries()) {
-    // Remove registros com mais de 1 hora
     if (now - record.windowStart > oneHour) {
       rateLimitStore.delete(key);
     }
   }
-}
-
-// Executar cleanup a cada 10 minutos
-if (typeof globalThis !== "undefined" && typeof setInterval !== "undefined") {
-  setInterval(cleanupExpiredRecords, 10 * 60 * 1000);
 }
 
 /**
@@ -81,6 +76,7 @@ export function checkRateLimit(
   resetAt: Date;
   message: string;
 } {
+  cleanupExpiredRecords();
   const now = Date.now();
   const record = rateLimitStore.get(identifier);
 
