@@ -11,6 +11,7 @@ import {
 const postMetaSchema = buildMetaSchema([
   { key: "taxonomy", type: "array", default: ["category", "tag"] },
   { key: "post_thumbnail", type: "boolean", default: true },
+  { key: "post_types", type: "array", default: [] },
 ]);
 
 const attachmentMetaSchema = buildMetaSchema([
@@ -22,6 +23,9 @@ const attachmentMetaSchema = buildMetaSchema([
   { key: "attachment_path", type: "string" },
   { key: "attachment_alt", type: "string" },
 ]);
+
+/** Post types que existem só para referência em meta_values (ex.: post_types no post). Não aparecem no menu. */
+const META_ONLY_POST_TYPES = new Set(["custom_fields"]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function clearSeedData(db: any): Promise<number> {
@@ -44,6 +48,7 @@ export async function runSeed(db: any): Promise<void> {
     { slug: "settings", name: "Configurações" },
     { slug: "user", name: "User" },
     { slug: "attachment", name: "Attachment" },
+    { slug: "custom_fields", name: "Custom Fields" }, // meta-only: referenciado em meta_values (ex.: post_types), não aparece no menu
   ];
 
   const existing = await db
@@ -224,6 +229,7 @@ export async function runSeed(db: any): Promise<void> {
   ];
 
   for (const config of menuConfig) {
+    if (META_ONLY_POST_TYPES.has(config.typeSlug)) continue;
     const typeId = typeIds[config.typeSlug];
     if (!typeId) continue;
 
@@ -243,6 +249,7 @@ export async function runSeed(db: any): Promise<void> {
       menu_options: config.menu_options,
       menu_order: config.menu_order,
       icon: config.icon,
+      post_types: ["custom_fields"],
     };
 
     if (existingMenuPost.length > 0) {
