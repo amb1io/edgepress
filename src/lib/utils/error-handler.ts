@@ -1,5 +1,8 @@
-import { internalServerErrorResponse, errorResponse } from './http-responses.ts';
-import { getErrorMessage } from '../constants/error-messages.ts';
+import {
+  internalServerErrorResponse,
+  errorResponse,
+} from "./http-responses.ts";
+import { getErrorMessage } from "../constants/error-messages.ts";
 
 /**
  * Estrutura de log de erro
@@ -21,24 +24,24 @@ interface ErrorLogData {
 export function logError(
   context: string,
   error: unknown,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
 ): void {
   const errorData: ErrorLogData = {
     context,
     message: error instanceof Error ? error.message : String(error),
     timestamp: new Date().toISOString(),
   };
-  
+
   if (error instanceof Error && error.stack) {
     errorData.stack = error.stack;
   }
-  
+
   if (metadata) {
     errorData.metadata = metadata;
   }
-  
+
   // TODO: Integrar com serviço de logging (ex: Sentry, LogRocket, etc)
-  console.error('[ERROR]', JSON.stringify(errorData, null, 2));
+  console.error("[ERROR]", JSON.stringify(errorData, null, 2));
 }
 
 /**
@@ -46,14 +49,17 @@ export function logError(
  * @param message - Mensagem a ser logada
  * @param metadata - Metadados adicionais
  */
-export function logInfo(message: string, metadata?: Record<string, unknown>): void {
+export function logInfo(
+  message: string,
+  metadata?: Record<string, unknown>,
+): void {
   const logData = {
     message,
     metadata,
     timestamp: new Date().toISOString(),
   };
-  
-  console.log('[INFO]', JSON.stringify(logData, null, 2));
+
+  console.log("[INFO]", JSON.stringify(logData, null, 2));
 }
 
 /**
@@ -61,14 +67,17 @@ export function logInfo(message: string, metadata?: Record<string, unknown>): vo
  * @param message - Mensagem de warning
  * @param metadata - Metadados adicionais
  */
-export function logWarning(message: string, metadata?: Record<string, unknown>): void {
+export function logWarning(
+  message: string,
+  metadata?: Record<string, unknown>,
+): void {
   const logData = {
     message,
     metadata,
     timestamp: new Date().toISOString(),
   };
-  
-  console.warn('[WARNING]', JSON.stringify(logData, null, 2));
+
+  console.warn("[WARNING]", JSON.stringify(logData, null, 2));
 }
 
 /**
@@ -81,19 +90,27 @@ export function logWarning(message: string, metadata?: Record<string, unknown>):
 export function handleApiError(
   error: unknown,
   context: string,
-  locale: string = 'pt-br'
+  locale: string = "pt-br",
 ): Response {
   logError(context, error);
-  
+
   // Se o erro tem um status HTTP customizado, usar ele
-  if (error && typeof error === 'object' && 'status' in error && typeof error.status === 'number') {
+  if (
+    error &&
+    typeof error === "object" &&
+    "status" in error &&
+    typeof error.status === "number"
+  ) {
     const status = error.status;
-    const message = error instanceof Error ? error.message : getErrorMessage('INTERNAL_SERVER_ERROR', locale);
+    const message =
+      error instanceof Error
+        ? error.message
+        : getErrorMessage("INTERNAL_SERVER_ERROR", locale);
     return errorResponse(message, status);
   }
-  
+
   // Erro genérico
-  const message = getErrorMessage('INTERNAL_SERVER_ERROR', locale);
+  const message = getErrorMessage("INTERNAL_SERVER_ERROR", locale);
   return internalServerErrorResponse(message);
 }
 
@@ -107,7 +124,7 @@ export function handleApiError(
 export function createErrorResponse(
   message: string,
   status: number,
-  locale?: string
+  locale?: string,
 ): Response {
   return errorResponse(message, status);
 }
@@ -119,10 +136,10 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status: number = 500,
-    public details?: unknown
+    public details?: unknown,
   ) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
   }
 }
 

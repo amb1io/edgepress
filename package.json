@@ -23,6 +23,7 @@
   "main": "index.ts",
   "scripts": {
     "dev": "wrangler types -c wrangler.jsonc && astro dev",
+    "dev:reset": "rm -rf .wrangler && npm run build && npx wrangler dev",
     "dev:vite": "vite",
     "wrangler-type": "wrangler types -c wrangler.jsonc",
     "build": "wrangler types -c wrangler.jsonc && astro build",

@@ -50,22 +50,22 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     defaultCallback,
   );
 
-  // await runMigrationsIfNeeded(env.DB);
+  await runMigrationsIfNeeded(env.DB);
 
-  // let needSeed = true;
-  // try {
-  //   const [row] = await db
-  //     .select({ value: settingsTable.value })
-  //     .from(settingsTable)
-  //     .where(eq(settingsTable.name, "setup_done"))
-  //     .limit(1);
-  //   if (row?.value === "Y") needSeed = false;
-  // } catch {
-  //   needSeed = true;
-  // }
-  // if (needSeed) {
-  //   await runSeed(db);
-  // }
+  let needSeed = true;
+  try {
+    const [row] = await db
+      .select({ value: settingsTable.value })
+      .from(settingsTable)
+      .where(eq(settingsTable.name, "setup_done"))
+      .limit(1);
+    if (row?.value === "Y") needSeed = false;
+  } catch {
+    needSeed = true;
+  }
+  if (needSeed) {
+    await runSeed(db);
+  }
 
   const authRequest = new Request(`${origin}/api/auth/sign-up/email`, {
     method: "POST",
@@ -90,22 +90,28 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     };
     const code = errData?.code ?? "signup_failed";
     console.error(code, errData);
-    // return redirect(`/setup?error=${encodeURIComponent(code)}`, 303);
+    return redirect(`/${locale}/setup?error=${encodeURIComponent(code)}`, 303);
   }
 
-  // await db
-  //   .update(settingsTable)
-  //   .set({ value: siteName || "demo site" })
-  //   .where(eq(settingsTable.name, "site_name"));
-  // await db
-  //   .update(settingsTable)
-  //   .set({ value: siteDescription || "demo_description" })
-  //   .where(eq(settingsTable.name, "site_description"));
-  // await db
-  //   .update(settingsTable)
-  //   .set({ value: "Y" })
-  //   .where(eq(settingsTable.name, "setup_done"));
+  await db
+    .update(settingsTable)
+    .set({ value: siteName || "demo site" })
+    .where(eq(settingsTable.name, "site_name"));
+  await db
+    .update(settingsTable)
+    .set({ value: siteDescription || "demo_description" })
+    .where(eq(settingsTable.name, "site_description"));
+  await db
+    .update(settingsTable)
+    .set({ value: "Y" })
+    .where(eq(settingsTable.name, "setup_done"));
 
-  // return redirect("/login?setup=success", 303);
-  return "";
+  // Criar resposta de redirect com cookie para session storage server-side
+  const response = redirect(`/${locale}/login?setup=success`, 303);
+  // Definir cookie que pode ser lido pelo middleware (equivalente ao session storage)
+  response.headers.set(
+    "Set-Cookie",
+    "setup_done=Y; Path=/; HttpOnly; SameSite=Lax",
+  );
+  return response;
 };

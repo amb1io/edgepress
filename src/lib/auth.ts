@@ -29,6 +29,7 @@ export const auth = betterAuth({
     enabled: true,
   },
   baseURL: env.BETTER_AUTH_URL,
+  basePath: "/api/auth",
   secret: env.BETTER_AUTH_SECRET,
   trustedOrigins: (() => {
     const trusted = (env as { BETTER_AUTH_TRUSTED_ORIGINS?: string }).BETTER_AUTH_TRUSTED_ORIGINS;

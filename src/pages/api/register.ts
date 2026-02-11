@@ -14,7 +14,9 @@ export const prerender = false;
 
 export const POST: APIRoute = async ({ request, redirect, locals }) => {
   // Obter rate limits do ambiente (locals pode ser undefined em testes ou SSR)
-  const env = (locals as { runtime?: { env?: Record<string, string> } } | undefined)?.runtime?.env;
+  const env = (
+    locals as { runtime?: { env?: Record<string, string> } } | undefined
+  )?.runtime?.env;
   const rateLimits = getRateLimits(env);
 
   // Aplicar rate limiting: configurável via env (padrão: 3 registros / hora)
@@ -31,7 +33,10 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
   let callbackURL: string | undefined;
   let locale: string | undefined;
 
-  if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
+  if (
+    contentType.includes("application/x-www-form-urlencoded") ||
+    contentType.includes("multipart/form-data")
+  ) {
     const formData = await request.formData();
     name = (formData.get("name") as string)?.trim() ?? "";
     email = (formData.get("email") as string)?.trim() ?? "";
@@ -41,20 +46,23 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
     callbackURL = (formData.get("callbackURL") as string)?.trim() || undefined;
     locale = (formData.get("locale") as string)?.trim() || undefined;
   } else {
-    return redirect(`/${locale || "pt-br"}/admin/content?post_type=user&action=new&error=invalid_request`, 303);
+    return redirect(
+      `/${locale || "pt-br"}/admin/content?post_type=user&action=new&error=invalid_request`,
+      303,
+    );
   }
 
   if (!name || !email || !password) {
     return redirect(
       `/${locale || "pt-br"}/admin/content?post_type=user&action=new&error=missing_fields`,
-      303
+      303,
     );
   }
 
   if (password.length < 8) {
     return redirect(
       `/${locale || "pt-br"}/admin/content?post_type=user&action=new&error=password_too_short`,
-      303
+      303,
     );
   }
 
@@ -62,10 +70,13 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
   const session = await getSession(request);
   const isAdmin = session?.user?.role === 0;
   if (isAdmin) {
-    const roleNum = role !== undefined && role !== "" ? parseInt(role, 10) : NaN;
-    roleValue = Number.isNaN(roleNum) || !USER_ROLE_IDS.includes(roleNum as (typeof USER_ROLE_IDS)[number])
-      ? 3
-      : roleNum;
+    const roleNum =
+      role !== undefined && role !== "" ? parseInt(role, 10) : NaN;
+    roleValue =
+      Number.isNaN(roleNum) ||
+      !USER_ROLE_IDS.includes(roleNum as (typeof USER_ROLE_IDS)[number])
+        ? 3
+        : roleNum;
   } else {
     // Prevenir escalação de privilégios: apenas admin pode definir role diferente de leitor
     roleValue = 3; // leitor
@@ -77,7 +88,11 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
 
   // Sanitizar e validar callbackURL para prevenir Open Redirect
   const defaultCallback = `/${locale || "pt-br"}/admin/list?type=user&limit=10&page=1`;
-  const safeCallbackURL = sanitizeCallbackURL(callbackURL, origin, defaultCallback);
+  const safeCallbackURL = sanitizeCallbackURL(
+    callbackURL,
+    origin,
+    defaultCallback,
+  );
 
   const authRequest = new Request(`${origin}${authPath}`, {
     method: "POST",
@@ -112,19 +127,13 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
     });
     return redirect(
       `/${locale || "pt-br"}/admin/content?post_type=user&action=new&error=${encodeURIComponent(code)}`,
-      303
+      303,
     );
   }
-  
-  // Log de sucesso para debug
-  console.log("Registration successful:", {
-    email,
-    name,
-    role: roleValue,
-  });
 
   const data = await authResponse.json().catch(() => ({}));
-  const location = data?.url ?? `/${locale || "pt-br"}/admin/list?type=user&limit=10&page=1`;
+  const location =
+    data?.url ?? `/${locale || "pt-br"}/admin/list?type=user&limit=10&page=1`;
 
   const responseHeaders = new Headers({ Location: location });
   const cookies = authResponse.headers.getSetCookie?.() ?? [];

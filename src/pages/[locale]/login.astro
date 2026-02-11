@@ -1,6 +1,6 @@
 ---
-import Layout from "../layouts/Layout.astro";
-import Notificacao from "../components/Notificacao.astro";
+import Layout from "../../layouts/Layout.astro";
+import Notificacao from "../../components/Notificacao.astro";
 
 const errorMessages: Record<string, string> = {
   invalid_credentials: "Email ou senha incorretos. Tente novamente.",
@@ -9,9 +9,21 @@ const errorMessages: Record<string, string> = {
 };
 
 const error = Astro.url.searchParams.get("error");
-const errorMessage = error ? errorMessages[error] ?? "Erro ao fazer login." : null;
+const errorMessage = error
+  ? (errorMessages[error] ?? "Erro ao fazer login.")
+  : null;
 const setupSuccess = Astro.url.searchParams.get("setup") === "success";
 ---
+
+<script>
+  // Definir session storage após setup bem-sucedido
+  if (
+    import.meta.env.SSR === false &&
+    new URL(window.location.href).searchParams.get("setup") === "success"
+  ) {
+    sessionStorage.setItem("setup_done", "Y");
+  }
+</script>
 
 <Layout title="Login - Edgepress">
   <main class="min-h-screen flex items-center justify-center bg-base-200 p-4">
@@ -19,19 +31,30 @@ const setupSuccess = Astro.url.searchParams.get("setup") === "success";
       <div class="card-body">
         <h1 class="card-title justify-center text-2xl mb-4">Login</h1>
 
-        {setupSuccess && (
-          <Notificacao type="success" message="Configuração concluída. Faça login com o email e senha que você criou." dismissible className="mb-4" />
-        )}
-        {errorMessage && (
-          <Notificacao type="error" message={errorMessage} dismissible className="mb-4" />
-        )}
+        {
+          setupSuccess && (
+            <Notificacao
+              type="success"
+              message="Configuração concluída. Faça login com o email e senha que você criou."
+              dismissible
+              className="mb-4"
+            />
+          )
+        }
+        {
+          errorMessage && (
+            <Notificacao
+              type="error"
+              message={errorMessage}
+              dismissible
+              className="mb-4"
+            />
+          )
+        }
 
-        <form
-          action="/api/login"
-          method="post"
-          class="space-y-4"
-        >
-          <input type="hidden" name="callbackURL" value="/pt-br/admin" />
+        <form action="/api/login" method="post" class="space-y-4">
+          <input type="hidden" name="locale" value={Astro.params["locale"] ?? "pt-br"} />
+          <input type="hidden" name="callbackURL" value={`/${Astro.params["locale"] ?? "pt-br"}/admin`} />
           <div class="form-control w-full">
             <label class="label" for="email">
               <span class="label-text">Email</span>
@@ -61,16 +84,17 @@ const setupSuccess = Astro.url.searchParams.get("setup") === "success";
               autocomplete="current-password"
             />
             <label class="label">
-              <a href="/login/forgot-password" class="label-text-alt link link-hover">
+              <a
+                href={`/${Astro.params["locale"] ?? "pt-br"}/login/forgot-password`}
+                class="label-text-alt link link-hover"
+              >
                 Esqueci senha
               </a>
             </label>
           </div>
 
           <div class="form-control mt-6">
-            <button type="submit" class="btn btn-primary">
-              Fazer login
-            </button>
+            <button type="submit" class="btn btn-primary"> Fazer login </button>
           </div>
         </form>
       </div>
