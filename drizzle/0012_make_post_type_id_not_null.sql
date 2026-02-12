@@ -34,11 +34,10 @@ WHERE "post_type_id" IS NULL;
 -- ============================================
 -- NOTA: SQLite não suporta ALTER COLUMN, então precisamos recriar a tabela
 
--- Criar tabela temporária com nova estrutura (inclui parent_id para compatibilidade com 0013)
+-- Criar tabela temporária com nova estrutura
 CREATE TABLE "posts_new" (
   "id" INTEGER PRIMARY KEY AUTOINCREMENT,
   "post_type_id" INTEGER NOT NULL REFERENCES "post_types"("id") ON DELETE RESTRICT,
-  "parent_id" INTEGER,
   "author_id" TEXT REFERENCES "user"("id") ON DELETE SET NULL,
   "title" TEXT NOT NULL,
   "slug" TEXT NOT NULL UNIQUE,
@@ -51,9 +50,35 @@ CREATE TABLE "posts_new" (
   "updated_at" INTEGER
 );
 
--- Copiar dados da tabela antiga
-INSERT INTO "posts_new" 
-SELECT * FROM "posts";
+-- Copiar dados da tabela antiga (especificar colunas explicitamente para evitar conflito com parent_id)
+INSERT INTO "posts_new" (
+  "id",
+  "post_type_id",
+  "author_id",
+  "title",
+  "slug",
+  "excerpt",
+  "body",
+  "status",
+  "meta_values",
+  "published_at",
+  "created_at",
+  "updated_at"
+)
+SELECT 
+  "id",
+  "post_type_id",
+  "author_id",
+  "title",
+  "slug",
+  "excerpt",
+  "body",
+  "status",
+  "meta_values",
+  "published_at",
+  "created_at",
+  "updated_at"
+FROM "posts";
 
 -- Dropar tabela antiga
 DROP TABLE "posts";
@@ -61,9 +86,8 @@ DROP TABLE "posts";
 -- Renomear tabela nova
 ALTER TABLE "posts_new" RENAME TO "posts";
 
--- Recriar índices (incl. parent_id se a tabela já tiver essa coluna via 0013)
+-- Recriar índices
 CREATE INDEX "posts_post_type_id_idx" ON "posts" ("post_type_id");
-CREATE INDEX IF NOT EXISTS "posts_parent_id_idx" ON "posts" ("parent_id");
 CREATE INDEX "posts_author_id_idx" ON "posts" ("author_id");
 CREATE INDEX "posts_status_idx" ON "posts" ("status");
 CREATE INDEX "posts_created_at_idx" ON "posts" ("created_at");
