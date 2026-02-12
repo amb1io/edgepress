@@ -10,6 +10,7 @@ import { db } from "../../../db/index.ts";
 import TaxonomiesBlocks from "../../../components/TaxonomiesBlocks.astro";
 import TaxonomyAddModal from "../../../components/TaxonomyAddModal.astro";
 import UppyUpload from "../../../components/UppyUpload.astro";
+import CustomFieldsWrapper from "../../../components/CustomFieldsWrapper.astro";
 import { getMenuItems } from "../../../lib/menu.ts";
 import { t, locales, defaultLocale, type Locale } from "../../../i18n/index.ts";
 import { eq, and, inArray, or, isNull } from "drizzle-orm";
@@ -91,6 +92,9 @@ let thumbnailPath = "";
 let thumbnailUrl = "";
 let thumbnailAttachmentId: number | null = null;
 let hasPostThumbnail = false;
+let hasCustomFields = false;
+let customFieldsTypeId: number | null = null;
+let initialCustomFields: Array<{ id: number; title: string; rows: Array<{ id: number; name: string; value: string }> }> = [];
 
 if (!showUserTemplate && !showAttachmentTemplate) {
   const [typeRowResult] = await db
@@ -125,6 +129,22 @@ if (!showUserTemplate && !showAttachmentTemplate) {
     const def = item && "default" in item ? (item as { default?: unknown }).default : undefined;
     return typeof def === "boolean" ? def : false;
   })();
+
+  hasCustomFields = (() => {
+    const schema = (typeRow!.meta_schema ?? []) as { key: string; default?: unknown }[];
+    const item = schema.find((s) => s.key === "post_types");
+    const def = item?.default;
+    return Array.isArray(def) && def.includes("custom_fields");
+  })();
+
+  if (hasCustomFields) {
+    const [cfType] = await db
+      .select({ id: postTypes.id })
+      .from(postTypes)
+      .where(eq(postTypes.slug, "custom_fields"))
+      .limit(1);
+    customFieldsTypeId = cfType?.id ?? null;
+  }
 
   const taxonomyRoots =
     taxonomyTypes.length > 0
@@ -260,6 +280,56 @@ if (!showUserTemplate && !showAttachmentTemplate) {
           thumbnailAttachmentId = mediaRelation.media_id;
         }
       }
+
+      // Buscar custom fields filhos quando hasCustomFields
+      if (hasCustomFields && customFieldsTypeId) {
+        const customFieldsPosts = await db
+          .select({
+            id: posts.id,
+            title: posts.title,
+            meta_values: posts.meta_values,
+          })
+          .from(posts)
+          .where(
+            and(
+              eq(posts.parent_id, post.id),
+              eq(posts.post_type_id, customFieldsTypeId)
+            )
+          )
+          .orderBy(posts.created_at);
+
+        let rowIdCounter = Date.now();
+        initialCustomFields = customFieldsPosts.map((cfPost) => {
+          let rows: Array<{ id: number; name: string; value: string }> = [];
+          if (cfPost.meta_values) {
+            try {
+              const meta = JSON.parse(cfPost.meta_values) as { fields?: Array<{ name?: string; value?: string }> };
+              if (meta.fields && Array.isArray(meta.fields)) {
+                rows = meta.fields.map((field) => {
+                  rowIdCounter += 1;
+                  return {
+                    id: rowIdCounter,
+                    name: typeof field.name === "string" ? field.name : "",
+                    value: typeof field.value === "string" ? field.value : "",
+                  };
+                });
+              }
+            } catch {
+              // Se não conseguir parsear, usar array vazio
+            }
+          }
+          // Se não tiver rows, criar uma linha vazia
+          if (rows.length === 0) {
+            rowIdCounter += 1;
+            rows = [{ id: rowIdCounter, name: "", value: "" }];
+          }
+          return {
+            id: cfPost.id,
+            title: cfPost.title || "",
+            rows,
+          };
+        });
+      }
     }
   }
 
@@ -280,7 +350,6 @@ thumbnailPath = String(thumbnailPath || "");
 thumbnailUrl = String(thumbnailUrl || "");
 const initialThumbnailAttachmentId = thumbnailAttachmentId;
 ---
-
 {showUserTemplate ? (
   <UserTemplate
     locale={locale}
@@ -545,10 +614,45 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
           form.appendChild(attachmentIdInput);
         });
       }
-      
+
       // Enviar formulário
       try {
         const formData = new FormData(form);
+
+        // Dados do CustomFieldsWrapper: cada collapse vira um post custom_fields (enviado após salvar o post pai)
+        const wrapperEl = document.getElementById("custom-fields-wrapper");
+        if (wrapperEl && window.Alpine) {
+          const wrapperData = window.Alpine.$data(wrapperEl);
+          if (wrapperData && Array.isArray(wrapperData.customFields)) {
+            // Filtrar campos e rows marcadas para deleção
+            const customFieldsToSave = wrapperData.customFields
+              .filter((item) => !item._deleted) // Remove campos marcados para deleção
+              .map((item) => ({
+                ...item,
+                rows: item.rows.filter((row) => !row._deleted),
+              }))
+              .filter((item) => item.rows.length > 0); // Remove custom fields sem rows
+            
+            // IDs de custom fields que devem ser deletados (marcados como _deleted ou ficaram sem rows)
+            const existingFieldIds = wrapperData.customFields
+              .filter((item) => {
+                const isExisting = item.id && typeof item.id === 'number' && item.id < 1000000000000;
+                const isMarkedForDeletion = item._deleted === true;
+                const hasNoRows = !item.rows || item.rows.length === 0;
+                const allRowsDeleted = item.rows && item.rows.every((row) => row._deleted);
+                return isExisting && (isMarkedForDeletion || hasNoRows || allRowsDeleted);
+              })
+              .map((item) => item.id);
+            
+            if (customFieldsToSave.length > 0) {
+              formData.set("custom_fields_data", JSON.stringify(customFieldsToSave));
+            }
+            
+            if (existingFieldIds.length > 0) {
+              formData.set("custom_fields_to_delete", JSON.stringify(existingFieldIds));
+            }
+          }
+        }
         
         // IMPORTANTE: Usar getAttribute ao invés de .action porque há um input com name="action"
         const formAction = form.getAttribute('action');
@@ -707,6 +811,12 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
             />
           </div>
         </div>
+
+        {hasCustomFields && (
+          <div id="custom-fields-wrapper-root" class="mt-4">
+            <CustomFieldsWrapper initialData={action === "edit" ? initialCustomFields : []} />
+          </div>
+        )}
       </div>
 
       <aside
