@@ -11,7 +11,7 @@ import {
 const postMetaSchema = buildMetaSchema([
   { key: "taxonomy", type: "array", default: ["category", "tag"] },
   { key: "post_thumbnail", type: "boolean", default: true },
-  { key: "post_types", type: "array", default: [] },
+  { key: "post_types", type: "array", default: ["custom_fields"] },
 ]);
 
 const attachmentMetaSchema = buildMetaSchema([
