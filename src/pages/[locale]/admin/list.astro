@@ -2,19 +2,21 @@
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import DataList from "../../../components/DataList.astro";
 import { db } from "../../../db/index.ts";
-import { user as userTable } from "../../../db/schema.ts";
 import { getListItems, getSettingsListItems } from "../../../lib/list-items.ts";
 import { getMenuItems } from "../../../lib/menu.ts";
 import { getTableList, TABLE_DELETE_TEMPLATE } from "../../../lib/list-table-dynamic.ts";
 import { t, locales, defaultLocale } from "../../../i18n/index.ts";
-import { and, asc, desc, like, sql } from "drizzle-orm";
-import { USER_ROLE_LABEL_KEYS } from "../../../db/schema.ts";
 import { getSourceKind } from "../../../lib/content-source.ts";
+import { ensureTranslationsLoaded } from "../../../lib/i18n-helpers.ts";
 
 const locale = Astro.params["locale"] ?? defaultLocale;
 if (!locales.includes(locale as "en" | "es" | "pt-br")) {
   return Astro.redirect(`/${defaultLocale}/admin`);
 }
+
+// Pré-carregar traduções
+await ensureTranslationsLoaded(locale);
+
 const currentUser = Astro.locals.user;
 
 if (!currentUser) {
@@ -50,16 +52,6 @@ function formatDate(ts: number | null) {
   return new Date(ts).toLocaleString(loc);
 }
 
-function formatCellValue(val: unknown, key: string): string {
-  if (val == null) return "—";
-  if (typeof val === "number" && (key.endsWith("_at") || key.endsWith("At") || key === "expires_at")) {
-    return formatDate(val);
-  }
-  if (typeof val === "boolean" || (typeof val === "number" && (val === 0 || val === 1))) {
-    return val ? "Y" : "N";
-  }
-  return String(val);
-}
 
 let result: { items: Record<string, unknown>[]; total: number; page: number; limit: number; totalPages: number };
 let listColumns: { key: string; label: string; sortLink?: string }[];
@@ -84,21 +76,49 @@ if (loadFromTable) {
     limit: tableResult.limit,
     totalPages: tableResult.totalPages,
   };
-  listColumns = [
-    { key: "id", label: t(locale, "admin.list.id"), sortLink: buildListUrl({ order: "id", orderDir: order === "id" && orderDir === "asc" ? "desc" : "asc" }) },
-    { key: "name", label: t(locale, "admin.user.formName"), sortLink: buildListUrl({ order: "name", orderDir: order === "name" && orderDir === "asc" ? "desc" : "asc" }) },
-    { key: "email", label: t(locale, "admin.user.formEmail"), sortLink: buildListUrl({ order: "email", orderDir: order === "email" && orderDir === "asc" ? "desc" : "asc" }) },
-    { key: "role", label: t(locale, "admin.user.formRole"), sortLink: buildListUrl({ order: "role", orderDir: order === "role" && orderDir === "asc" ? "desc" : "asc" }) },
-    { key: "created_at", label: t(locale, "admin.list.createdAt"), sortLink: buildListUrl({ order: "created_at", orderDir: order === "created_at" && orderDir === "asc" ? "desc" : "asc" }) },
-    { key: "updated_at", label: t(locale, "admin.list.updatedAt"), sortLink: buildListUrl({ order: "updated_at", orderDir: order === "updated_at" && orderDir === "asc" ? "desc" : "asc" }) },
-  ];
-  listItems = result.items.map((i) => ({
-    ...i,
-    created_at: formatDate((i["created_at"] as number) ?? null),
-    updated_at: formatDate((i["updated_at"] as number) ?? null),
-  }));
-  listEmptyColspan = 8;
-  deletePathTemplate = "/api/users/{id}";
+  
+  // Gerar colunas dinamicamente baseado nas colunas retornadas
+  listColumns = tableResult.columns.map((col) => {
+    // Formatar label: converter snake_case para Title Case e tratar campos relacionados
+    let label = col;
+    if (col.includes("_")) {
+      // Se for campo relacionado (formato: tabela_coluna), mostrar apenas a parte da coluna
+      const parts = col.split("_");
+      if (parts.length > 1) {
+        // Verificar se a primeira parte é um nome de tabela conhecido
+        const possibleTable = parts[0];
+        const colName = parts.slice(1).join("_");
+        label = `${colName} (${possibleTable})`;
+      }
+    }
+    label = label
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (l) => l.toUpperCase());
+    
+    return {
+      key: col,
+      label,
+      sortLink: buildListUrl({ order: col, orderDir: order === col && orderDir === "asc" ? "desc" : "asc" }),
+    };
+  });
+  
+  // Formatar itens: converter timestamps e manter outros valores
+  listItems = result.items.map((i) => {
+    const formatted: Record<string, unknown> = { ...i };
+    // Formatar campos de data/timestamp
+    for (const key of Object.keys(formatted)) {
+      if (key.endsWith("_at") || key.endsWith("At") || key === "expires_at") {
+        const val = formatted[key];
+        if (typeof val === "number") {
+          formatted[key] = formatDate(val);
+        }
+      }
+    }
+    return formatted;
+  });
+  
+  listEmptyColspan = listColumns.length + 2; // +2 para coluna de ações e checkbox (se selectable)
+  deletePathTemplate = TABLE_DELETE_TEMPLATE[type] || "";
 } else if (loadFromTable && type === "settings") {
   const listResult = await getSettingsListItems(db, {
     order,
@@ -163,16 +183,26 @@ if (loadFromTable) {
       <input type="hidden" name="page" value="1" />
       {loadFromTable ? (
         <>
-          {tableColumns.slice(0, 5).map((col) => (
-            <div class="form-control">
-              <label class="label py-0"><span class="label-text text-xs">{col.replace(/_/g, " ")}</span></label>
-              <input type="text" name={`filter_${col}`} placeholder={t(locale, "admin.list.filter")} class="input input-bordered input-sm w-32" value={filter[col] ?? ""} />
-            </div>
-          ))}
-          <div class="form-control">
-            <label class="label py-0"><span class="label-text text-xs">{t(locale, "admin.user.formEmail")}</span></label>
-            <input type="text" name="filter_email" placeholder={t(locale, "admin.list.filter")} class="input input-bordered input-sm w-40" value={filter["email"] ?? ""} />
-          </div>
+          {tableColumns.slice(0, 6).map((col) => {
+            // Formatar label para exibição
+            let label = col;
+            if (col.includes("_")) {
+              const parts = col.split("_");
+              if (parts.length > 1) {
+                const possibleTable = parts[0];
+                const colName = parts.slice(1).join("_");
+                label = `${colName} (${possibleTable})`;
+              }
+            }
+            label = label.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+            
+            return (
+              <div class="form-control">
+                <label class="label py-0"><span class="label-text text-xs">{label}</span></label>
+                <input type="text" name={`filter_${col}`} placeholder={t(locale, "admin.list.filter")} class="input input-bordered input-sm w-32" value={filter[col] ?? ""} />
+              </div>
+            );
+          })}
         </>
       ) : type === "settings" ? (
         <>

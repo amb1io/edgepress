@@ -3,11 +3,15 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { t, locales, defaultLocale } from "../../../i18n/index.ts";
 import { db } from "../../../db/index.ts";
 import { getMenuItems } from "../../../lib/menu.ts";
+import { ensureTranslationsLoaded } from "../../../lib/i18n-helpers.ts";
 
 const locale = Astro.params["locale"] ?? defaultLocale;
 if (!locales.includes(locale as "en" | "es" | "pt-br")) {
   return Astro.redirect(`/${defaultLocale}/admin`);
 }
+
+// Pré-carregar traduções
+await ensureTranslationsLoaded(locale);
 
 const user = Astro.locals.user;
 
