@@ -20,9 +20,14 @@ export interface Props {
   type: string;
   menuItems: MenuItem[];
   params?: Record<string, string>;
+  user?: {
+    email?: string;
+    name?: string;
+    image?: string | null;
+  } | null;
 }
 
-const { locale, slug, domain, type, menuItems, params = {} } = Astro.props;
+const { locale, slug, domain, type, menuItems, params = {}, user } = Astro.props;
 const currentLocale = locale as Locale;
 const title = t(currentLocale, "taxonomy.type." + type);
 const action = params["action"] ?? "";
@@ -105,7 +110,7 @@ const columns = [
 const emptyColspan = columns.length;
 ---
 
-<AdminLayout title={title} locale={locale} menuItems={menuItems}>
+<AdminLayout title={title} locale={locale} menuItems={menuItems} user={user}>
   <script
     define:vars={{ initialName, initialSlug, initialDescription }}
   >

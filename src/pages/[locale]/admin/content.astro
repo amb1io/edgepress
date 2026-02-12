@@ -6,13 +6,16 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
 import ContentEditor from "../../../components/ContentEditor.astro";
 import UserTemplate from "../../../templates/user.astro";
 import AttachmentTemplate from "../../../templates/attachment.astro";
+import TranslationsTemplate from "../../../templates/translations_languages.astro";
 import { db } from "../../../db/index.ts";
 import TaxonomiesBlocks from "../../../components/TaxonomiesBlocks.astro";
 import TaxonomyAddModal from "../../../components/TaxonomyAddModal.astro";
 import UppyUpload from "../../../components/UppyUpload.astro";
 import CustomFieldsWrapper from "../../../components/CustomFieldsWrapper.astro";
+import LanguageDropdown from "../../../components/LanguageDropdown.astro";
 import { getMenuItems } from "../../../lib/menu.ts";
 import { t, locales, defaultLocale, type Locale } from "../../../i18n/index.ts";
+import { ensureTranslationsLoaded } from "../../../lib/i18n-helpers.ts";
 import { eq, and, inArray, or, isNull } from "drizzle-orm";
 import {
   postTypes,
@@ -28,6 +31,9 @@ const locale = Astro.params["locale"] ?? defaultLocale;
 if (!locales.includes(locale as "en" | "es" | "pt-br")) {
   return Astro.redirect(`/${defaultLocale}/admin`);
 }
+
+// Pré-carregar traduções
+await ensureTranslationsLoaded(locale);
 
 const user = Astro.locals.user;
 
@@ -64,6 +70,7 @@ if (action === "edit" && (!idParam || !isValidEditId(idParam))) {
 
 const showUserTemplate = postTypeSlug === "user";
 const showAttachmentTemplate = postTypeSlug === "attachment";
+const showTranslationsTemplate = postTypeSlug === "translations_languages";
 
 let typeRow: { id: number; name: string; meta_schema: unknown } | undefined;
 let typeId: number;
@@ -79,6 +86,7 @@ let post: {
   body: string | null;
   status: string | null;
   author_id: string | null;
+  id_locale_code: number | null;
   meta_values: string | null;
 } | null = null;
 let pageTitle = "";
@@ -87,6 +95,7 @@ let initialSlug = "";
 let initialExcerpt = "";
 let initialStatus = "draft";
 let initialAuthorId = "";
+let initialLocaleId: number | null = null;
 let asideAccordionName = "content-aside";
 let thumbnailPath = "";
 let thumbnailUrl = "";
@@ -96,7 +105,7 @@ let hasCustomFields = false;
 let customFieldsTypeId: number | null = null;
 let initialCustomFields: Array<{ id: number; title: string; rows: Array<{ id: number; name: string; value: string }> }> = [];
 
-if (!showUserTemplate && !showAttachmentTemplate) {
+if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate) {
   const [typeRowResult] = await db
     .select({
       id: postTypes.id,
@@ -195,6 +204,7 @@ if (!showUserTemplate && !showAttachmentTemplate) {
         body: posts.body,
         status: posts.status,
         author_id: posts.author_id,
+        id_locale_code: posts.id_locale_code,
         meta_values: posts.meta_values,
       })
       .from(posts)
@@ -342,7 +352,11 @@ if (!showUserTemplate && !showAttachmentTemplate) {
   initialSlug = String(post?.slug ?? "");
   initialExcerpt = String(post?.excerpt ?? "");
   initialStatus = String(post?.status ?? "draft");
-  initialAuthorId = String(post?.author_id ?? "");
+  // Se estiver editando, usar o author_id do post; se estiver criando, usar o usuário logado
+  initialAuthorId = action === "edit" && post?.author_id 
+    ? String(post.author_id) 
+    : String(user?.id ?? "");
+  initialLocaleId = post?.id_locale_code ?? null;
 }
 
 // Garantir que todas as variáveis sejam strings válidas antes de usar no define:vars
@@ -368,6 +382,15 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
     menuItems={menuItems}
     currentUser={user}
   />
+) : showTranslationsTemplate ? (
+  <TranslationsTemplate
+    locale={locale}
+    postTypeSlug={postTypeSlug}
+    action={action}
+    idParam={idParam}
+    menuItems={menuItems}
+    currentUser={user}
+  />
 ) : (
 <AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={user}>
   <style>
@@ -386,6 +409,10 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
     }
     .content-editor-wrapper .bn-container {
       border: none;
+    }
+    /* Accordion Idioma com altura aumentada apenas quando aberto */
+    .language-accordion input[type="radio"]:checked ~ .collapse-content {
+      min-height: 400px;
     }
   </style>
   <script
@@ -486,6 +513,8 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
       ctx.thumbnail_url = customEvent.detail.imageUrl;
       
       const localeVal = form.querySelector('input[name="locale"]')?.value ?? "pt-br";
+      const idLocaleCode = form.querySelector('input[name="id_locale_code"]')?.value;
+      const postId = form.querySelector('input[name="id"]')?.value;
       const originalFilename = customEvent.detail.originalFilename || customEvent.detail.filename || "untitled";
       const postTitle = originalFilename;
       const postBaseSlug = window.slugify?.(originalFilename) ?? "file";
@@ -495,6 +524,12 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
       fd.set("post_type", "attachment");
       fd.set("action", "new");
       fd.set("locale", localeVal);
+      if (idLocaleCode && idLocaleCode.trim() !== "") {
+        fd.set("id_locale_code", idLocaleCode);
+      }
+      if (postId && postId.trim() !== "" && /^\d+$/.test(postId.trim())) {
+        fd.set("parent_id", postId.trim());
+      }
       fd.set("title", postTitle);
       fd.set("slug", postSlug);
       fd.set("status", "published");
@@ -942,6 +977,30 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
               accordionName={asideAccordionName}
               siblings
             />
+
+            <div class="collapse collapse-arrow join-item border border-base-300 language-accordion">
+              <input
+                type="radio"
+                name={asideAccordionName}
+                aria-label={t(locale, "admin.content.language")}
+              />
+              <div class="collapse-title font-semibold text-sm py-2 min-h-0">
+                {t(locale, "admin.content.language")}
+              </div>
+              <div class="collapse-content text-sm">
+                <div class="flex flex-col gap-3">
+                  <div class="form-control">
+                    <label class="label py-0">
+                      <span class="label-text text-xs">{t(locale, "admin.content.language")}</span>
+                    </label>
+                    <LanguageDropdown selectedLocaleId={initialLocaleId} fieldName="id_locale_code" cols={1} />
+                    <p class="text-xs text-base-content/50 mt-1">
+                      Selecione o idioma para este conteúdo
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {hasPostThumbnail && (
               <div class="collapse collapse-arrow join-item border border-base-300">

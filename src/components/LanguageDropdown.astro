@@ -1,0 +1,216 @@
+---
+/**
+ * Componente reutilizável de dropdown de idiomas
+ * Baseado no dropdown usado em translations_languages.astro
+ */
+import { locales as localesTable } from "../db/schema.ts";
+import { db } from "../db/index.ts";
+
+export interface Props {
+  /** ID do locale selecionado inicialmente (opcional) */
+  selectedLocaleId?: number | null;
+  /** Nome do campo hidden que será enviado no formulário */
+  fieldName?: string;
+  /** Se true, o campo é obrigatório */
+  required?: boolean;
+  /** Quantidade de colunas na lista de idiomas (padrão: 3) */
+  cols?: number;
+}
+
+const { selectedLocaleId = null, fieldName = "id_locale_code", required = false, cols = 3 } = Astro.props;
+
+// Mapear número de colunas para classes Tailwind válidas
+const gridColsClass = cols === 1 ? "grid-cols-1" : cols === 2 ? "grid-cols-2" : cols === 3 ? "grid-cols-3" : cols === 4 ? "grid-cols-4" : "grid-cols-3";
+
+// Buscar todos os locales
+const allLocales = await db
+  .select({
+    id: localesTable.id,
+    language: localesTable.language,
+    hello_world: localesTable.hello_world,
+    locale_code: localesTable.locale_code,
+    country: localesTable.country,
+  })
+  .from(localesTable)
+  .orderBy(localesTable.language);
+
+const initialLocaleId = selectedLocaleId;
+---
+
+<div
+  class="dropdown w-full"
+  :class="{ 'dropdown-open': localeDropdownOpen }"
+  x-on:click.outside="localeDropdownOpen = false"
+  x-data="languageDropdown"
+>
+  <input
+    type="hidden"
+    name={fieldName}
+    x-model="selectedLocaleId"
+    {required}
+  />
+  <label
+    tabindex="0"
+    class="input input-bordered w-full flex items-center cursor-pointer"
+    @click="toggleDropdown()"
+  >
+    <span
+      x-show="selectedLocale"
+      class="flex-1 flex items-center gap-2"
+    >
+      <span
+        x-text="selectedLocale ? getFlagEmoji(selectedLocale.locale_code) : ''"
+      ></span>
+      <span
+        x-text="selectedLocale ? selectedLocale.language : 'Selecione um idioma'"
+      ></span>
+    </span>
+    <span x-show="!selectedLocale" class="flex-1 text-base-content/50">
+      Selecione um idioma
+    </span>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      class="h-5 w-5 shrink-0"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M19 9l-7 7-7-7"></path>
+    </svg>
+  </label>
+  <div
+    tabindex="0"
+    class="dropdown-content bg-base-100 rounded-box z-10 w-full border border-base-300 p-2 shadow-lg mt-1 max-h-96 overflow-y-auto"
+    x-show="localeDropdownOpen"
+    x-transition
+  >
+    <div class="w-full mb-2">
+      <input
+        type="text"
+        placeholder="Buscar idioma..."
+        class="input input-bordered input-sm w-full"
+        x-model="localeSearch"
+        @click.stop
+        @keydown.escape="localeDropdownOpen = false"
+      />
+    </div>
+    <div class={`grid ${gridColsClass} gap-2`}>
+      <template x-for="locale in filteredLocales" :key="locale.id">
+        <a
+          href="#"
+          @click.prevent="selectLocale(locale.id)"
+          class="grid grid-cols-[auto_1fr] gap-2 py-2 px-2 items-center rounded hover:bg-base-200 transition-colors"
+        >
+          <span
+            class="text-2xl shrink-0"
+            x-text="getFlagEmoji(locale.locale_code)"></span>
+          <div class="flex flex-col flex-1 min-w-0">
+            <span class="font-medium text-sm" x-text="locale.language"
+            ></span>
+            <span
+              class="text-xs text-base-content/60"
+              x-text="locale.hello_world"></span>
+          </div>
+        </a>
+      </template>
+    </div>
+    <div
+      x-show="filteredLocales.length === 0"
+      class="text-base-content/50 text-sm py-2 px-4 text-center col-span-2"
+    >
+      Nenhum idioma encontrado
+    </div>
+  </div>
+</div>
+
+<script
+  define:vars={{
+    initialLocaleId,
+    localesData: JSON.stringify(allLocales),
+  }}
+>
+  document.addEventListener("alpine:init", () => {
+    window.Alpine.data("languageDropdown", () => {
+      const locales = JSON.parse(localesData);
+      return {
+        selectedLocaleId: initialLocaleId,
+        localeSearch: "",
+        localeDropdownOpen: false,
+        locales: locales,
+        get filteredLocales() {
+          if (!this.localeSearch.trim()) return this.locales;
+          const search = this.localeSearch.toLowerCase();
+          return this.locales.filter(
+            (locale) =>
+              locale.language.toLowerCase().includes(search) ||
+              locale.country.toLowerCase().includes(search) ||
+              locale.locale_code.toLowerCase().includes(search) ||
+              locale.hello_world.toLowerCase().includes(search),
+          );
+        },
+        get selectedLocale() {
+          return this.locales.find((l) => l.id === this.selectedLocaleId);
+        },
+        selectLocale(localeId) {
+          this.selectedLocaleId = localeId;
+          this.localeSearch = "";
+          this.localeDropdownOpen = false;
+        },
+        toggleDropdown() {
+          this.localeDropdownOpen = !this.localeDropdownOpen;
+        },
+        getFlagEmoji(localeCode) {
+          const flagMap = {
+            en: "🇺🇸",
+            "en-gb": "🇬🇧",
+            "pt-br": "🇧🇷",
+            pt_br: "🇧🇷",
+            "pt-pt": "🇵🇹",
+            es: "🇪🇸",
+            "es-mx": "🇲🇽",
+            fr: "🇫🇷",
+            "fr-ca": "🇨🇦",
+            de: "🇩🇪",
+            it: "🇮🇹",
+            ja: "🇯🇵",
+            "zh-cn": "🇨🇳",
+            "zh-tw": "🇹🇼",
+            ru: "🇷🇺",
+            ko: "🇰🇷",
+            ar: "🇸🇦",
+            nl: "🇳🇱",
+            pl: "🇵🇱",
+            tr: "🇹🇷",
+            vi: "🇻🇳",
+            hi: "🇮🇳",
+            th: "🇹🇭",
+            id: "🇮🇩",
+            he: "🇮🇱",
+            el: "🇬🇷",
+            sv: "🇸🇪",
+            no: "🇳🇴",
+            da: "🇩🇰",
+            fi: "🇫🇮",
+            cs: "🇨🇿",
+            ro: "🇷🇴",
+            hu: "🇭🇺",
+            uk: "🇺🇦",
+            bg: "🇧🇬",
+            hr: "🇭🇷",
+            sr: "🇷🇸",
+            sk: "🇸🇰",
+            sl: "🇸🇮",
+          };
+          const code = localeCode.toLowerCase().replace(/_/g, "-");
+          const codeParts = code.split("-");
+          const baseCode = codeParts[0] || code;
+          return flagMap[code] || flagMap[baseCode] || "🌐";
+        },
+      };
+    });
+  });
+</script>

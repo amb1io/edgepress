@@ -1,0 +1,164 @@
+---
+/**
+ * Componente reutilizável para o header do admin.
+ * Inclui título, dropdown de idioma, toggle de tema, avatar do usuário e slot para ações customizadas.
+ */
+import { Icon } from "astro-icon/components";
+import { getRelativeLocaleUrl } from "astro:i18n";
+import { t, locales, type Locale } from "../i18n/index.ts";
+
+interface Props {
+  title: string;
+  locale: string;
+  user?:
+    | {
+        email?: string;
+        name?: string;
+        image?: string | null;
+      }
+    | null
+    | undefined;
+}
+
+const { title, locale, user } = Astro.props;
+const currentLocale = locale as Locale;
+---
+
+<header
+  class="bg-base-100 border-b border-base-300 px-6 min-h-14 flex items-center justify-between shrink-0"
+>
+  <h1 class="text-xl font-semibold truncate">{title}</h1>
+  <div class="flex items-center gap-3 shrink-0">
+    <div class="dropdown dropdown-end">
+      <label tabindex="0" class="btn btn-ghost btn-sm">
+        {currentLocale === "pt-br" ? "PT" : currentLocale.toUpperCase()}
+      </label>
+      <ul
+        tabindex="0"
+        class="dropdown-content menu bg-base-100 rounded-box z-10 w-32 border border-base-300 p-1 shadow"
+      >
+        {
+          locales.map((loc) => {
+            const pathSegments = Astro.url.pathname.split("/").filter(Boolean);
+            const pathAfterLocale = pathSegments.slice(1).join("/") || "admin";
+            const localeUrl =
+              getRelativeLocaleUrl(loc, pathAfterLocale) + Astro.url.search;
+            return (
+              <li>
+                <a href={localeUrl}>
+                  {loc === "pt-br"
+                    ? "Português"
+                    : loc === "es"
+                      ? "Español"
+                      : "English"}
+                </a>
+              </li>
+            );
+          })
+        }
+      </ul>
+    </div>
+    <label
+      class="flex cursor-pointer gap-2 items-center"
+      title={t(currentLocale, "admin.theme.toggle")}
+    >
+      <Icon name="line-md:sunny" size={20} aria-hidden="true" />
+      <input
+        type="checkbox"
+        id="theme-toggle"
+        class="toggle theme-controller"
+        value="dark"
+        aria-label={t(currentLocale, "admin.theme.toggle")}
+      />
+      <Icon name="line-md:moon-alt" size={20} aria-hidden="true" />
+    </label>
+    {
+      user && (
+        <div class="dropdown dropdown-end">
+          <label tabindex="0" class="btn btn-ghost btn-circle avatar">
+            <div class="w-10 rounded-full">
+              {user.image ? (
+                <img src={user.image} alt={user.name || user.email || "User"} />
+              ) : (
+                <div class="w-full h-full rounded-full bg-primary text-primary-content flex items-center justify-center text-sm font-semibold">
+                  {(user.name || user.email || "U").charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+          </label>
+          <ul
+            tabindex="0"
+            class="dropdown-content menu bg-base-100 rounded-box z-10 w-52 border border-base-300 p-2 shadow-lg mt-2"
+          >
+            <li class="menu-title">
+              <span>{user.name || user.email}</span>
+            </li>
+            <li>
+              <a id="logout-link" href="/login">
+                <Icon name="line-md:logout" size={18} aria-hidden="true" />
+                {t(currentLocale, "admin.signOut")}
+              </a>
+            </li>
+          </ul>
+        </div>
+      )
+    }
+    <slot name="header-actions" />
+  </div>
+</header>
+
+<script>
+  import { authClient } from "../lib/auth-client.ts";
+
+  // Handler para logout - executa quando o DOM estiver pronto
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      const logoutLink = document.getElementById("logout-link");
+      if (logoutLink) {
+        logoutLink.addEventListener("click", async (e) => {
+          e.preventDefault();
+          await authClient.signOut();
+          window.location.href = "/login";
+        });
+      }
+    });
+  } else {
+    const logoutLink = document.getElementById("logout-link");
+    if (logoutLink) {
+      logoutLink.addEventListener("click", async (e) => {
+        e.preventDefault();
+        await authClient.signOut();
+        window.location.href = "/login";
+      });
+    }
+  }
+</script>
+<script is:inline>
+  (function () {
+    const KEY = "edgepress-theme";
+    const toggle = document.getElementById("theme-toggle");
+    const html = document.documentElement;
+
+    function applyTheme(theme) {
+      html.setAttribute("data-theme", theme);
+      if (toggle) toggle.checked = theme === "dark";
+    }
+
+    function init() {
+      const stored = localStorage.getItem(KEY);
+      const prefersDark = window.matchMedia(
+        "(prefers-color-scheme: dark)",
+      ).matches;
+      const theme = stored ?? (prefersDark ? "dark" : "light");
+      applyTheme(theme);
+    }
+
+    toggle?.addEventListener("change", function () {
+      const theme = this.checked ? "dark" : "light";
+      html.setAttribute("data-theme", theme);
+      localStorage.setItem(KEY, theme);
+    });
+
+    init();
+  })();
+</script>

@@ -8,6 +8,7 @@
 import { locales, defaultLocale } from "../../../i18n/index.ts";
 import { db } from "../../../db/index.ts";
 import { getMenuItems } from "../../../lib/menu.ts";
+import { ensureTranslationsLoaded } from "../../../lib/i18n-helpers.ts";
 import type { MenuItem } from "../../../lib/menu.ts";
 import TaxonomiesTemplate from "../../../templates/taxonomies.astro";
 
@@ -16,6 +17,14 @@ const slug = Astro.params["slug"];
 const domain = Astro.url.searchParams.get("domain");
 const type = Astro.url.searchParams.get("type") ?? "";
 
+if (!locales.includes(locale as "en" | "es" | "pt-br")) {
+  return Astro.redirect(`/${defaultLocale}/admin`);
+}
+if (!slug) return Astro.redirect(`/${locale}/admin`);
+
+// Pré-carregar traduções
+await ensureTranslationsLoaded(locale);
+
 const templateMap: Record<string, typeof TaxonomiesTemplate> = {
   taxonomies: TaxonomiesTemplate,
 };
@@ -23,14 +32,12 @@ const TemplateComponent = domain ? templateMap[domain] : null;
 
 let menuItems: MenuItem[] = [];
 let params: Record<string, string> = {};
-
-if (!locales.includes(locale as "en" | "es" | "pt-br")) {
-  return Astro.redirect(`/${defaultLocale}/admin`);
-}
-if (!slug) return Astro.redirect(`/${locale}/admin`);
+// @ts-expect-error - Astro.locals.user está definido em env.d.ts
+let user: { email?: string; name?: string; image?: string | null } | null = null;
 
 if (TemplateComponent) {
-  const user = Astro.locals.user;
+  // @ts-expect-error - Astro.locals.user está definido em env.d.ts
+  user = Astro.locals.user;
   if (!user) {
     return Astro.redirect("/login");
   }
@@ -61,6 +68,7 @@ if (TemplateComponent) {
       type={type}
       menuItems={menuItems}
       params={params}
+      user={user}
     />
   )
 }
