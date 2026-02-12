@@ -11,12 +11,14 @@ export type PostStatus = typeof POST_STATUSES[number];
 export interface Post {
   id: number;
   post_type_id: number;
+  parent_id: number | null;
   title: string;
   slug: string;
   excerpt: string | null;
   body: string | null;
   status: PostStatus;
   author_id: string | null;
+  id_locale_code: number | null;
   meta_values: string | null;
   created_at: number;
   updated_at: number;
@@ -34,6 +36,7 @@ export interface PostCreatePayload {
   body?: string | null;
   status: PostStatus;
   author_id?: string | null;
+  id_locale_code?: number | null;
   meta_values?: string | null;
   created_at: number;
   updated_at: number;
@@ -49,6 +52,7 @@ export interface PostUpdatePayload {
   body?: string | null;
   status?: PostStatus;
   author_id?: string | null;
+  id_locale_code?: number | null;
   meta_values?: string | null;
   updated_at: number;
 }

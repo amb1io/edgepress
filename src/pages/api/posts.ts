@@ -1,5 +1,7 @@
 // Database
 import { db } from "../../db/index.ts";
+import { locales } from "../../db/schema.ts";
+import { eq } from "drizzle-orm";
 
 // Services
 import {
@@ -116,8 +118,45 @@ export async function POST({
     // Extrair IDs de attachments do blocknote
     const blocknoteAttachmentIds = getNumberArray(formData, "blocknote_attachment_ids[]", true);
     
+    // Extrair parent_id (usado quando criar attachments filhos)
+    const parentId = getOptionalNumber(formData, "parent_id");
+    
     // Extrair meta_values customizados
     const metaValues = getFieldsWithPrefix(formData, "meta_", true);
+    
+    // Extrair id_locale_code do formulário (se selecionado no dropdown)
+    const localeCodeIdRaw = formData.get("id_locale_code");
+    let localeId: number | null = null;
+    if (localeCodeIdRaw != null && localeCodeIdRaw !== "" && /^\d+$/.test(String(localeCodeIdRaw))) {
+      localeId = parseInt(String(localeCodeIdRaw), 10);
+    } else {
+      // Fallback: usar locale da URL se não houver id_locale_code no formulário
+      const LOCALE_MAP: Record<string, string> = {
+        en: "en_US",
+        "en-US": "en_US",
+        "en_US": "en_US",
+        es: "es_ES",
+        "es-ES": "es_ES",
+        "es_ES": "es_ES",
+        "pt-br": "pt_BR",
+        "pt_BR": "pt_BR",
+        "pt-BR": "pt_BR",
+      };
+      const normalizedLocale = locale.toLowerCase().replace(/-/g, "_");
+      const dbLocaleCode = LOCALE_MAP[normalizedLocale] || LOCALE_MAP[locale] || locale;
+      
+      try {
+        const [localeRow] = await db
+          .select({ id: locales.id })
+          .from(locales)
+          .where(eq(locales.locale_code, dbLocaleCode))
+          .limit(1);
+        localeId = localeRow?.id ?? null;
+      } catch {
+        // Se não encontrar o locale, continua sem id_locale_code
+        localeId = null;
+      }
+    }
     
     // Validar campos obrigatórios
     if (!post_type || !title || !slug) {
@@ -160,6 +199,7 @@ export async function POST({
         body: body || null,
         status,
         author_id,
+        id_locale_code: localeId,
         updated_at: now,
       };
       
@@ -228,12 +268,14 @@ export async function POST({
       
       const createPayload = {
         post_type_id: postTypeId,
+        parent_id: parentId !== undefined ? parentId : null,
         title,
         slug,
         excerpt: excerpt || null,
         body: body || null,
         status,
         author_id,
+        id_locale_code: localeId,
         meta_values: stringifyMetaValues(finalMetaValues),
         created_at: now,
         updated_at: now,
@@ -255,6 +297,37 @@ export async function POST({
         thumbnailAttachmentId !== undefined ? thumbnailAttachmentId : undefined,
         blocknoteAttachmentIds
       );
+      
+      // Atualizar parent_id e id_locale_code dos attachments relacionados ao post
+      // Isso garante que attachments criados durante a criação/edição tenham os campos corretos
+      const attachmentTypeId = await getPostTypeId(db, "attachment");
+      if (attachmentTypeId) {
+        const { posts: postsTable } = await import("../../db/schema.ts");
+        const { eq, and, inArray } = await import("drizzle-orm");
+        
+        // Coletar todos os IDs de attachments relacionados ao post
+        const attachmentIds: number[] = [];
+        if (thumbnailAttachmentId && thumbnailAttachmentId > 0) {
+          attachmentIds.push(thumbnailAttachmentId);
+        }
+        attachmentIds.push(...blocknoteAttachmentIds);
+        
+        // Atualizar parent_id e id_locale_code dos attachments relacionados
+        if (attachmentIds.length > 0) {
+          await db
+            .update(postsTable)
+            .set({
+              parent_id: postId,
+              id_locale_code: localeId,
+            })
+            .where(
+              and(
+                eq(postsTable.post_type_id, attachmentTypeId),
+                inArray(postsTable.id, attachmentIds)
+              )
+            );
+        }
+      }
     }
 
     // Processar custom fields: deletar os marcados e criar/atualizar os restantes
@@ -321,6 +394,7 @@ export async function POST({
                   slug,
                   status,
                   author_id,
+                  id_locale_code: localeId,
                   meta_values: metaValuesStr,
                   created_at: now,
                   updated_at: now,
