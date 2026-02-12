@@ -22,8 +22,9 @@
   "type": "module",
   "main": "index.ts",
   "scripts": {
-    "dev": "wrangler types -c wrangler.jsonc && astro dev",
-    "dev:reset": "rm -rf .wrangler && npm run build && npx wrangler dev",
+    "dev": "wrangler types -c wrangler.jsonc && npm run db:seed && npm run build && npx wrangler dev",
+    "dev:astro": "wrangler types -c wrangler.jsonc && astro dev",
+    "dev:reset": "rm -rf .wrangler && npm run db:migrate:local && npm run db:seed && npm run build && npx wrangler dev",
     "dev:vite": "vite",
     "wrangler-type": "wrangler types -c wrangler.jsonc",
     "build": "wrangler types -c wrangler.jsonc && astro build",
@@ -40,7 +41,9 @@
     "db:migrate:local": "wrangler d1 migrations apply edgepress --local -c wrangler.jsonc",
     "db:migrate:remote": "wrangler d1 migrations apply edgepress --remote -c wrangler.jsonc",
     "db:baseline:remote": "wrangler d1 execute edgepress --remote --file=./drizzle/baseline.sql -c wrangler.jsonc",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "seed": "tsx scripts/seed-local.ts",
+    "db:seed": "npm run seed"
   },
   "devDependencies": {
     "@astrojs/react": "^4.4.2",
