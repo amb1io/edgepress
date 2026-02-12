@@ -27,6 +27,7 @@ export interface Post {
  */
 export interface PostCreatePayload {
   post_type_id: number;
+  parent_id?: number | null;
   title: string;
   slug: string;
   excerpt?: string | null;
