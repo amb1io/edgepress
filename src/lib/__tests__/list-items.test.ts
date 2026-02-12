@@ -13,6 +13,7 @@ import {
 } from "../../db/schema.ts";
 import { getListItems, getSettingsListItems } from "../list-items.ts";
 import { getTableNames } from "../db-utils.ts";
+import { getTableList, getRelatedTableInfo } from "../list-table-dynamic.ts";
 
 describe("getListItems", () => {
   let client: ReturnType<typeof createClient>;
@@ -192,5 +193,156 @@ describe("list dynamic: type as table name vs post_type", () => {
     const result = await getSettingsListItems(db, { limit: 10, page: 1, filter: { name: "setup" } });
     expect(result.total).toBe(1);
     expect(result.items[0]?.name).toBe("setup_done");
+  });
+});
+
+describe("getTableList with Foreign Keys", () => {
+  let client: ReturnType<typeof createClient>;
+  let db: ReturnType<typeof drizzle>;
+
+  beforeAll(async () => {
+    client = createClient({ url: ":memory:" });
+    db = drizzle(client);
+    
+    // Criar tabelas para testar Foreign Keys
+    // Tabela locales
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS locales (
+        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        language TEXT NOT NULL,
+        hello_world TEXT NOT NULL,
+        locale_code TEXT NOT NULL UNIQUE,
+        country TEXT NOT NULL,
+        timezone TEXT NOT NULL
+      )
+    `);
+    
+    // Tabela translations
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS translations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        namespace TEXT NOT NULL,
+        key TEXT NOT NULL,
+        created_at INTEGER,
+        updated_at INTEGER
+      )
+    `);
+    
+    // Tabela translations_languages com Foreign Keys
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS translations_languages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        id_translations INTEGER NOT NULL REFERENCES translations(id) ON DELETE CASCADE,
+        id_locale_code INTEGER NOT NULL REFERENCES locales(id) ON DELETE CASCADE,
+        value TEXT NOT NULL
+      )
+    `);
+    
+    // Inserir dados de teste
+    await client.execute(`
+      INSERT INTO locales (language, hello_world, locale_code, country, timezone) 
+      VALUES ('English', 'Hello World', 'en', 'United States', 'UTC-5')
+    `);
+    
+    await client.execute(`
+      INSERT INTO locales (language, hello_world, locale_code, country, timezone) 
+      VALUES ('Portuguese', 'Olá Mundo', 'pt_br', 'Brazil', 'UTC-3')
+    `);
+    
+    await client.execute(`
+      INSERT INTO translations (namespace, key, created_at, updated_at) 
+      VALUES ('admin.menu', 'dashboard', ${Date.now()}, ${Date.now()})
+    `);
+    
+    await client.execute(`
+      INSERT INTO translations_languages (id_translations, id_locale_code, value) 
+      VALUES (1, 1, 'Dashboard')
+    `);
+    
+    await client.execute(`
+      INSERT INTO translations_languages (id_translations, id_locale_code, value) 
+      VALUES (1, 2, 'Painel')
+    `);
+  });
+
+  it("getRelatedTableInfo returns Foreign Key relationships for translations_languages", async () => {
+    const relatedInfo = await getRelatedTableInfo(db, "translations_languages");
+    expect(relatedInfo.length).toBeGreaterThan(0);
+    
+    const translationsRel = relatedInfo.find((r) => r.table === "translations");
+    expect(translationsRel).toBeDefined();
+    expect(translationsRel?.fkColumn).toBe("id_translations");
+    expect(translationsRel?.refColumn).toBe("id");
+    expect(translationsRel?.textColumns).toContain("namespace");
+    expect(translationsRel?.textColumns).toContain("key");
+    
+    const localesRel = relatedInfo.find((r) => r.table === "locales");
+    expect(localesRel).toBeDefined();
+    expect(localesRel?.fkColumn).toBe("id_locale_code");
+    expect(localesRel?.refColumn).toBe("id");
+    expect(localesRel?.textColumns).toContain("language");
+    expect(localesRel?.textColumns).toContain("hello_world");
+    expect(localesRel?.textColumns).toContain("locale_code");
+    expect(localesRel?.textColumns).toContain("country");
+  });
+
+  it("getTableList includes text columns from related tables via Foreign Keys", async () => {
+    const result = await getTableList(db, "translations_languages", {
+      limit: 10,
+      page: 1,
+    });
+    
+    expect(result.items.length).toBeGreaterThan(0);
+    expect(result.columns).toContain("id");
+    expect(result.columns).toContain("id_translations");
+    expect(result.columns).toContain("id_locale_code");
+    expect(result.columns).toContain("value");
+    
+    // Verificar se campos relacionados estão presentes
+    expect(result.columns.some((col) => col.startsWith("translations_"))).toBe(true);
+    expect(result.columns.some((col) => col.startsWith("locales_"))).toBe(true);
+    
+    const firstItem = result.items[0];
+    expect(firstItem).toHaveProperty("value");
+    // Verificar se campos relacionados estão nos itens
+    const hasTranslationField = Object.keys(firstItem).some((key) => key.startsWith("translations_"));
+    const hasLocaleField = Object.keys(firstItem).some((key) => key.startsWith("locales_"));
+    expect(hasTranslationField || hasLocaleField).toBe(true);
+  });
+
+  it("getTableList filters by related table text columns", async () => {
+    const result = await getTableList(db, "translations_languages", {
+      limit: 10,
+      page: 1,
+      filter: { "locales_language": "English" },
+    });
+    
+    expect(result.items.length).toBeGreaterThan(0);
+    // Verificar se o filtro funcionou
+    const hasEnglish = result.items.some((item) => {
+      return Object.entries(item).some(([key, value]) => 
+        key.startsWith("locales_") && String(value).includes("English")
+      );
+    });
+    expect(hasEnglish).toBe(true);
+  });
+
+  it("getTableList orders by related table text columns", async () => {
+    const result = await getTableList(db, "translations_languages", {
+      limit: 10,
+      page: 1,
+      order: "locales_language",
+      orderDir: "asc",
+    });
+    
+    expect(result.items.length).toBeGreaterThan(0);
+    // Verificar se a ordenação funcionou (primeiro item deve ter language menor alfabeticamente)
+    if (result.items.length > 1) {
+      const firstLang = Object.entries(result.items[0]).find(([key]) => key.startsWith("locales_language"))?.[1];
+      const secondLang = Object.entries(result.items[1]).find(([key]) => key.startsWith("locales_language"))?.[1];
+      if (firstLang && secondLang) {
+        expect(String(firstLang).localeCompare(String(secondLang))).toBeLessThanOrEqual(0);
+      }
+    }
   });
 });
