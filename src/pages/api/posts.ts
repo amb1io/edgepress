@@ -33,6 +33,9 @@ import { badRequestResponse, jsonResponse, redirectResponse } from "../../lib/ut
 // Utils - URLs
 import { buildAbsoluteUrl, buildContentUrl, buildListUrl } from "../../lib/utils/url.ts";
 
+// Utils - Slug
+import { slugify } from "../../lib/slugify.ts";
+
 // Constants
 import { getErrorMessage } from "../../lib/constants/error-messages.ts";
 
@@ -253,7 +256,84 @@ export async function POST({
         blocknoteAttachmentIds
       );
     }
+
+    // Processar custom fields: deletar os marcados e criar/atualizar os restantes
+    const customFieldsToDeleteRaw = formData.get("custom_fields_to_delete");
+    const customFieldsDataRaw = formData.get("custom_fields_data");
     
+    if (postId) {
+      const customFieldsTypeId = await getPostTypeId(db, "custom_fields");
+      if (customFieldsTypeId) {
+        const { posts: postsTable } = await import("../../db/schema.ts");
+        const { eq, and, inArray } = await import("drizzle-orm");
+        
+        // Deletar custom fields explicitamente marcados para deleção
+        if (customFieldsToDeleteRaw && typeof customFieldsToDeleteRaw === "string" && customFieldsToDeleteRaw.trim()) {
+          try {
+            const idsToDelete = JSON.parse(customFieldsToDeleteRaw) as number[];
+            if (Array.isArray(idsToDelete) && idsToDelete.length > 0) {
+              await db
+                .delete(postsTable)
+                .where(
+                  and(
+                    eq(postsTable.parent_id, postId),
+                    eq(postsTable.post_type_id, customFieldsTypeId),
+                    inArray(postsTable.id, idsToDelete)
+                  )
+                );
+            }
+          } catch {
+            // Ignorar erro de parse
+          }
+        }
+        
+        // Criar/atualizar custom fields restantes
+        if (customFieldsDataRaw && typeof customFieldsDataRaw === "string" && customFieldsDataRaw.trim()) {
+          try {
+            const customFieldsItems = JSON.parse(customFieldsDataRaw) as Array<{
+              id?: number;
+              title: string;
+              rows: Array<{ id?: number; name?: string; value: string }>;
+            }>;
+            if (Array.isArray(customFieldsItems) && customFieldsItems.length > 0) {
+              // Deletar todos os custom fields filhos existentes para recriar a partir do formulário
+              // (isso garante que campos removidos do formulário sejam deletados)
+              await db
+                .delete(postsTable)
+                .where(
+                  and(
+                    eq(postsTable.parent_id, postId),
+                    eq(postsTable.post_type_id, customFieldsTypeId)
+                  )
+                );
+              
+              // Criar os custom fields do formulário
+              for (const item of customFieldsItems) {
+                const slug = slugify(item.title) || "custom-field";
+                const metaValuesStr =
+                  item.rows?.length > 0
+                    ? JSON.stringify({ fields: item.rows.map((r) => ({ name: r.name ?? "", value: r.value ?? "" })) })
+                    : null;
+                await createPost(db, {
+                  post_type_id: customFieldsTypeId,
+                  parent_id: postId,
+                  title: (item.title || "").trim() || "Custom field",
+                  slug,
+                  status,
+                  author_id,
+                  meta_values: metaValuesStr,
+                  created_at: now,
+                  updated_at: now,
+                });
+              }
+            }
+          } catch {
+            // Ignorar erro de parse ou criação de custom fields
+          }
+        }
+      }
+    }
+
     // Retornar resposta
     const acceptsJson = request.headers.get("Accept")?.includes("application/json");
     if (acceptsJson) {
