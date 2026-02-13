@@ -367,6 +367,7 @@ export async function POST({
               id?: number;
               title: string;
               rows: Array<{ id?: number; name?: string; value: string }>;
+              template?: boolean;
             }>;
             if (Array.isArray(customFieldsItems) && customFieldsItems.length > 0) {
               // Deletar todos os custom fields filhos existentes para recriar a partir do formulário
@@ -383,10 +384,14 @@ export async function POST({
               // Criar os custom fields do formulário
               for (const item of customFieldsItems) {
                 const slug = slugify(item.title) || "custom-field";
+                const template = item.template === true;
                 const metaValuesStr =
                   item.rows?.length > 0
-                    ? JSON.stringify({ fields: item.rows.map((r) => ({ name: r.name ?? "", value: r.value ?? "" })) })
-                    : null;
+                    ? JSON.stringify({
+                        fields: item.rows.map((r) => ({ name: r.name ?? "", value: r.value ?? "" })),
+                        template,
+                      })
+                    : JSON.stringify({ template });
                 await createPost(db, {
                   post_type_id: customFieldsTypeId,
                   parent_id: postId,

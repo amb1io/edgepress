@@ -16,7 +16,7 @@ import LanguageDropdown from "../../../components/LanguageDropdown.astro";
 import { getMenuItems } from "../../../lib/menu.ts";
 import { t, locales, defaultLocale, type Locale } from "../../../i18n/index.ts";
 import { ensureTranslationsLoaded } from "../../../lib/i18n-helpers.ts";
-import { eq, and, inArray, or, isNull } from "drizzle-orm";
+import { eq, and, inArray, or, isNull, sql } from "drizzle-orm";
 import {
   postTypes,
   posts,
@@ -104,6 +104,8 @@ let hasPostThumbnail = false;
 let hasCustomFields = false;
 let customFieldsTypeId: number | null = null;
 let initialCustomFields: Array<{ id: number; title: string; rows: Array<{ id: number; name: string; value: string }> }> = [];
+/** Lista distinta (por título) de custom fields que são templates (meta_values.template = true), sem filtrar por parent_id */
+let templateCustomFieldsList: Array<{ id: number; title: string; meta_values: string | null }> = [];
 
 if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate) {
   const [typeRowResult] = await db
@@ -311,9 +313,13 @@ if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate) {
         let rowIdCounter = Date.now();
         initialCustomFields = customFieldsPosts.map((cfPost) => {
           let rows: Array<{ id: number; name: string; value: string }> = [];
+          let template = false;
           if (cfPost.meta_values) {
             try {
-              const meta = JSON.parse(cfPost.meta_values) as { fields?: Array<{ name?: string; value?: string }> };
+              const meta = JSON.parse(cfPost.meta_values) as {
+                fields?: Array<{ name?: string; value?: string }>;
+                template?: boolean;
+              };
               if (meta.fields && Array.isArray(meta.fields)) {
                 rows = meta.fields.map((field) => {
                   rowIdCounter += 1;
@@ -324,6 +330,7 @@ if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate) {
                   };
                 });
               }
+              if (meta.template === true) template = true;
             } catch {
               // Se não conseguir parsear, usar array vazio
             }
@@ -337,10 +344,36 @@ if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate) {
             id: cfPost.id,
             title: cfPost.title || "",
             rows,
+            template,
           };
         });
       }
     }
+  }
+
+  // Lista de templates (para modal): todos os posts tipo custom_fields com template = true, sem filtrar por parent_id
+  if (hasCustomFields && customFieldsTypeId) {
+    const templatePosts = await db
+      .select({
+        id: posts.id,
+        title: posts.title,
+        meta_values: posts.meta_values,
+      })
+      .from(posts)
+      .where(
+        and(
+          eq(posts.post_type_id, customFieldsTypeId),
+          sql`json_extract(${posts.meta_values}, '$.template') = 1`
+        )
+      )
+      .orderBy(posts.title);
+    const seenTitles = new Set<string>();
+    templateCustomFieldsList = templatePosts.filter((p) => {
+      const t = (p.title || "").trim();
+      if (!t || seenTitles.has(t)) return false;
+      seenTitles.add(t);
+      return true;
+    });
   }
 
   pageTitle =
@@ -665,6 +698,7 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
               .map((item) => ({
                 ...item,
                 rows: item.rows.filter((row) => !row._deleted),
+                template: item.template === true,
               }))
               .filter((item) => item.rows.length > 0); // Remove custom fields sem rows
             
@@ -849,7 +883,10 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
 
         {hasCustomFields && (
           <div id="custom-fields-wrapper-root" class="mt-4">
-            <CustomFieldsWrapper initialData={action === "edit" ? initialCustomFields : []} />
+            <CustomFieldsWrapper
+              initialData={action === "edit" ? initialCustomFields : []}
+              templateCustomFields={templateCustomFieldsList}
+            />
           </div>
         )}
       </div>

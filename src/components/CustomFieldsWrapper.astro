@@ -11,10 +11,17 @@ interface Props {
     id: number;
     title: string;
     rows: Array<{ id: number; name: string; value: string }>;
+    template?: boolean;
+  }>;
+  /** Lista distinta (por título) de custom fields que são templates, para a aba "Selecione Template" */
+  templateCustomFields?: Array<{
+    id: number;
+    title: string;
+    meta_values: string | null;
   }>;
 }
 
-const { initialData = [] } = Astro.props;
+const { initialData = [], templateCustomFields = [] } = Astro.props;
 ---
 
 <div
@@ -80,13 +87,25 @@ const { initialData = [] } = Astro.props;
                   </button>
                 </div>
               </template>
-              <a
-                href="#"
-                class="link link-primary underline text-sm text-center block pt-5"
-                @click.prevent="addRow(item)"
-              >
-                adicionar mais dados
-              </a>
+              <div class="flex flex-wrap items-center gap-3 pt-5">
+                <a
+                  href="#"
+                  class="link link-primary underline text-sm"
+                  @click.prevent="addRow(item)"
+                >
+                  adicionar mais dados
+                </a>
+                <label class="label cursor-pointer gap-2 py-0">
+                  <input
+                    type="checkbox"
+                    class="checkbox checkbox-sm"
+                    x-model="item.template"
+                  />
+                  <span class="label-text text-sm"
+                    >Transformar em um template?</span
+                  >
+                </label>
+              </div>
             </div>
           </div>
         </div>
@@ -101,7 +120,7 @@ const { initialData = [] } = Astro.props;
     Adicionar campo personalizado
   </button>
 
-  <!-- Modal: nome do custom field + Adicionar + X (daisyUI exige classe modal-open no container) -->
+  <!-- Modal: abas "Selecione Template" | "Crie um Novo" (daisyUI tabs) -->
   <div
     class="modal"
     :class="{ 'modal-open': modalOpen }"
@@ -119,20 +138,83 @@ const { initialData = [] } = Astro.props;
       >
         <Icon name="line-md:close" size={20} aria-hidden="true" />
       </button>
-      <h3 class="font-semibold text-lg mb-3">Nome do custom field</h3>
-      <div class="form-control mb-4">
-        <input
-          type="text"
-          class="input input-bordered w-full"
-          placeholder="Nome do custom field"
-          x-model="newFieldName"
-          @keydown.enter.prevent="submitNewField()"
-        />
-      </div>
-      <div class="modal-action">
-        <button type="button" class="btn btn-primary" @click="submitNewField()">
-          Adicionar
+      <h3 class="font-semibold text-lg mb-3">Adicionar campo personalizado</h3>
+
+      <div role="tablist" class="tabs tabs-lift tabs-sm mb-0">
+        <button
+          type="button"
+          role="tab"
+          class="tab"
+          :class="{ 'tab-active': modalTab === 'template' }"
+          @click="modalTab = 'template'"
+        >
+          Selecione Template
         </button>
+        <button
+          type="button"
+          role="tab"
+          class="tab"
+          :class="{ 'tab-active': modalTab === 'create' }"
+          @click="modalTab = 'create'"
+        >
+          Crie um Novo
+        </button>
+      </div>
+
+      <div class="min-h-[120px]">
+        <!-- Aba: Selecione Template (não usar classe tab-content do DaisyUI - ela esconde por padrão) -->
+        <div
+          class="border border-base-300 bg-base-100 rounded-b-lg p-4"
+          x-show="modalTab === 'template'"
+          x-transition
+        >
+          <div class="form-control mb-4">
+            <select
+              class="select select-bordered w-full"
+              x-model="selectedTemplateId"
+            >
+              <option value="">Selecione um template</option>
+              <template x-for="t in templateCustomFields" :key="t.id">
+                <option :value="t.id" x-text="t.title"></option>
+              </template>
+            </select>
+          </div>
+          <div class="modal-action">
+            <button
+              type="button"
+              class="btn btn-primary"
+              @click="submitFromTemplate()"
+            >
+              Adicionar
+            </button>
+          </div>
+        </div>
+
+        <!-- Aba: Crie um Novo -->
+        <div
+          class="border border-base-300 bg-base-100 rounded-b-lg p-4"
+          x-show="modalTab === 'create'"
+          x-transition
+        >
+          <div class="form-control mb-4">
+            <input
+              type="text"
+              class="input input-bordered w-full"
+              placeholder="Nome do custom field"
+              x-model="newFieldName"
+              @keydown.enter.prevent="submitNewField()"
+            />
+          </div>
+          <div class="modal-action">
+            <button
+              type="button"
+              class="btn btn-primary"
+              @click="submitNewField()"
+            >
+              Adicionar
+            </button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="modal-backdrop" @click="modalOpen = false">Fechar</div>
@@ -140,7 +222,10 @@ const { initialData = [] } = Astro.props;
 </div>
 
 <script
-  define:vars={{ initialCustomFieldsData: JSON.stringify(initialData) }}
+  define:vars={{
+    initialCustomFieldsData: JSON.stringify(initialData),
+    templateCustomFieldsData: JSON.stringify(templateCustomFields),
+  }}
   is:inline
 >
   (function () {
@@ -168,14 +253,29 @@ const { initialData = [] } = Astro.props;
                   value: row.value || "",
                 }))
               : [{ id: Date.now(), name: "", value: "" }],
+          template: item.template === true,
         }))
       : [];
+
+    let templateList = [];
+    try {
+      templateList =
+        typeof templateCustomFieldsData !== "undefined"
+          ? JSON.parse(templateCustomFieldsData)
+          : [];
+    } catch (e) {
+      templateList = [];
+    }
+    if (!Array.isArray(templateList)) templateList = [];
 
     window.customFieldsWrapper = function () {
       return {
         customFields: processedData,
         modalOpen: false,
+        modalTab: "create",
         newFieldName: "",
+        selectedTemplateId: "",
+        templateCustomFields: templateList,
         initCustomFields() {
           // Garantir que cada item tenha pelo menos uma row
           this.customFields.forEach((item) => {
@@ -191,19 +291,54 @@ const { initialData = [] } = Astro.props;
             id: Date.now(),
             title: name,
             rows: [{ id: Date.now() + 1, name: "", value: "" }],
+            template: false,
           });
           this.newFieldName = "";
+          this.modalOpen = false;
+        },
+        submitFromTemplate() {
+          const id = this.selectedTemplateId
+            ? Number(this.selectedTemplateId)
+            : 0;
+          if (!id) return;
+          const t = this.templateCustomFields.find((x) => x.id === id);
+          if (!t) return;
+          let rows = [{ id: Date.now(), name: "", value: "" }];
+          if (t.meta_values) {
+            try {
+              const meta = JSON.parse(t.meta_values);
+              if (
+                meta.fields &&
+                Array.isArray(meta.fields) &&
+                meta.fields.length > 0
+              ) {
+                const base = Date.now();
+                rows = meta.fields.map((f, i) => ({
+                  id: base + i,
+                  name: typeof f.name === "string" ? f.name : "",
+                  value: typeof f.value === "string" ? f.value : "",
+                }));
+              }
+            } catch (_) {}
+          }
+          this.customFields.push({
+            id: Date.now(),
+            title: (t.title || "").trim() || "Custom field",
+            rows,
+            template: false,
+          });
+          this.selectedTemplateId = "";
           this.modalOpen = false;
         },
         removeField(id) {
           const item = this.customFields.find((f) => f.id === id);
           if (!item) return;
-          
+
           // Se o custom field já existe no banco (ID é número e não timestamp), marca para deleção
           // Caso contrário, remove imediatamente do frontend
           const isExistingField =
             item.id && typeof item.id === "number" && item.id < 1000000000000; // IDs do banco são menores que timestamps
-          
+
           if (isExistingField) {
             // Marca para deleção (será processado no submit)
             item._deleted = true;
