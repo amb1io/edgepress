@@ -6,8 +6,9 @@
  */
 import AdminLayout from "../layouts/AdminLayout.astro";
 import DataList from "../components/DataList.astro";
+import LanguageDropdown from "../components/LanguageDropdown.astro";
 import { db } from "../db/index.ts";
-import { taxonomies } from "../db/schema.ts";
+import { taxonomies, locales as localesTable } from "../db/schema.ts";
 import { and, eq, or, isNull } from "drizzle-orm";
 import { t, type Locale } from "../i18n/index.ts";
 import type { MenuItem } from "../lib/menu.ts";
@@ -27,7 +28,15 @@ export interface Props {
   } | null;
 }
 
-const { locale, slug, domain, type, menuItems, params = {}, user } = Astro.props;
+const {
+  locale,
+  slug,
+  domain,
+  type,
+  menuItems,
+  params = {},
+  user,
+} = Astro.props;
 const currentLocale = locale as Locale;
 const title = t(currentLocale, "taxonomy.type." + type);
 const action = params["action"] ?? "";
@@ -42,15 +51,22 @@ const rootRows = type
       .where(
         and(
           eq(taxonomies.type, type),
-          or(isNull(taxonomies.parent_id), eq(taxonomies.parent_id, 0))
-        )
+          or(isNull(taxonomies.parent_id), eq(taxonomies.parent_id, 0)),
+        ),
       )
       .limit(1)
   : [];
 const parentId = rootRows.length > 0 ? rootRows[0]!.id : null;
 
 // Em modo edição, carregar o registro para preencher o formulário
-let editTaxonomy: { id: number; name: string; slug: string; description: string | null; type: string } | null = null;
+let editTaxonomy: {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  type: string;
+  id_locale_code: number | null;
+} | null = null;
 if (isEdit && idParam) {
   const editId = parseInt(idParam, 10);
   const [row] = await db
@@ -60,6 +76,7 @@ if (isEdit && idParam) {
       slug: taxonomies.slug,
       description: taxonomies.description,
       type: taxonomies.type,
+      id_locale_code: taxonomies.id_locale_code,
     })
     .from(taxonomies)
     .where(eq(taxonomies.id, editId))
@@ -71,11 +88,12 @@ if (isEdit && idParam) {
       slug: row.slug,
       description: row.description ?? "",
       type: row.type,
+      id_locale_code: row.id_locale_code ?? null,
     };
   }
 }
 
-// Lista apenas os filhos do type (parent_id = rootId), não a raiz
+// Lista apenas os filhos do type (parent_id = rootId), não a raiz; join com locales para nome do idioma
 const taxonomyRows =
   type && parentId != null
     ? await db
@@ -84,9 +102,13 @@ const taxonomyRows =
           name: taxonomies.name,
           slug: taxonomies.slug,
           type: taxonomies.type,
+          language: localesTable.language,
         })
         .from(taxonomies)
-        .where(and(eq(taxonomies.type, type), eq(taxonomies.parent_id, parentId)))
+        .leftJoin(localesTable, eq(taxonomies.id_locale_code, localesTable.id))
+        .where(
+          and(eq(taxonomies.type, type), eq(taxonomies.parent_id, parentId)),
+        )
         .orderBy(taxonomies.name)
     : [];
 const taxonomyItems = taxonomyRows.map((r) => ({
@@ -94,6 +116,7 @@ const taxonomyItems = taxonomyRows.map((r) => ({
   name: r.name,
   slug: r.slug,
   type: r.type,
+  language: r.language ?? "—",
 }));
 
 const baseUrl = `/${locale}/admin/${slug}?domain=${domain}&type=${encodeURIComponent(type)}`;
@@ -101,19 +124,24 @@ const baseUrl = `/${locale}/admin/${slug}?domain=${domain}&type=${encodeURICompo
 const initialName = editTaxonomy?.name ?? "";
 const initialSlug = editTaxonomy?.slug ?? "";
 const initialDescription = editTaxonomy?.description ?? "";
+const initialLocaleId = editTaxonomy?.id_locale_code ?? null;
 
 const columns = [
   { key: "name", label: t(currentLocale, "admin.taxonomy.formName") },
   { key: "slug", label: t(currentLocale, "admin.taxonomy.formSlug") },
   { key: "type", label: t(currentLocale, "admin.taxonomy.typeColumn") },
+  { key: "language", label: t(currentLocale, "admin.content.language") },
 ];
 const emptyColspan = columns.length;
 ---
 
-<AdminLayout title={title} locale={locale} menuItems={menuItems} user={user}>
-  <script
-    define:vars={{ initialName, initialSlug, initialDescription }}
-  >
+<AdminLayout
+  title={title}
+  locale={locale}
+  menuItems={menuItems}
+  user={user !== undefined ? user : null}
+>
+  <script define:vars={{ initialName, initialSlug, initialDescription }}>
     window.slugify = function (text) {
       if (typeof text !== "string" || !text.trim()) return "";
       return text
@@ -139,6 +167,68 @@ const emptyColspan = columns.length;
           this.slug = "";
           this.description = "";
         },
+        async handleSubmit(e) {
+          e.preventDefault();
+          const formEl = document.querySelector("form.taxonomy-form");
+          if (!formEl || !(formEl instanceof HTMLFormElement)) return;
+          const errorEl = formEl.querySelector("[data-taxonomy-form-error]");
+          if (errorEl) errorEl.innerHTML = "";
+          const editId = formEl.getAttribute("data-edit-id")?.trim();
+          const url =
+            editId && /^\d+$/.test(editId)
+              ? `/api/taxonomies/${editId}`
+              : "/api/taxonomies";
+          const method = editId && /^\d+$/.test(editId) ? "PUT" : "POST";
+          const formData = new FormData(formEl);
+          try {
+            const res = await fetch(url, { method, body: formData });
+            const contentType = res.headers.get("Content-Type") ?? "";
+            if (!res.ok) {
+              const text = await res.text();
+              if (errorEl) errorEl.innerHTML = text;
+              return;
+            }
+            if (contentType.includes("application/json")) {
+              const data = await res.json().catch(() => null);
+              const hxTrigger = res.headers.get("HX-Trigger");
+              let dispatched = false;
+              if (hxTrigger) {
+                try {
+                  const payload = JSON.parse(hxTrigger);
+                  for (const [eventName, detail] of Object.entries(payload)) {
+                    window.dispatchEvent(
+                      new CustomEvent(eventName, { detail }),
+                    );
+                    dispatched = true;
+                    if (eventName === "taxonomy-added") this.resetForm();
+                  }
+                } catch (_) {}
+              }
+              if (!dispatched && method === "POST" && data?.taxonomy) {
+                const detail = {
+                  id: data.taxonomy.id,
+                  name: data.taxonomy.name,
+                  slug: data.taxonomy.slug,
+                  type: data.taxonomy.type,
+                  language: data.taxonomy.language ?? "—",
+                };
+                window.dispatchEvent(
+                  new CustomEvent("taxonomy-added", { detail }),
+                );
+                this.resetForm();
+              }
+            } else {
+              const text = await res.text();
+              if (errorEl) errorEl.innerHTML = text;
+            }
+          } catch (err) {
+            if (errorEl)
+              errorEl.textContent =
+                typeof err === "object" && err != null && "message" in err
+                  ? String(err.message)
+                  : "Erro ao enviar.";
+          }
+        },
       }));
     });
   </script>
@@ -146,16 +236,11 @@ const emptyColspan = columns.length;
   <div class="p-6 flex gap-6">
     <div class="w-5/12 shrink-0">
       <form
-        method="post"
-        action={editTaxonomy ? `/api/taxonomies/${editTaxonomy.id}` : "/api/taxonomies"}
         class="flex flex-col gap-3 taxonomy-form"
         data-base-url={baseUrl}
         data-edit-id={editTaxonomy?.id ?? ""}
-        hx-post={editTaxonomy ? undefined : "/api/taxonomies"}
-        hx-put={editTaxonomy ? `/api/taxonomies/${editTaxonomy.id}` : undefined}
-        hx-swap="none"
         x-data="taxonomyForm"
-        @taxonomy-form-reset.window="resetForm()"
+        @submit.prevent="handleSubmit($event)"
       >
         <input type="hidden" name="type" value={type} />
         {
@@ -163,7 +248,11 @@ const emptyColspan = columns.length;
             <input type="hidden" name="parent_id" value={parentId} />
           )
         }
-        {editTaxonomy && <input type="hidden" name="id" value={editTaxonomy.id} />}
+        {
+          editTaxonomy && (
+            <input type="hidden" name="id" value={editTaxonomy.id} />
+          )
+        }
         <input type="hidden" name="locale" value={locale} />
         <div class="form-control">
           <label for="tax-name" class="label">
@@ -206,15 +295,31 @@ const emptyColspan = columns.length;
             name="description"
             rows="3"
             class="textarea textarea-bordered textarea-sm w-full"
-            x-model="description"
-          ></textarea>
+            x-model="description"></textarea>
         </div>
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text"
+              >{t(currentLocale, "admin.content.language")}</span
+            >
+          </label>
+          <LanguageDropdown selectedLocaleId={initialLocaleId} cols={1} />
+        </div>
+        <div data-taxonomy-form-error class="min-h-6"></div>
         <button type="submit" class="btn btn-primary btn-sm">
           {t(currentLocale, "admin.taxonomy.formSave")}
         </button>
       </form>
     </div>
-    <div class="w-6/12 min-w-0 overflow-x-auto">
+    <div
+      id="taxonomy-list-wrapper"
+      class="w-6/12 min-w-0 overflow-x-auto"
+      data-edit-link-template={`/${locale}/admin/${slug}?domain=${domain}&type=${encodeURIComponent(type)}&action=edit&id={id}`}
+      data-delete-path-template="/api/taxonomies/{id}"
+      data-edit-label={t(locale, "admin.list.edit")}
+      data-delete-label={t(locale, "admin.list.delete")}
+      data-delete-confirm={t(locale, "admin.list.deleteConfirm")}
+    >
       <DataList
         columns={columns}
         items={taxonomyItems}
@@ -236,24 +341,167 @@ const emptyColspan = columns.length;
   </div>
 </AdminLayout>
 
-<script>
-  document.querySelectorAll("form.taxonomy-form").forEach((form) => {
-    form.addEventListener("htmx:afterRequest", (ev) => {
-      const evt = ev;
-      const detail = "detail" in evt ? evt.detail : null;
-      const successful = detail && typeof detail === "object" && "successful" in detail && detail.successful;
-      const xhr = detail && typeof detail === "object" && "xhr" in detail ? detail.xhr : null;
-      const status = xhr && typeof xhr === "object" && "status" in xhr ? xhr.status : 0;
-      const getHeader = xhr && typeof xhr === "object" && "getResponseHeader" in xhr && typeof xhr.getResponseHeader === "function" ? xhr.getResponseHeader.bind(xhr) : null;
-      if (!successful || status !== 200) return;
-      const baseUrl = form.getAttribute("data-base-url");
-      const editId = form.getAttribute("data-edit-id");
-      if (editId) {
-        if (getHeader?.("HX-Refresh") === "true" && baseUrl) window.location.href = baseUrl;
-        return;
-      }
+<script is:inline>
+  (function () {
+    function escapeHtml(s) {
+      if (s == null) return "—";
+      const t = String(s);
+      return t
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function resetFormAndDropdown(form) {
       window.dispatchEvent(new CustomEvent("taxonomy-form-reset"));
-      if (getHeader?.("HX-Refresh") === "true") window.location.reload();
+      const dropdown = form.querySelector("[x-data*='languageDropdown']");
+      if (dropdown && window.Alpine) {
+        const data = window.Alpine.$data(dropdown);
+        if (data && typeof data["selectedLocaleId"] !== "undefined")
+          data["selectedLocaleId"] = null;
+      }
+    }
+
+    window.addEventListener("taxonomy-form-reset", function () {
+      const form = document.querySelector("form.taxonomy-form");
+      if (!form) return;
+      const dropdown = form.querySelector("[x-data*='languageDropdown']");
+      if (dropdown && window.Alpine) {
+        const data = window.Alpine.$data(dropdown);
+        if (data && typeof data["selectedLocaleId"] !== "undefined")
+          data["selectedLocaleId"] = null;
+      }
     });
-  });
+
+    const listWrapper = document.getElementById("taxonomy-list-wrapper");
+    if (listWrapper) {
+      listWrapper.addEventListener("click", function (ev) {
+        const link = ev.target && ev.target.closest ? ev.target.closest("a[hx-delete]") : null;
+        if (!link || !link.getAttribute("hx-delete")) return;
+        ev.preventDefault();
+        const url = link.getAttribute("hx-delete");
+        const confirmMsg = link.getAttribute("hx-confirm") || "Tem certeza que deseja deletar este item?";
+        if (!window.confirm(confirmMsg)) return;
+        const tr = link.closest("tr");
+        fetch(url, { method: "DELETE" })
+          .then(function (res) {
+            if (res.ok && tr && tr.parentNode) tr.remove();
+          })
+          .catch(function () {});
+      });
+    }
+
+    window.addEventListener("taxonomy-added", function (ev) {
+      const d = ev.detail;
+      if (!d || typeof d.id === "undefined") return;
+
+      const wrapper = document.getElementById("taxonomy-list-wrapper");
+      if (!wrapper) return;
+      const tbody = wrapper.querySelector("tbody");
+      if (!tbody) return;
+
+      const editLink =
+        wrapper
+          .getAttribute("data-edit-link-template")
+          ?.replace("{id}", String(d.id)) ?? "#";
+      const deletePath =
+        wrapper
+          .getAttribute("data-delete-path-template")
+          ?.replace("{id}", String(d.id)) ?? "#";
+      const editLabel = wrapper.getAttribute("data-edit-label") ?? "Editar";
+      const deleteLabel =
+        wrapper.getAttribute("data-delete-label") ?? "Deletar";
+      const deleteConfirm = wrapper.getAttribute("data-delete-confirm") ?? "";
+
+      const name = escapeHtml(d?.name);
+      const slug = escapeHtml(d?.slug);
+      const type = escapeHtml(d?.type);
+      const language = escapeHtml(d?.language);
+
+      const emptyRow = tbody.querySelector("tr td[colspan]");
+      const emptyTr = emptyRow?.closest("tr");
+      if (emptyTr) emptyTr.remove();
+
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        '<td><label class="label cursor-pointer justify-center p-0"><input type="checkbox" class="checkbox checkbox-sm row-select" value="' +
+        escapeHtml(d.id) +
+        '" aria-label="Select item ' +
+        escapeHtml(d.id) +
+        '"></label></td>' +
+        "<td>" +
+        name +
+        "</td>" +
+        "<td>" +
+        slug +
+        "</td>" +
+        "<td>" +
+        type +
+        "</td>" +
+        "<td>" +
+        language +
+        "</td>" +
+        '<td class="flex gap-1"><a href="' +
+        editLink +
+        '" class="link link-primary text-sm">' +
+        editLabel +
+        "</a>" +
+        '<span class="text-base-content/40">|</span>' +
+        '<a href="#" class="link link-error text-sm" hx-delete="' +
+        deletePath +
+        '" hx-confirm="' +
+        escapeHtml(deleteConfirm) +
+        '" hx-target="closest tr" hx-swap="outerHTML swap:300ms">' +
+        deleteLabel +
+        "</a></td>";
+      tbody.appendChild(tr);
+      const htmxLib =
+        typeof globalThis !== "undefined" && globalThis["htmx"];
+      if (htmxLib?.process) htmxLib.process(tr);
+
+      const form = document.querySelector("form.taxonomy-form");
+      if (form instanceof HTMLFormElement) resetFormAndDropdown(form);
+    });
+
+    window.addEventListener("taxonomy-updated", function (ev) {
+      const d = ev.detail;
+      if (!d || typeof d.id === "undefined") return;
+      const wrapper = document.getElementById("taxonomy-list-wrapper");
+      if (!wrapper) return;
+      const tbody = wrapper.querySelector("tbody");
+      if (!tbody) return;
+
+      const id = String(d.id);
+      const rows = tbody.querySelectorAll("tr");
+      for (const row of rows) {
+        const editLink = row.querySelector(
+          'a[href*="action=edit"][href*="id="]'
+        );
+        if (!editLink || !editLink.getAttribute("href")) continue;
+        const m = editLink.getAttribute("href")?.match(/[?&]id=(\d+)(?:&|$)/);
+        if (m && m[1] === id) {
+          const cells = row.querySelectorAll("td");
+          if (cells.length >= 5 && d != null) {
+            const dataStart = row.querySelector(".row-select") ? 1 : 0;
+            const c0 = cells[dataStart];
+            const c1 = cells[dataStart + 1];
+            const c2 = cells[dataStart + 2];
+            const c3 = cells[dataStart + 3];
+            if (c0 != null) c0.textContent = d.name ?? "—";
+            if (c1 != null) c1.textContent = d.slug ?? "—";
+            if (c2 != null) c2.textContent = d.type ?? "—";
+            if (c3 != null) c3.textContent = d.language ?? "—";
+          }
+          break;
+        }
+      }
+
+      const form = document.querySelector("form.taxonomy-form");
+      if (window.history && window.history.replaceState) {
+        const baseUrl = form?.getAttribute("data-base-url") ?? "";
+        if (baseUrl) window.history.replaceState(null, "", baseUrl);
+      }
+    });
+  })();
 </script>
