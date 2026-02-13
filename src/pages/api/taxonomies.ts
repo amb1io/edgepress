@@ -1,5 +1,5 @@
 import { db } from "../../db/index.ts";
-import { taxonomies } from "../../db/schema.ts";
+import { taxonomies, locales } from "../../db/schema.ts";
 import { eq } from "drizzle-orm";
 import { slugify } from "../../lib/slugify.ts";
 import { t } from "../../i18n/index.ts";
@@ -19,21 +19,24 @@ export async function POST({
 
   try {
     const formData = await request.formData();
-    const name = (formData.get("name") as string)?.trim();
-    const slugInput = (formData.get("slug") as string)?.trim();
-    const description = (formData.get("description") as string)?.trim() || null;
+    const name = trimFormValue(formData.get("name"));
+    const slugInput = trimFormValue(formData.get("slug"));
+    const description = trimFormValue(formData.get("description")) || null;
     const parentIdRaw = formData.get("parent_id");
-    const type = (formData.get("type") as string)?.trim();
-    const locale = (formData.get("locale") as string)?.trim() || "pt-br";
+    const idLocaleCodeRaw = formData.get("id_locale_code");
+    const type = trimFormValue(formData.get("type"));
+    const locale = trimFormValue(formData.get("locale")) || "pt-br";
 
     if (!name || !type) {
       return errorHtmlResponse(locale);
     }
 
+    const parentIdStr = trimFormValue(parentIdRaw);
+    const idLocaleCodeStr = trimFormValue(idLocaleCodeRaw);
     const parent_id =
-      parentIdRaw != null && parentIdRaw !== "" && /^\d+$/.test(String(parentIdRaw))
-        ? parseInt(String(parentIdRaw), 10)
-        : null;
+      parentIdStr !== "" && /^\d+$/.test(parentIdStr) ? parseInt(parentIdStr, 10) : null;
+    const id_locale_code =
+      idLocaleCodeStr !== "" && /^\d+$/.test(idLocaleCodeStr) ? parseInt(idLocaleCodeStr, 10) : null;
 
     const slug = slugInput ? slugify(slugInput) : slugify(name);
     if (!slug) {
@@ -52,39 +55,65 @@ export async function POST({
       return errorHtmlResponse(locale);
     }
 
-    const [inserted] = await db.insert(taxonomies).values({
-      name,
-      slug,
-      description,
-      type,
-      parent_id,
-      created_at: now,
-      updated_at: now,
-    }).returning({
-      id: taxonomies.id,
-      name: taxonomies.name,
-      slug: taxonomies.slug,
-    });
+    const [inserted] = await db
+      .insert(taxonomies)
+      .values({
+        name,
+        slug,
+        description,
+        type,
+        parent_id,
+        id_locale_code,
+        created_at: now,
+        updated_at: now,
+      })
+      .returning({
+        id: taxonomies.id,
+        name: taxonomies.name,
+        slug: taxonomies.slug,
+      });
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      taxonomy: inserted 
-    }), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "HX-Trigger": JSON.stringify({ 
-          "taxonomy-added": { 
-            id: inserted.id, 
-            name: inserted.name, 
-            slug: inserted.slug,
-            parent_id: parent_id 
-          } 
-        }),
+    if (!inserted) {
+      return errorHtmlResponse(locale);
+    }
+
+    let language = "—";
+    if (id_locale_code != null) {
+      const [loc] = await db
+        .select({ language: locales.language })
+        .from(locales)
+        .where(eq(locales.id, id_locale_code))
+        .limit(1);
+      if (loc) language = loc.language;
+    }
+
+    const triggerPayload = {
+      "taxonomy-added": {
+        id: inserted.id,
+        name: inserted.name,
+        slug: inserted.slug,
+        type,
+        language,
+        parent_id: parent_id,
       },
-    });
+    };
+    return new Response(
+      JSON.stringify({
+        success: true,
+        taxonomy: { ...inserted, type, language },
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "HX-Trigger": JSON.stringify(triggerPayload),
+          "Access-Control-Expose-Headers": "HX-Trigger",
+        },
+      },
+    );
   } catch (err) {
-    console.error("POST /api/taxonomies", err);
+    console.error("POST /api/taxonomies", err instanceof Error ? err.message : err);
+    if (err instanceof Error && err.stack) console.error(err.stack);
     return errorHtmlResponse("pt-br");
   }
 }
@@ -104,4 +133,12 @@ function escapeHtml(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/** Trim and strip optional surrounding double quotes (e.g. "value" → value). */
+function trimFormValue(raw: FormDataEntryValue | null): string {
+  if (raw == null || typeof raw !== "string") return "";
+  const s = raw.trim();
+  if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) return s.slice(1, -1).trim();
+  return s;
 }

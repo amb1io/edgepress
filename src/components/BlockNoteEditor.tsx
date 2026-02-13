@@ -77,6 +77,8 @@ export function BlockNoteEditor({
         if (!form) return result.url;
         
         const localeVal = form.querySelector<HTMLInputElement>('input[name="locale"]')?.value ?? "pt-br";
+        const idLocaleCode = form.querySelector<HTMLInputElement>('input[name="id_locale_code"]')?.value;
+        const postId = form.querySelector<HTMLInputElement>('input[name="id"]')?.value;
         const postTypeSlug = form.querySelector<HTMLInputElement>('input[name="post_type"]')?.value?.trim() || "post";
         
         // Gerar título e slug únicos para o attachment
@@ -104,6 +106,12 @@ export function BlockNoteEditor({
         fd.set("post_type", "attachment");
         fd.set("action", "new");
         fd.set("locale", localeVal);
+        if (idLocaleCode && idLocaleCode.trim() !== "") {
+          fd.set("id_locale_code", idLocaleCode);
+        }
+        if (postId && postId.trim() !== "" && /^\d+$/.test(postId.trim())) {
+          fd.set("parent_id", postId.trim());
+        }
         fd.set("title", postTitle);
         fd.set("slug", postSlug);
         fd.set("status", "published");

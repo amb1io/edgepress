@@ -1,0 +1,373 @@
+---
+/**
+ * Agrupa a lista de custom fields: botão "Adicionar campo personalizado",
+ * modal para informar o nome do campo e cada instância em formato Collapse
+ * (checkbox) com título, opção de deletar e corpo com linhas Nome/Valor + "adicionar mais dados".
+ */
+import { Icon } from "astro-icon/components";
+
+interface Props {
+  initialData?: Array<{
+    id: number;
+    title: string;
+    rows: Array<{ id: number; name: string; value: string }>;
+    template?: boolean;
+  }>;
+  /** Lista distinta (por título) de custom fields que são templates, para a aba "Selecione Template" */
+  templateCustomFields?: Array<{
+    id: number;
+    title: string;
+    meta_values: string | null;
+  }>;
+}
+
+const { initialData = [], templateCustomFields = [] } = Astro.props;
+---
+
+<div
+  id="custom-fields-wrapper"
+  class="custom-fields-wrapper flex flex-col gap-3"
+  x-data="customFieldsWrapper()"
+  x-init="initCustomFields()"
+>
+  <div class="flex flex-col gap-2" id="custom-fields-list">
+    <template x-for="item in customFields" :key="item.id">
+      <div
+        class="collapse-wrapper"
+        x-show="!item._deleted && item.rows && item.rows.some(r => !r._deleted)"
+      >
+        <div class="collapse bg-base-100 border border-base-300">
+          <input type="checkbox" />
+          <div
+            class="collapse-title font-semibold flex items-center justify-between gap-2 min-h-0 p-4"
+          >
+            <span class="flex-1" x-text="item.title"></span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-circle shrink-0 relative z-10"
+              aria-label="Remover"
+              @click.stop="removeField(item.id)"
+            >
+              <Icon name="line-md:close" size={18} aria-hidden="true" />
+            </button>
+          </div>
+          <div class="collapse-content">
+            <div class="flex flex-col gap-3">
+              <template x-for="(row, ri) in item.rows" :key="row.id">
+                <div
+                  class="grid gap-2 items-center"
+                  style="grid-template-columns: auto 1fr auto 1fr auto;"
+                  x-show="!row._deleted"
+                >
+                  <label class="label py-0 whitespace-nowrap">
+                    <span class="label-text text-sm">Nome do campo:</span>
+                  </label>
+                  <input
+                    type="text"
+                    class="input input-bordered input-sm w-full"
+                    placeholder="Valor do Titulo"
+                    x-model="row.name"
+                  />
+                  <label class="label py-0 whitespace-nowrap">
+                    <span class="label-text text-sm">Valor do Campo:</span>
+                  </label>
+                  <input
+                    type="text"
+                    class="input input-bordered input-sm w-full"
+                    placeholder="Valor do campo"
+                    x-model="row.value"
+                  />
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-xs btn-circle text-error flex items-center justify-center"
+                    title="Apagar Dado"
+                    @click.prevent="markRowForDeletion(item, row)"
+                  >
+                    <Icon name="line-md:trash" size={18} aria-hidden="true" />
+                  </button>
+                </div>
+              </template>
+              <div class="flex flex-wrap items-center gap-3 pt-5">
+                <a
+                  href="#"
+                  class="link link-primary underline text-sm"
+                  @click.prevent="addRow(item)"
+                >
+                  adicionar mais dados
+                </a>
+                <label class="label cursor-pointer gap-2 py-0">
+                  <input
+                    type="checkbox"
+                    class="checkbox checkbox-sm"
+                    x-model="item.template"
+                  />
+                  <span class="label-text text-sm"
+                    >Transformar em um template?</span
+                  >
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+  <button
+    type="button"
+    class="btn btn-primary btn-sm"
+    @click="modalOpen = true"
+  >
+    Adicionar campo personalizado
+  </button>
+
+  <!-- Modal: abas "Selecione Template" | "Crie um Novo" (daisyUI tabs) -->
+  <div
+    class="modal"
+    :class="{ 'modal-open': modalOpen }"
+    role="dialog"
+    x-show="modalOpen"
+    x-cloak
+    x-transition
+  >
+    <div class="modal-box relative">
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm btn-circle absolute right-2 top-2"
+        aria-label="Fechar"
+        @click="modalOpen = false"
+      >
+        <Icon name="line-md:close" size={20} aria-hidden="true" />
+      </button>
+      <h3 class="font-semibold text-lg mb-3">Adicionar campo personalizado</h3>
+
+      <div role="tablist" class="tabs tabs-lift tabs-sm mb-0">
+        <button
+          type="button"
+          role="tab"
+          class="tab"
+          :class="{ 'tab-active': modalTab === 'template' }"
+          @click="modalTab = 'template'"
+        >
+          Selecione Template
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="tab"
+          :class="{ 'tab-active': modalTab === 'create' }"
+          @click="modalTab = 'create'"
+        >
+          Crie um Novo
+        </button>
+      </div>
+
+      <div class="min-h-[120px]">
+        <!-- Aba: Selecione Template (não usar classe tab-content do DaisyUI - ela esconde por padrão) -->
+        <div
+          class="border border-base-300 bg-base-100 rounded-b-lg p-4"
+          x-show="modalTab === 'template'"
+          x-transition
+        >
+          <div class="form-control mb-4">
+            <select
+              class="select select-bordered w-full"
+              x-model="selectedTemplateId"
+            >
+              <option value="">Selecione um template</option>
+              <template x-for="t in templateCustomFields" :key="t.id">
+                <option :value="t.id" x-text="t.title"></option>
+              </template>
+            </select>
+          </div>
+          <div class="modal-action">
+            <button
+              type="button"
+              class="btn btn-primary"
+              @click="submitFromTemplate()"
+            >
+              Adicionar
+            </button>
+          </div>
+        </div>
+
+        <!-- Aba: Crie um Novo -->
+        <div
+          class="border border-base-300 bg-base-100 rounded-b-lg p-4"
+          x-show="modalTab === 'create'"
+          x-transition
+        >
+          <div class="form-control mb-4">
+            <input
+              type="text"
+              class="input input-bordered w-full"
+              placeholder="Nome do custom field"
+              x-model="newFieldName"
+              @keydown.enter.prevent="submitNewField()"
+            />
+          </div>
+          <div class="modal-action">
+            <button
+              type="button"
+              class="btn btn-primary"
+              @click="submitNewField()"
+            >
+              Adicionar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-backdrop" @click="modalOpen = false">Fechar</div>
+  </div>
+</div>
+
+<script
+  define:vars={{
+    initialCustomFieldsData: JSON.stringify(initialData),
+    templateCustomFieldsData: JSON.stringify(templateCustomFields),
+  }}
+  is:inline
+>
+  (function () {
+    const initialDataJson =
+      typeof initialCustomFieldsData !== "undefined"
+        ? initialCustomFieldsData
+        : "[]";
+    let parsedData = [];
+    try {
+      parsedData = JSON.parse(initialDataJson);
+    } catch (e) {
+      console.error("Error parsing initial custom fields data:", e);
+      parsedData = [];
+    }
+
+    const processedData = Array.isArray(parsedData)
+      ? parsedData.map((item) => ({
+          id: item.id || Date.now(),
+          title: item.title || "",
+          rows:
+            Array.isArray(item.rows) && item.rows.length > 0
+              ? item.rows.map((row) => ({
+                  id: row.id || Date.now(),
+                  name: row.name || "",
+                  value: row.value || "",
+                }))
+              : [{ id: Date.now(), name: "", value: "" }],
+          template: item.template === true,
+        }))
+      : [];
+
+    let templateList = [];
+    try {
+      templateList =
+        typeof templateCustomFieldsData !== "undefined"
+          ? JSON.parse(templateCustomFieldsData)
+          : [];
+    } catch (e) {
+      templateList = [];
+    }
+    if (!Array.isArray(templateList)) templateList = [];
+
+    window.customFieldsWrapper = function () {
+      return {
+        customFields: processedData,
+        modalOpen: false,
+        modalTab: "create",
+        newFieldName: "",
+        selectedTemplateId: "",
+        templateCustomFields: templateList,
+        initCustomFields() {
+          // Garantir que cada item tenha pelo menos uma row
+          this.customFields.forEach((item) => {
+            if (!item.rows || item.rows.length === 0) {
+              item.rows = [{ id: Date.now(), name: "", value: "" }];
+            }
+          });
+        },
+        submitNewField() {
+          const name = (this.newFieldName || "").trim();
+          if (!name) return;
+          this.customFields.push({
+            id: Date.now(),
+            title: name,
+            rows: [{ id: Date.now() + 1, name: "", value: "" }],
+            template: false,
+          });
+          this.newFieldName = "";
+          this.modalOpen = false;
+        },
+        submitFromTemplate() {
+          const id = this.selectedTemplateId
+            ? Number(this.selectedTemplateId)
+            : 0;
+          if (!id) return;
+          const t = this.templateCustomFields.find((x) => x.id === id);
+          if (!t) return;
+          let rows = [{ id: Date.now(), name: "", value: "" }];
+          if (t.meta_values) {
+            try {
+              const meta = JSON.parse(t.meta_values);
+              if (
+                meta.fields &&
+                Array.isArray(meta.fields) &&
+                meta.fields.length > 0
+              ) {
+                const base = Date.now();
+                rows = meta.fields.map((f, i) => ({
+                  id: base + i,
+                  name: typeof f.name === "string" ? f.name : "",
+                  value: typeof f.value === "string" ? f.value : "",
+                }));
+              }
+            } catch (_) {}
+          }
+          this.customFields.push({
+            id: Date.now(),
+            title: (t.title || "").trim() || "Custom field",
+            rows,
+            template: false,
+          });
+          this.selectedTemplateId = "";
+          this.modalOpen = false;
+        },
+        removeField(id) {
+          const item = this.customFields.find((f) => f.id === id);
+          if (!item) return;
+
+          // Se o custom field já existe no banco (ID é número e não timestamp), marca para deleção
+          // Caso contrário, remove imediatamente do frontend
+          const isExistingField =
+            item.id && typeof item.id === "number" && item.id < 1000000000000; // IDs do banco são menores que timestamps
+
+          if (isExistingField) {
+            // Marca para deleção (será processado no submit)
+            item._deleted = true;
+          } else {
+            // Remove imediatamente se é um campo novo
+            this.customFields = this.customFields.filter((f) => f.id !== id);
+          }
+        },
+        markRowForDeletion(item, row) {
+          // Se o custom field já existe no banco (ID é número e não timestamp), marca para deleção
+          // Caso contrário, remove imediatamente do frontend
+          const isExistingField =
+            item.id && typeof item.id === "number" && item.id < 1000000000000; // IDs do banco são menores que timestamps
+
+          if (isExistingField) {
+            // Marca para deleção (será processado no submit)
+            // O x-show="!row._deleted" já oculta visualmente
+            row._deleted = true;
+          } else {
+            // Remove imediatamente se é um campo novo
+            if (item.rows && item.rows.length > 1) {
+              item.rows = item.rows.filter((r) => r.id !== row.id);
+            }
+          }
+        },
+        addRow(item) {
+          item.rows.push({ id: Date.now(), name: "", value: "" });
+        },
+      };
+    };
+  })();
+</script>

@@ -607,6 +607,7 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
     const form = alpineRoot as HTMLFormElement;
     const postType = form.querySelector<HTMLInputElement>('input[name="post_type"]')?.value?.trim() || "attachment";
     const localeVal = form.querySelector<HTMLInputElement>('input[name="locale"]')?.value ?? "pt-br";
+    const idLocaleCode = form.querySelector<HTMLInputElement>('input[name="id_locale_code"]')?.value;
     const fd = new FormData();
     // Usar o nome original do arquivo para o título do post (reutilizar variável já declarada)
     const postTitle = originalFilename;
@@ -615,6 +616,9 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
     fd.set("post_type", postType);
     fd.set("action", "new");
     fd.set("locale", localeVal);
+    if (idLocaleCode && idLocaleCode.trim() !== "") {
+      fd.set("id_locale_code", idLocaleCode);
+    }
     fd.set("title", postTitle);
     fd.set("slug", postSlug);
     fd.set("status", "published");

@@ -1,0 +1,48 @@
+---
+/**
+ * Collapse com variante checkbox (daisyUI).
+ * Requer clique para abrir/fechar. Aceita slot para o corpo.
+ * @see https://daisyui.com/components/collapse/
+ */
+import { Icon } from "astro-icon/components";
+
+interface Props {
+  /** Título exibido no cabeçalho do collapse */
+  title: string;
+  /** Classes CSS adicionais para personalização (aplicadas no container do collapse) */
+  class?: string;
+  /** Se true, exibe ícone X no título; ao clicar, a instância some da página */
+  deletar?: boolean;
+  /** Função customizada para deletar (se não fornecida, usa comportamento padrão de esconder) */
+  onDelete?: string;
+}
+
+const { title, class: className = "", deletar = false, onDelete } = Astro.props;
+---
+
+<div
+  class="collapse-wrapper"
+  x-data="{ visible: true }"
+  x-show="visible"
+  x-transition
+>
+  <div class={`collapse bg-base-100 border border-base-300 ${className}`.trim()}>
+    <input type="checkbox" />
+    <div class="collapse-title font-semibold flex items-center justify-between gap-2 min-h-0 py-[15px]">
+      <span class="flex-1">{title}</span>
+      {deletar && (
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs btn-circle shrink-0 relative z-10"
+          aria-label="Remover"
+          @click.stop={onDelete ? onDelete : "visible = false"}
+        >
+          <Icon name="line-md:close" size={18} aria-hidden="true" />
+        </button>
+      )}
+    </div>
+    <div class="collapse-content">
+      <slot />
+    </div>
+  </div>
+</div>

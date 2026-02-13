@@ -6,13 +6,17 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
 import ContentEditor from "../../../components/ContentEditor.astro";
 import UserTemplate from "../../../templates/user.astro";
 import AttachmentTemplate from "../../../templates/attachment.astro";
+import TranslationsTemplate from "../../../templates/translations_languages.astro";
 import { db } from "../../../db/index.ts";
 import TaxonomiesBlocks from "../../../components/TaxonomiesBlocks.astro";
 import TaxonomyAddModal from "../../../components/TaxonomyAddModal.astro";
 import UppyUpload from "../../../components/UppyUpload.astro";
+import CustomFieldsWrapper from "../../../components/CustomFieldsWrapper.astro";
+import LanguageDropdown from "../../../components/LanguageDropdown.astro";
 import { getMenuItems } from "../../../lib/menu.ts";
 import { t, locales, defaultLocale, type Locale } from "../../../i18n/index.ts";
-import { eq, and, inArray, or, isNull } from "drizzle-orm";
+import { ensureTranslationsLoaded } from "../../../lib/i18n-helpers.ts";
+import { eq, and, inArray, or, isNull, sql } from "drizzle-orm";
 import {
   postTypes,
   posts,
@@ -27,6 +31,9 @@ const locale = Astro.params["locale"] ?? defaultLocale;
 if (!locales.includes(locale as "en" | "es" | "pt-br")) {
   return Astro.redirect(`/${defaultLocale}/admin`);
 }
+
+// Pré-carregar traduções
+await ensureTranslationsLoaded(locale);
 
 const user = Astro.locals.user;
 
@@ -63,6 +70,7 @@ if (action === "edit" && (!idParam || !isValidEditId(idParam))) {
 
 const showUserTemplate = postTypeSlug === "user";
 const showAttachmentTemplate = postTypeSlug === "attachment";
+const showTranslationsTemplate = postTypeSlug === "translations_languages";
 
 let typeRow: { id: number; name: string; meta_schema: unknown } | undefined;
 let typeId: number;
@@ -78,6 +86,7 @@ let post: {
   body: string | null;
   status: string | null;
   author_id: string | null;
+  id_locale_code: number | null;
   meta_values: string | null;
 } | null = null;
 let pageTitle = "";
@@ -86,13 +95,19 @@ let initialSlug = "";
 let initialExcerpt = "";
 let initialStatus = "draft";
 let initialAuthorId = "";
+let initialLocaleId: number | null = null;
 let asideAccordionName = "content-aside";
 let thumbnailPath = "";
 let thumbnailUrl = "";
 let thumbnailAttachmentId: number | null = null;
 let hasPostThumbnail = false;
+let hasCustomFields = false;
+let customFieldsTypeId: number | null = null;
+let initialCustomFields: Array<{ id: number; title: string; rows: Array<{ id: number; name: string; value: string }> }> = [];
+/** Lista distinta (por título) de custom fields que são templates (meta_values.template = true), sem filtrar por parent_id */
+let templateCustomFieldsList: Array<{ id: number; title: string; meta_values: string | null }> = [];
 
-if (!showUserTemplate && !showAttachmentTemplate) {
+if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate) {
   const [typeRowResult] = await db
     .select({
       id: postTypes.id,
@@ -125,6 +140,22 @@ if (!showUserTemplate && !showAttachmentTemplate) {
     const def = item && "default" in item ? (item as { default?: unknown }).default : undefined;
     return typeof def === "boolean" ? def : false;
   })();
+
+  hasCustomFields = (() => {
+    const schema = (typeRow!.meta_schema ?? []) as { key: string; default?: unknown }[];
+    const item = schema.find((s) => s.key === "post_types");
+    const def = item?.default;
+    return Array.isArray(def) && def.includes("custom_fields");
+  })();
+
+  if (hasCustomFields) {
+    const [cfType] = await db
+      .select({ id: postTypes.id })
+      .from(postTypes)
+      .where(eq(postTypes.slug, "custom_fields"))
+      .limit(1);
+    customFieldsTypeId = cfType?.id ?? null;
+  }
 
   const taxonomyRoots =
     taxonomyTypes.length > 0
@@ -175,6 +206,7 @@ if (!showUserTemplate && !showAttachmentTemplate) {
         body: posts.body,
         status: posts.status,
         author_id: posts.author_id,
+        id_locale_code: posts.id_locale_code,
         meta_values: posts.meta_values,
       })
       .from(posts)
@@ -260,7 +292,88 @@ if (!showUserTemplate && !showAttachmentTemplate) {
           thumbnailAttachmentId = mediaRelation.media_id;
         }
       }
+
+      // Buscar custom fields filhos quando hasCustomFields
+      if (hasCustomFields && customFieldsTypeId) {
+        const customFieldsPosts = await db
+          .select({
+            id: posts.id,
+            title: posts.title,
+            meta_values: posts.meta_values,
+          })
+          .from(posts)
+          .where(
+            and(
+              eq(posts.parent_id, post.id),
+              eq(posts.post_type_id, customFieldsTypeId)
+            )
+          )
+          .orderBy(posts.created_at);
+
+        let rowIdCounter = Date.now();
+        initialCustomFields = customFieldsPosts.map((cfPost) => {
+          let rows: Array<{ id: number; name: string; value: string }> = [];
+          let template = false;
+          if (cfPost.meta_values) {
+            try {
+              const meta = JSON.parse(cfPost.meta_values) as {
+                fields?: Array<{ name?: string; value?: string }>;
+                template?: boolean;
+              };
+              if (meta.fields && Array.isArray(meta.fields)) {
+                rows = meta.fields.map((field) => {
+                  rowIdCounter += 1;
+                  return {
+                    id: rowIdCounter,
+                    name: typeof field.name === "string" ? field.name : "",
+                    value: typeof field.value === "string" ? field.value : "",
+                  };
+                });
+              }
+              if (meta.template === true) template = true;
+            } catch {
+              // Se não conseguir parsear, usar array vazio
+            }
+          }
+          // Se não tiver rows, criar uma linha vazia
+          if (rows.length === 0) {
+            rowIdCounter += 1;
+            rows = [{ id: rowIdCounter, name: "", value: "" }];
+          }
+          return {
+            id: cfPost.id,
+            title: cfPost.title || "",
+            rows,
+            template,
+          };
+        });
+      }
     }
+  }
+
+  // Lista de templates (para modal): todos os posts tipo custom_fields com template = true, sem filtrar por parent_id
+  if (hasCustomFields && customFieldsTypeId) {
+    const templatePosts = await db
+      .select({
+        id: posts.id,
+        title: posts.title,
+        meta_values: posts.meta_values,
+      })
+      .from(posts)
+      .where(
+        and(
+          eq(posts.post_type_id, customFieldsTypeId),
+          sql`json_extract(${posts.meta_values}, '$.template') = 1`
+        )
+      )
+      .orderBy(posts.title);
+    const seenTitles = new Set<string>();
+    templateCustomFieldsList = templatePosts.filter((p) => {
+      const t = (p.title || "").trim();
+      if (!t || seenTitles.has(t)) return false;
+      seenTitles.add(t);
+      return true;
+    });
   }
 
   pageTitle =
@@ -272,7 +385,11 @@ if (!showUserTemplate && !showAttachmentTemplate) {
   initialSlug = String(post?.slug ?? "");
   initialExcerpt = String(post?.excerpt ?? "");
   initialStatus = String(post?.status ?? "draft");
-  initialAuthorId = String(post?.author_id ?? "");
+  // Se estiver editando, usar o author_id do post; se estiver criando, usar o usuário logado
+  initialAuthorId = action === "edit" && post?.author_id 
+    ? String(post.author_id) 
+    : String(user?.id ?? "");
+  initialLocaleId = post?.id_locale_code ?? null;
 }
 
 // Garantir que todas as variáveis sejam strings válidas antes de usar no define:vars
@@ -280,7 +397,6 @@ thumbnailPath = String(thumbnailPath || "");
 thumbnailUrl = String(thumbnailUrl || "");
 const initialThumbnailAttachmentId = thumbnailAttachmentId;
 ---
-
 {showUserTemplate ? (
   <UserTemplate
     locale={locale}
@@ -292,6 +408,15 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
   />
 ) : showAttachmentTemplate ? (
   <AttachmentTemplate
+    locale={locale}
+    postTypeSlug={postTypeSlug}
+    action={action}
+    idParam={idParam}
+    menuItems={menuItems}
+    currentUser={user}
+  />
+) : showTranslationsTemplate ? (
+  <TranslationsTemplate
     locale={locale}
     postTypeSlug={postTypeSlug}
     action={action}
@@ -317,6 +442,10 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
     }
     .content-editor-wrapper .bn-container {
       border: none;
+    }
+    /* Accordion Idioma com altura aumentada apenas quando aberto */
+    .language-accordion input[type="radio"]:checked ~ .collapse-content {
+      min-height: 400px;
     }
   </style>
   <script
@@ -417,6 +546,8 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
       ctx.thumbnail_url = customEvent.detail.imageUrl;
       
       const localeVal = form.querySelector('input[name="locale"]')?.value ?? "pt-br";
+      const idLocaleCode = form.querySelector('input[name="id_locale_code"]')?.value;
+      const postId = form.querySelector('input[name="id"]')?.value;
       const originalFilename = customEvent.detail.originalFilename || customEvent.detail.filename || "untitled";
       const postTitle = originalFilename;
       const postBaseSlug = window.slugify?.(originalFilename) ?? "file";
@@ -426,6 +557,12 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
       fd.set("post_type", "attachment");
       fd.set("action", "new");
       fd.set("locale", localeVal);
+      if (idLocaleCode && idLocaleCode.trim() !== "") {
+        fd.set("id_locale_code", idLocaleCode);
+      }
+      if (postId && postId.trim() !== "" && /^\d+$/.test(postId.trim())) {
+        fd.set("parent_id", postId.trim());
+      }
       fd.set("title", postTitle);
       fd.set("slug", postSlug);
       fd.set("status", "published");
@@ -545,10 +682,46 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
           form.appendChild(attachmentIdInput);
         });
       }
-      
+
       // Enviar formulário
       try {
         const formData = new FormData(form);
+
+        // Dados do CustomFieldsWrapper: cada collapse vira um post custom_fields (enviado após salvar o post pai)
+        const wrapperEl = document.getElementById("custom-fields-wrapper");
+        if (wrapperEl && window.Alpine) {
+          const wrapperData = window.Alpine.$data(wrapperEl);
+          if (wrapperData && Array.isArray(wrapperData.customFields)) {
+            // Filtrar campos e rows marcadas para deleção
+            const customFieldsToSave = wrapperData.customFields
+              .filter((item) => !item._deleted) // Remove campos marcados para deleção
+              .map((item) => ({
+                ...item,
+                rows: item.rows.filter((row) => !row._deleted),
+                template: item.template === true,
+              }))
+              .filter((item) => item.rows.length > 0); // Remove custom fields sem rows
+            
+            // IDs de custom fields que devem ser deletados (marcados como _deleted ou ficaram sem rows)
+            const existingFieldIds = wrapperData.customFields
+              .filter((item) => {
+                const isExisting = item.id && typeof item.id === 'number' && item.id < 1000000000000;
+                const isMarkedForDeletion = item._deleted === true;
+                const hasNoRows = !item.rows || item.rows.length === 0;
+                const allRowsDeleted = item.rows && item.rows.every((row) => row._deleted);
+                return isExisting && (isMarkedForDeletion || hasNoRows || allRowsDeleted);
+              })
+              .map((item) => item.id);
+            
+            if (customFieldsToSave.length > 0) {
+              formData.set("custom_fields_data", JSON.stringify(customFieldsToSave));
+            }
+            
+            if (existingFieldIds.length > 0) {
+              formData.set("custom_fields_to_delete", JSON.stringify(existingFieldIds));
+            }
+          }
+        }
         
         // IMPORTANTE: Usar getAttribute ao invés de .action porque há um input com name="action"
         const formAction = form.getAttribute('action');
@@ -707,6 +880,15 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
             />
           </div>
         </div>
+
+        {hasCustomFields && (
+          <div id="custom-fields-wrapper-root" class="mt-4">
+            <CustomFieldsWrapper
+              initialData={action === "edit" ? initialCustomFields : []}
+              templateCustomFields={templateCustomFieldsList}
+            />
+          </div>
+        )}
       </div>
 
       <aside
@@ -832,6 +1014,30 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
               accordionName={asideAccordionName}
               siblings
             />
+
+            <div class="collapse collapse-arrow join-item border border-base-300 language-accordion">
+              <input
+                type="radio"
+                name={asideAccordionName}
+                aria-label={t(locale, "admin.content.language")}
+              />
+              <div class="collapse-title font-semibold text-sm py-2 min-h-0">
+                {t(locale, "admin.content.language")}
+              </div>
+              <div class="collapse-content text-sm">
+                <div class="flex flex-col gap-3">
+                  <div class="form-control">
+                    <label class="label py-0">
+                      <span class="label-text text-xs">{t(locale, "admin.content.language")}</span>
+                    </label>
+                    <LanguageDropdown selectedLocaleId={initialLocaleId} fieldName="id_locale_code" cols={1} />
+                    <p class="text-xs text-base-content/50 mt-1">
+                      Selecione o idioma para este conteúdo
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {hasPostThumbnail && (
               <div class="collapse collapse-arrow join-item border border-base-300">

@@ -1,0 +1,456 @@
+---
+/**
+ * Template para o post_type "translations_languages" (formulário baseado na tabela translations e translations_languages).
+ * Campos: namespace, key, translation, locale_id.
+ */
+import AdminLayout from "../layouts/AdminLayout.astro";
+import { db } from "../db/index.ts";
+import {
+  translations as translationsTable,
+  locales as localesTable,
+  translationsLanguages as translationsLanguagesTable,
+} from "../db/schema.ts";
+import { eq } from "drizzle-orm";
+import { t, type Locale } from "../i18n/index.ts";
+import type { MenuItem } from "../lib/menu.ts";
+
+export interface Props {
+  locale: string;
+  postTypeSlug: string;
+  action: string;
+  idParam: string | null;
+  menuItems: MenuItem[];
+  /** Usuário logado (para header) */
+  currentUser: { email: string; name: string };
+}
+
+const { locale, postTypeSlug, action, idParam, menuItems, currentUser } =
+  Astro.props;
+const currentLocale = locale as Locale;
+
+const pageTitle =
+  action === "new"
+    ? t(currentLocale, "admin.content.newTitle", {
+        type: t(currentLocale, "postType.translations_languages"),
+      })
+    : t(currentLocale, "admin.content.editTitle", {
+        type: t(currentLocale, "postType.translations_languages"),
+      });
+
+let editTranslation: {
+  id: number;
+  namespace: string;
+  key: string;
+  locale_id: number | null;
+  translation_value: string | null;
+} | null = null;
+
+if (action === "edit" && idParam) {
+  const idParamNum = parseInt(idParam, 10);
+  if (!isNaN(idParamNum)) {
+    // Primeiro, tentar buscar em translations_languages (caso o ID seja dessa tabela)
+    const [translationLangRow] = await db
+      .select({
+        id: translationsLanguagesTable.id,
+        id_translations: translationsLanguagesTable.id_translations,
+        id_locale_code: translationsLanguagesTable.id_locale_code,
+        value: translationsLanguagesTable.value,
+      })
+      .from(translationsLanguagesTable)
+      .where(eq(translationsLanguagesTable.id, idParamNum))
+      .limit(1);
+
+    if (translationLangRow) {
+      // Se encontrou em translations_languages, buscar o registro relacionado em translations
+      const [translationRow] = await db
+        .select({
+          id: translationsTable.id,
+          namespace: translationsTable.namespace,
+          key: translationsTable.key,
+        })
+        .from(translationsTable)
+        .where(eq(translationsTable.id, translationLangRow.id_translations))
+        .limit(1);
+
+      if (translationRow) {
+        editTranslation = {
+          id: translationRow.id,
+          namespace: translationRow.namespace,
+          key: translationRow.key,
+          locale_id: translationLangRow.id_locale_code,
+          translation_value: translationLangRow.value,
+        };
+      }
+    } else {
+      // Se não encontrou em translations_languages, tentar buscar diretamente em translations
+      const [row] = await db
+        .select({
+          id: translationsTable.id,
+          namespace: translationsTable.namespace,
+          key: translationsTable.key,
+        })
+        .from(translationsTable)
+        .where(eq(translationsTable.id, idParamNum))
+        .limit(1);
+      
+      if (row) {
+        // Buscar locale_id e value da primeira tradução_language relacionada (se existir)
+        const [translationLang] = await db
+          .select({
+            id_locale_code: translationsLanguagesTable.id_locale_code,
+            value: translationsLanguagesTable.value,
+          })
+          .from(translationsLanguagesTable)
+          .where(eq(translationsLanguagesTable.id_translations, row.id))
+          .limit(1);
+
+        editTranslation = {
+          id: row.id,
+          namespace: row.namespace,
+          key: row.key,
+          locale_id: translationLang?.id_locale_code ?? null,
+          translation_value: translationLang?.value ?? null,
+        };
+      }
+    }
+  }
+}
+
+// Buscar todos os locales
+const allLocales = await db
+  .select({
+    id: localesTable.id,
+    language: localesTable.language,
+    hello_world: localesTable.hello_world,
+    locale_code: localesTable.locale_code,
+    country: localesTable.country,
+  })
+  .from(localesTable)
+  .orderBy(localesTable.language);
+
+const initialNamespace = editTranslation?.namespace ?? "";
+const initialKey = editTranslation?.key ?? "";
+const initialLocaleId = editTranslation?.locale_id ?? null;
+const initialTranslationValue = editTranslation?.translation_value ?? "";
+---
+
+<AdminLayout title={pageTitle} locale={locale} menuItems={menuItems}>
+  <div slot="header-actions" class="flex gap-4">
+    <span class="text-sm text-base-content/70">{currentUser.email}</span>
+  </div>
+
+  <script
+    define:vars={{
+      initialNamespace,
+      initialKey,
+      initialLocaleId,
+      initialTranslationValue,
+      localesData: JSON.stringify(allLocales),
+    }}
+  >
+    document.addEventListener("alpine:init", () => {
+      window.Alpine.data("translationForm", () => {
+        const locales = JSON.parse(localesData);
+        return {
+          namespace: initialNamespace,
+          key: initialKey,
+          translation: initialTranslationValue,
+          selectedLocaleId: initialLocaleId,
+          localeSearch: "",
+          localeDropdownOpen: false,
+          locales: locales,
+          get filteredLocales() {
+            if (!this.localeSearch.trim()) return this.locales;
+            const search = this.localeSearch.toLowerCase();
+            return this.locales.filter(
+              (locale) =>
+                locale.language.toLowerCase().includes(search) ||
+                locale.country.toLowerCase().includes(search) ||
+                locale.locale_code.toLowerCase().includes(search) ||
+                locale.hello_world.toLowerCase().includes(search),
+            );
+          },
+          get selectedLocale() {
+            return this.locales.find((l) => l.id === this.selectedLocaleId);
+          },
+          selectLocale(localeId) {
+            this.selectedLocaleId = localeId;
+            this.localeSearch = "";
+            this.localeDropdownOpen = false;
+          },
+          toggleDropdown() {
+            this.localeDropdownOpen = !this.localeDropdownOpen;
+          },
+          getFlagEmoji(localeCode) {
+            const flagMap = {
+              en: "🇺🇸",
+              "en-gb": "🇬🇧",
+              "pt-br": "🇧🇷",
+              pt_br: "🇧🇷",
+              "pt-pt": "🇵🇹",
+              es: "🇪🇸",
+              "es-mx": "🇲🇽",
+              fr: "🇫🇷",
+              "fr-ca": "🇨🇦",
+              de: "🇩🇪",
+              it: "🇮🇹",
+              ja: "🇯🇵",
+              "zh-cn": "🇨🇳",
+              "zh-tw": "🇹🇼",
+              ru: "🇷🇺",
+              ko: "🇰🇷",
+              ar: "🇸🇦",
+              nl: "🇳🇱",
+              pl: "🇵🇱",
+              tr: "🇹🇷",
+              vi: "🇻🇳",
+              hi: "🇮🇳",
+              th: "🇹🇭",
+              id: "🇮🇩",
+              he: "🇮🇱",
+              el: "🇬🇷",
+              sv: "🇸🇪",
+              no: "🇳🇴",
+              da: "🇩🇰",
+              fi: "🇫🇮",
+              cs: "🇨🇿",
+              ro: "🇷🇴",
+              hu: "🇭🇺",
+              uk: "🇺🇦",
+              bg: "🇧🇬",
+              hr: "🇭🇷",
+              sr: "🇷🇸",
+              sk: "🇸🇰",
+              sl: "🇸🇮",
+            };
+            const code = localeCode.toLowerCase().replace(/_/g, "-");
+            const codeParts = code.split("-");
+            const baseCode = codeParts[0] || code;
+            return flagMap[code] || flagMap[baseCode] || "🌐";
+          },
+        };
+      });
+    });
+  </script>
+
+  <div class="p-6 max-w-2xl">
+    <form
+      method="post"
+      action="/api/translations"
+      x-data="translationForm"
+      class="flex flex-col gap-4 translation-form"
+    >
+      <input type="hidden" name="action" value={action} />
+      <input type="hidden" name="locale" value={locale} />
+      {
+        editTranslation && (
+          <input type="hidden" name="id" value={editTranslation.id} />
+        )
+      }
+
+      <div class="form-control">
+        <label for="translation-namespace" class="label">
+          <span class="label-text">Namespace</span>
+        </label>
+        <input
+          type="text"
+          id="translation-namespace"
+          name="namespace"
+          required
+          class="input input-bordered w-full"
+          placeholder="admin.menu"
+          x-model="namespace"
+        />
+        <p class="text-xs text-base-content/50 mt-1">
+          Namespace da tradução (ex: admin.menu, admin.content)
+        </p>
+      </div>
+
+      <div class="form-control">
+        <label for="translation-key" class="label">
+          <span class="label-text">Key</span>
+        </label>
+        <input
+          type="text"
+          id="translation-key"
+          name="key"
+          required
+          class="input input-bordered w-full"
+          placeholder="dashboard"
+          x-model="key"
+        />
+        <p class="text-xs text-base-content/50 mt-1">
+          Chave da tradução (ex: dashboard, saveNew)
+        </p>
+      </div>
+
+      <div class="form-control">
+        <label for="translation-value" class="label">
+          <span class="label-text">Translation</span>
+        </label>
+        <input
+          type="text"
+          id="translation-value"
+          name="translation"
+          required
+          class="input input-bordered w-full"
+          placeholder="Texto da tradução"
+          x-model="translation"
+        />
+        <p class="text-xs text-base-content/50 mt-1">
+          Texto da tradução no idioma selecionado
+        </p>
+      </div>
+
+      <div class="form-control">
+        <label for="translation-locale" class="label">
+          <span class="label-text">Language</span>
+        </label>
+        <div
+          class="dropdown w-full"
+          :class="{ 'dropdown-open': localeDropdownOpen }"
+          x-on:click.outside="localeDropdownOpen = false"
+        >
+          <input
+            type="hidden"
+            name="locale_id"
+            x-model="selectedLocaleId"
+            required
+          />
+          <label
+            tabindex="0"
+            class="input input-bordered w-full flex items-center cursor-pointer"
+            @click="toggleDropdown()"
+          >
+            <span
+              x-show="selectedLocale"
+              class="flex-1 flex items-center gap-2"
+            >
+              <span
+                x-text="selectedLocale ? getFlagEmoji(selectedLocale.locale_code) : ''"
+              ></span>
+              <span
+                x-text="selectedLocale ? selectedLocale.language : 'Selecione um idioma'"
+              ></span>
+            </span>
+            <span x-show="!selectedLocale" class="flex-1 text-base-content/50">
+              Selecione um idioma
+            </span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5 shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </label>
+          <div
+            tabindex="0"
+            class="dropdown-content bg-base-100 rounded-box z-10 w-full border border-base-300 p-2 shadow-lg mt-1 max-h-96 overflow-y-auto"
+            x-show="localeDropdownOpen"
+            x-transition
+          >
+            <div class="w-full mb-2">
+              <input
+                type="text"
+                placeholder="Buscar idioma..."
+                class="input input-bordered input-sm w-full"
+                x-model="localeSearch"
+                @click.stop
+                @keydown.escape="localeDropdownOpen = false"
+              />
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <template x-for="locale in filteredLocales" :key="locale.id">
+                <a
+                  href="#"
+                  @click.prevent="selectLocale(locale.id)"
+                  class="grid grid-cols-[auto_1fr] gap-2 py-2 px-2 items-center rounded hover:bg-base-200 transition-colors"
+                >
+                  <span
+                    class="text-2xl shrink-0"
+                    x-text="getFlagEmoji(locale.locale_code)"></span>
+                  <div class="flex flex-col flex-1 min-w-0">
+                    <span class="font-medium text-sm" x-text="locale.language"
+                    ></span>
+                    <span
+                      class="text-xs text-base-content/60"
+                      x-text="locale.hello_world"></span>
+                  </div>
+                </a>
+              </template>
+            </div>
+            <div
+              x-show="filteredLocales.length === 0"
+              class="text-base-content/50 text-sm py-2 px-4 text-center col-span-2"
+            >
+              Nenhum idioma encontrado
+            </div>
+          </div>
+        </div>
+        <p class="text-xs text-base-content/50 mt-1">
+          Selecione o idioma para esta tradução
+        </p>
+      </div>
+
+      <div class="flex gap-2 mt-2">
+        <button type="submit" class="btn btn-primary">
+          {
+            action === "new"
+              ? t(currentLocale, "admin.content.saveNew")
+              : t(currentLocale, "admin.content.saveEdit")
+          }
+        </button>
+        <a
+          href={`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`}
+          class="btn btn-ghost"
+        >
+          {t(currentLocale, "admin.content.cancel")}
+        </a>
+      </div>
+    </form>
+  </div>
+</AdminLayout>
+
+<script>
+  document.querySelectorAll("form.translation-form").forEach((form) => {
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const formData = new FormData(form as HTMLFormElement);
+
+      try {
+        const response = await fetch("/api/translations", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          let errorMessage =
+            "Ocorreu um erro ao salvar. Por favor, tente novamente.";
+          try {
+            const errorData = (await response.json()) as { error?: string };
+            if (errorData.error) {
+              errorMessage = errorData.error;
+            }
+          } catch {
+            // Ignorar erro de parse
+          }
+          alert(errorMessage);
+          return;
+        }
+
+        // Redirecionar após sucesso
+        const locale = formData.get("locale");
+        window.location.href = `/${locale}/admin/list?type=translations_languages&limit=10&page=1`;
+      } catch (error) {
+        alert("Erro de conexão. Verifique sua internet e tente novamente.");
+      }
+    });
+  });
+</script>

@@ -27,9 +27,6 @@ const { locale } = Astro.props;
       id="taxonomy-add-form"
       method="post"
       action="/api/taxonomies"
-      hx-post="/api/taxonomies"
-      hx-target="#taxonomy-modal-error-container"
-      hx-swap="innerHTML"
       class="flex flex-col gap-3 pt-6"
     >
       <input type="hidden" name="parent_id" id="taxonomy-form-parent-id" value="" />
@@ -57,23 +54,26 @@ const { locale } = Astro.props;
 </div>
 
 <script>
-  // Handler para o evento taxonomy-added
+  interface TaxonomyApiResponse {
+    success?: boolean;
+    taxonomy?: { id: number; name: string; slug: string };
+  }
+
+  // Função auxiliar para escapar HTML (escopo local)
+  function escapeHtml(text: string): string {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // Handler para o evento taxonomy-added: atualiza a lista no accordion e fecha o modal
   function handleTaxonomyAdded(event: Event) {
     const customEvent = event as CustomEvent<{ id: number; name: string; slug: string; parent_id: number | null }>;
     const { id, name, parent_id } = customEvent.detail;
-    
-    // Função auxiliar para escapar HTML (escopo local)
-    const escapeHtml = (text: string): string => {
-      const div = document.createElement("div");
-      div.textContent = text;
-      return div.innerHTML;
-    };
-    
-    // Encontra a lista correspondente ao parent_id
+
     const list = document.getElementById(`taxonomy-list-${parent_id}`);
     if (!list) return;
-    
-    // Cria o novo item da lista
+
     const li = document.createElement("li");
     li.innerHTML = `
       <label class="label cursor-pointer justify-start gap-2 py-1">
@@ -86,15 +86,11 @@ const { locale } = Astro.props;
         <span class="label-text">${escapeHtml(name)}</span>
       </label>
     `;
-    
-    // Insere o novo item na lista (mantém ordem alfabética seria ideal, mas por simplicidade adiciona no final)
     list.appendChild(li);
-    
-    // Fecha o modal
+
     const modalToggle = document.getElementById("taxonomy-add-modal-toggle") as HTMLInputElement;
     if (modalToggle) modalToggle.checked = false;
-    
-    // Limpa o formulário
+
     const form = document.getElementById("taxonomy-add-form") as HTMLFormElement;
     if (form) {
       form.reset();
@@ -102,42 +98,57 @@ const { locale } = Astro.props;
       if (errorContainer) errorContainer.innerHTML = "";
     }
   }
-  
-  // Escuta o evento taxonomy-added disparado pela API quando um novo termo é criado
+
   document.body.addEventListener("taxonomy-added", handleTaxonomyAdded);
-  
-  // Intercepta a resposta do HTMX para tratar JSON e HTML separadamente
-  document.getElementById("taxonomy-add-form")?.addEventListener("htmx:after-request", (event: any) => {
-    const xhr = event.detail.xhr;
-    if (!xhr) return;
-    
-    const contentType = xhr.getResponseHeader("Content-Type") || "";
-    
-    // Se a resposta for JSON (sucesso), limpa o container de erro
-    // O evento taxonomy-added já foi disparado pelo header HX-Trigger
-    if (contentType.includes("application/json")) {
-      try {
-        const data = JSON.parse(xhr.responseText);
+
+  // Submit via fetch para não redirecionar; em sucesso dispara taxonomy-added e fecha o modal
+  const form = document.getElementById("taxonomy-add-form") as HTMLFormElement;
+  form?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const target = e.currentTarget as HTMLFormElement;
+    const action = target.getAttribute("action") || "/api/taxonomies";
+    const errorContainer = document.getElementById("taxonomy-modal-error-container");
+    const submitBtn = target.querySelector('button[type="submit"]') as HTMLButtonElement;
+    const parentIdInput = document.getElementById("taxonomy-form-parent-id") as HTMLInputElement;
+    const parentIdVal = parentIdInput?.value?.trim();
+    const parent_id =
+      parentIdVal && /^\d+$/.test(parentIdVal) ? parseInt(parentIdVal, 10) : null;
+
+    if (submitBtn) submitBtn.disabled = true;
+    if (errorContainer) errorContainer.innerHTML = "";
+
+    try {
+      const res = await fetch(action, {
+        method: "POST",
+        body: new FormData(target),
+      });
+      const contentType = res.headers.get("Content-Type") || "";
+
+      if (contentType.includes("application/json")) {
+        const data = (await res.json()) as TaxonomyApiResponse;
         if (data.success && data.taxonomy) {
-          const errorContainer = document.getElementById("taxonomy-modal-error-container");
-          if (errorContainer) errorContainer.innerHTML = "";
+          document.body.dispatchEvent(
+            new CustomEvent("taxonomy-added", {
+              detail: {
+                id: data.taxonomy.id,
+                name: data.taxonomy.name,
+                slug: data.taxonomy.slug,
+                parent_id,
+              },
+            })
+          );
+          return;
         }
-      } catch (e) {
-        // Se não conseguir fazer parse do JSON, pode ser que seja HTML de erro
-        // Nesse caso, o HTMX já fez o swap normalmente
       }
-    }
-  });
-  
-  // Previne swap quando a resposta for JSON
-  document.getElementById("taxonomy-add-form")?.addEventListener("htmx:before-swap", (event: any) => {
-    const xhr = event.detail.xhr;
-    if (!xhr) return;
-    
-    const contentType = xhr.getResponseHeader("Content-Type") || "";
-    if (contentType.includes("application/json")) {
-      // Cancela o swap para respostas JSON
-      event.detail.shouldSwap = false;
+
+      const html = await res.text();
+      if (errorContainer) errorContainer.innerHTML = html;
+    } catch (err) {
+      if (errorContainer) {
+        errorContainer.innerHTML = '<p class="text-error text-sm mt-2">Erro de conexão.</p>';
+      }
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
     }
   });
 </script>

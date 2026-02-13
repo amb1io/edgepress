@@ -50,4 +50,26 @@ describe("taxonomies", () => {
     expect(inserted).toBeDefined();
     expect(inserted?.description).toBe("Design-related posts");
   });
+
+  it("should insert a taxonomy with id_locale_code null and allow selecting it", async () => {
+    const [inserted] = await db
+      .insert(taxonomies)
+      .values({
+        name: "Unlocalized",
+        slug: "unlocalized",
+        type: "tag",
+        id_locale_code: null,
+      })
+      .returning();
+
+    expect(inserted).toBeDefined();
+    expect(inserted?.id_locale_code).toBeNull();
+
+    const [selected] = await db
+      .select({ id_locale_code: taxonomies.id_locale_code })
+      .from(taxonomies)
+      .where(eq(taxonomies.slug, "unlocalized"));
+
+    expect(selected?.id_locale_code).toBeNull();
+  });
 });

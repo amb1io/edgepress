@@ -50,9 +50,35 @@ CREATE TABLE "posts_new" (
   "updated_at" INTEGER
 );
 
--- Copiar dados da tabela antiga
-INSERT INTO "posts_new" 
-SELECT * FROM "posts";
+-- Copiar dados da tabela antiga (especificar colunas explicitamente para evitar conflito com parent_id)
+INSERT INTO "posts_new" (
+  "id",
+  "post_type_id",
+  "author_id",
+  "title",
+  "slug",
+  "excerpt",
+  "body",
+  "status",
+  "meta_values",
+  "published_at",
+  "created_at",
+  "updated_at"
+)
+SELECT 
+  "id",
+  "post_type_id",
+  "author_id",
+  "title",
+  "slug",
+  "excerpt",
+  "body",
+  "status",
+  "meta_values",
+  "published_at",
+  "created_at",
+  "updated_at"
+FROM "posts";
 
 -- Dropar tabela antiga
 DROP TABLE "posts";
