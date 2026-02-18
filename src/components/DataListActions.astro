@@ -7,8 +7,10 @@ export interface DataListActionsProps {
   editLink: string;
   deletePath?: string;
   deleteConfirm: string;
+  duplicatePath?: string;
   editLabel?: string;
   deleteLabel?: string;
+  duplicateLabel?: string;
   actionsLabel?: string;
 }
 
@@ -16,8 +18,10 @@ const {
   editLink,
   deletePath,
   deleteConfirm,
+  duplicatePath,
   editLabel = "Editar",
   deleteLabel = "Deletar",
+  duplicateLabel = "Duplicar",
   actionsLabel = "Actions",
 } = Astro.props;
 ---
@@ -36,6 +40,19 @@ const {
       </a>
     </li>
     {
+      duplicatePath && (
+        <li>
+          <button
+            type="button"
+            class="text-sm w-full text-left"
+            data-duplicate-path={duplicatePath}
+          >
+            {duplicateLabel}
+          </button>
+        </li>
+      )
+    }
+    {
       deletePath && (
         <li>
           <button
@@ -53,42 +70,92 @@ const {
 </div>
 
 <script>
-  // Handler para botões de delete que funciona com ou sem HTMX
+  // Handler para botões de delete e duplicate
   document.addEventListener("DOMContentLoaded", function() {
-    document.body.addEventListener("click", function(ev) {
-      const button = ev.target?.closest?.("button[data-delete-path]");
-      if (!button) return;
+    document.body.addEventListener("click", function(ev: Event) {
+      const target = ev.target;
+      if (!(target instanceof Element)) return;
       
-      const deletePath = button.getAttribute("data-delete-path");
-      const deleteConfirm = button.getAttribute("data-delete-confirm");
-      
-      if (!deletePath) return;
-      
-      ev.preventDefault();
-      ev.stopPropagation();
-      
-      // Mostrar confirmação
-      if (deleteConfirm && !window.confirm(deleteConfirm)) {
+      // Handler para delete
+      const deleteButton = target.closest("button[data-delete-path]") as HTMLButtonElement | null;
+      if (deleteButton) {
+        const deletePath = deleteButton.getAttribute("data-delete-path");
+        const deleteConfirm = deleteButton.getAttribute("data-delete-confirm");
+        
+        if (!deletePath) return;
+        
+        ev.preventDefault();
+        ev.stopPropagation();
+        
+        // Mostrar confirmação
+        if (deleteConfirm && !window.confirm(deleteConfirm)) {
+          return;
+        }
+        
+        // Encontrar a linha da tabela
+        const tr = deleteButton.closest("tr");
+        
+        // Fazer a requisição DELETE
+        fetch(deletePath, { method: "DELETE" })
+          .then(function(res) {
+            if (res.ok && tr && tr.parentNode) {
+              // Adicionar classe de fade-out antes de remover
+              tr.classList.add("data-list-row-fade-out");
+              setTimeout(function() {
+                tr.remove();
+              }, 300);
+            }
+          })
+          .catch(function(err) {
+            console.error("Erro ao deletar:", err);
+          });
         return;
       }
-      
-      // Encontrar a linha da tabela
-      const tr = button.closest("tr");
-      
-      // Fazer a requisição DELETE
-      fetch(deletePath, { method: "DELETE" })
-        .then(function(res) {
-          if (res.ok && tr && tr.parentNode) {
-            // Adicionar classe de fade-out antes de remover
-            tr.classList.add("data-list-row-fade-out");
-            setTimeout(function() {
-              tr.remove();
-            }, 300);
-          }
-        })
-        .catch(function(err) {
-          console.error("Erro ao deletar:", err);
-        });
+
+      // Handler para duplicate
+      const duplicateButton = target.closest("button[data-duplicate-path]") as HTMLButtonElement | null;
+      if (duplicateButton) {
+        const duplicatePath = duplicateButton.getAttribute("data-duplicate-path");
+        
+        if (!duplicatePath) return;
+        
+        ev.preventDefault();
+        ev.stopPropagation();
+        
+        // Desabilitar o botão durante o processamento
+        const btn = duplicateButton as HTMLButtonElement;
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = "Duplicando...";
+        
+        // Fazer a requisição POST para duplicar
+        fetch(duplicatePath, { method: "POST" })
+          .then(function(res) {
+            return res.json();
+          })
+          .then(function(data: unknown) {
+            const result = data as { success?: boolean; error?: string };
+            if (result.success) {
+              // Recarregar a página para mostrar o novo registro
+              window.location.reload();
+            } else {
+              alert("Erro ao duplicar: " + (result.error || "Erro desconhecido"));
+              btn.disabled = false;
+              if (originalText !== null) {
+                btn.textContent = originalText;
+              }
+            }
+          })
+          .catch(function(err) {
+            console.error("Erro ao duplicar:", err);
+            alert("Erro ao duplicar o registro");
+            btn.disabled = false;
+            if (originalText !== null) {
+              btn.textContent = originalText;
+            }
+          });
+        return;
+      }
     });
   });
 </script>

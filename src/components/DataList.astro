@@ -15,6 +15,7 @@ export interface DataListActionConfig {
   editLinkTemplate: string;
   deletePathTemplate: string;
   deleteConfirm: string;
+  duplicatePathTemplate?: string;
 }
 
 interface Props {
@@ -41,6 +42,8 @@ interface Props {
   editLabel?: string;
   /** Label do link Deletar. */
   deleteLabel?: string;
+  /** Label do botão Duplicar. */
+  duplicateLabel?: string;
   /** Paginação: quando definido e totalPages > 1, renderiza controles abaixo da tabela. */
   pagination?: {
     page: number;
@@ -70,6 +73,7 @@ const {
   actionsColumnLabel = "Ações",
   editLabel = "Editar",
   deleteLabel = "Deletar",
+  duplicateLabel = "Duplicar",
   pagination,
   previousLabel = "Anterior",
   nextLabel = "Próxima",
@@ -144,8 +148,10 @@ function expandTemplate(template: string, item: Record<string, unknown>): string
                 editLink={expandTemplate(actionConfig.editLinkTemplate, item)}
                 deletePath={actionConfig.deletePathTemplate ? expandTemplate(actionConfig.deletePathTemplate, item) : undefined}
                 deleteConfirm={actionConfig.deleteConfirm}
+                duplicatePath={actionConfig.duplicatePathTemplate ? expandTemplate(actionConfig.duplicatePathTemplate, item) : undefined}
                 editLabel={editLabel}
                 deleteLabel={deleteLabel}
+                duplicateLabel={duplicateLabel}
               />
             </td>
           )}
