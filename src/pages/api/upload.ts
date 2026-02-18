@@ -20,8 +20,16 @@ const REJECTED_EXTENSIONS = new Set([
   ".scss", ".less", ".json", ".xml", ".yaml", ".yml", ".md", ".lock",
 ]);
 
+const ALLOWED_IMAGE_EXTENSIONS = new Set([
+  ".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".svg", ".bmp", ".ico"
+]);
+
 function isAllowedMime(mime: string): boolean {
   return mime.startsWith("image/") || mime.startsWith("audio/") || mime === "application/pdf";
+}
+
+function isAllowedImageExtension(ext: string): boolean {
+  return ALLOWED_IMAGE_EXTENSIONS.has(ext.toLowerCase());
 }
 
 function getExtension(name: string): string {
@@ -120,18 +128,35 @@ export const POST: APIRoute = async ({ request, locals }) => {
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
-  if (!isAllowedMime(mimeType)) {
+  
+  // Se o MIME type não foi detectado mas a extensão é de imagem permitida, aceitar
+  let finalMimeType = mimeType;
+  if (mimeType === "application/octet-stream" && isAllowedImageExtension(ext)) {
+    // Mapear extensões de imagem para seus MIME types corretos quando não detectados
+    const imageMimeMap: Record<string, string> = {
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".png": "image/png",
+      ".gif": "image/gif",
+      ".webp": "image/webp",
+      ".avif": "image/avif",
+      ".svg": "image/svg+xml",
+      ".bmp": "image/bmp",
+      ".ico": "image/x-icon",
+    };
+    finalMimeType = imageMimeMap[ext.toLowerCase()] || mimeType;
+  } else if (!isAllowedMime(mimeType)) {
     return new Response(
       JSON.stringify({ error: "Tipo de arquivo não permitido. Use imagens, áudio ou PDF." }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
 
-  const key = buildKey(filename, mimeType);
+  const key = buildKey(filename, finalMimeType);
 
   try {
     await bucket.put(key, file.stream(), {
-      httpMetadata: { contentType: mimeType },
+      httpMetadata: { contentType: finalMimeType },
     });
   } catch (err) {
     console.error("R2 put error:", err);
@@ -143,7 +168,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   const path = `/${key}`;
   return new Response(
-    JSON.stringify({ key, path, mimeType, filename }),
+    JSON.stringify({ key, path, mimeType: finalMimeType, filename }),
     { status: 200, headers: { "Content-Type": "application/json" } }
   );
 };

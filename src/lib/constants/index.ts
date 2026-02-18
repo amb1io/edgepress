@@ -28,7 +28,7 @@ export const DEFAULT_PAGINATION = {
 // Upload constants
 export const UPLOAD_CONSTANTS = {
   MAX_FILE_SIZE: 20 * 1024 * 1024, // 20MB
-  ALLOWED_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+  ALLOWED_IMAGE_TYPES: ['image/*'],
   ALLOWED_DOCUMENT_TYPES: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
 } as const;
 

@@ -74,7 +74,7 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
     autoProceed,
     restrictions: {
       maxFileSize: 20 * 1024 * 1024,
-      allowedFileTypes: ["image/*", "audio/*", "application/pdf"],
+      allowedFileTypes: ["image/*", "audio/*", "application/pdf", ".avif", ".webp"],
       maxNumberOfFiles: maxFiles,
     },
   });
