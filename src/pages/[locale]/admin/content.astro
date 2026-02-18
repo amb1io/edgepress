@@ -317,16 +317,23 @@ if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate) {
           if (cfPost.meta_values) {
             try {
               const meta = JSON.parse(cfPost.meta_values) as {
-                fields?: Array<{ name?: string; value?: string }>;
+                fields?: Array<{ name?: string; value?: string; type?: string }>;
                 template?: boolean;
+                field_type?: string[];
               };
               if (meta.fields && Array.isArray(meta.fields)) {
-                rows = meta.fields.map((field) => {
+                const fieldTypeList = Array.isArray(meta.field_type) ? meta.field_type : [];
+                rows = meta.fields.map((field, i) => {
                   rowIdCounter += 1;
+                  const rowType =
+                    field.type === "file"
+                      ? "file"
+                      : (fieldTypeList[i] === "upload" ? "file" : "text");
                   return {
                     id: rowIdCounter,
                     name: typeof field.name === "string" ? field.name : "",
                     value: typeof field.value === "string" ? field.value : "",
+                    type: rowType,
                   };
                 });
               }
@@ -338,7 +345,7 @@ if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate) {
           // Se não tiver rows, criar uma linha vazia
           if (rows.length === 0) {
             rowIdCounter += 1;
-            rows = [{ id: rowIdCounter, name: "", value: "" }];
+            rows = [{ id: rowIdCounter, name: "", value: "", type: "text" }];
           }
           return {
             id: cfPost.id,
@@ -692,6 +699,29 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
         if (wrapperEl && window.Alpine) {
           const wrapperData = window.Alpine.$data(wrapperEl);
           if (wrapperData && Array.isArray(wrapperData.customFields)) {
+            // Upload de arquivos em linhas tipo "file": enviar para /api/upload e preencher row.value com o path
+            const fileInputs = wrapperEl.querySelectorAll('input[type="file"][data-item-id][data-row-id]');
+            for (const input of fileInputs) {
+              const file = input.files && input.files[0];
+              if (!file) continue;
+              const itemId = Number(input.getAttribute("data-item-id"));
+              const rowId = Number(input.getAttribute("data-row-id"));
+              try {
+                const uploadFd = new FormData();
+                uploadFd.set("file", file);
+                const uploadRes = await fetch("/api/upload", { method: "POST", body: uploadFd });
+                if (!uploadRes.ok) continue;
+                const uploadJson = await uploadRes.json();
+                const path = uploadJson.path || "";
+                if (path) {
+                  const item = wrapperData.customFields.find((f) => f.id === itemId);
+                  if (item && item.rows) {
+                    const row = item.rows.find((r) => r.id === rowId);
+                    if (row) row.value = path;
+                  }
+                }
+              } catch (_) {}
+            }
             // Filtrar campos e rows marcadas para deleção
             const customFieldsToSave = wrapperData.customFields
               .filter((item) => !item._deleted) // Remove campos marcados para deleção

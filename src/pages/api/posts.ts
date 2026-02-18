@@ -366,7 +366,7 @@ export async function POST({
             const customFieldsItems = JSON.parse(customFieldsDataRaw) as Array<{
               id?: number;
               title: string;
-              rows: Array<{ id?: number; name?: string; value: string }>;
+              rows: Array<{ id?: number; name?: string; value: string; type?: string }>;
               template?: boolean;
             }>;
             if (Array.isArray(customFieldsItems) && customFieldsItems.length > 0) {
@@ -385,13 +385,24 @@ export async function POST({
               for (const item of customFieldsItems) {
                 const slug = slugify(item.title) || "custom-field";
                 const template = item.template === true;
+                const rows = item.rows ?? [];
+                const fieldTypeSet = new Set<string>();
+                rows.forEach((r) => {
+                  fieldTypeSet.add(r.type === "file" ? "upload" : "text");
+                });
+                const field_type = Array.from(fieldTypeSet);
                 const metaValuesStr =
-                  item.rows?.length > 0
+                  rows.length > 0
                     ? JSON.stringify({
-                        fields: item.rows.map((r) => ({ name: r.name ?? "", value: r.value ?? "" })),
+                        fields: rows.map((r) => ({
+                          name: r.name ?? "",
+                          value: r.value ?? "",
+                          type: r.type === "file" ? "file" : "text",
+                        })),
                         template,
+                        field_type,
                       })
-                    : JSON.stringify({ template });
+                    : JSON.stringify({ template, field_type });
                 await createPost(db, {
                   post_type_id: customFieldsTypeId,
                   parent_id: postId,
