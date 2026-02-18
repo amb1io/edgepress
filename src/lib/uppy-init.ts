@@ -38,6 +38,8 @@ export interface UppyInitOptions {
   eventName: string;
   hideUploadButton: boolean;
   clearOnComplete: boolean;
+  /** Nome do evento disparado ao concluir (ex.: ao clicar "Concluído" no dashboard) */
+  completeEventName?: string;
 }
 
 export function initUppyInstance(options: UppyInitOptions): Uppy | null {
@@ -49,6 +51,7 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
     eventName,
     hideUploadButton,
     clearOnComplete,
+    completeEventName,
   } = options;
 
   const target = document.getElementById(containerId);
@@ -147,6 +150,9 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
   });
 
   uppy.on("complete", () => {
+    if (completeEventName) {
+      window.dispatchEvent(new CustomEvent(completeEventName, { detail: { containerId } }));
+    }
     if (clearOnComplete) {
       setTimeout(() => uppy.cancelAll(), 100);
     }

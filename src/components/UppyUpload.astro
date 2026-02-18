@@ -24,6 +24,8 @@ export interface Props {
   clearOnComplete?: boolean;
   /** Classe CSS adicional para o container */
   containerClass?: string;
+  /** Nome do evento disparado ao concluir (fechar painel após "Concluído") */
+  completeEventName?: string;
 }
 
 const {
@@ -35,6 +37,7 @@ const {
   hideUploadButton = mode === "edit",
   clearOnComplete = mode === "new",
   containerClass = "",
+  completeEventName,
 } = Astro.props;
 
 const currentLocale = localeProp;
@@ -50,6 +53,7 @@ const currentLocale = localeProp;
   data-event-name={eventName}
   data-hide-upload-button={hideUploadButton}
   data-clear-on-complete={clearOnComplete}
+  data-complete-event-name={completeEventName ?? ""}
 ></div>
 
 <style>
@@ -87,6 +91,7 @@ const currentLocale = localeProp;
       const eventName = element.dataset["eventName"] || "attachment-uploaded";
       const hideUploadButton = element.dataset["hideUploadButton"] === "true";
       const clearOnComplete = element.dataset["clearOnComplete"] === "true";
+      const completeEventName = element.dataset["completeEventName"] || undefined;
 
       initUppyInstance({
         containerId,
@@ -96,6 +101,7 @@ const currentLocale = localeProp;
         eventName,
         hideUploadButton,
         clearOnComplete,
+        ...(completeEventName ? { completeEventName } : {}),
       });
     });
   }
