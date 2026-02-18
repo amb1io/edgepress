@@ -25,15 +25,26 @@ import {
 } from "../../lib/utils/form-data.ts";
 
 // Utils - Validation & Parsing
-import { normalizePostStatus, parseNumericId } from "../../lib/utils/validation.ts";
+import {
+  normalizePostStatus,
+  parseNumericId,
+} from "../../lib/utils/validation.ts";
 import { stringifyMetaValues } from "../../lib/utils/meta-parser.ts";
 
 // Utils - HTTP & Errors
 import { handleApiError } from "../../lib/utils/error-handler.ts";
-import { badRequestResponse, jsonResponse, redirectResponse } from "../../lib/utils/http-responses.ts";
+import {
+  badRequestResponse,
+  jsonResponse,
+  redirectResponse,
+} from "../../lib/utils/http-responses.ts";
 
 // Utils - URLs
-import { buildAbsoluteUrl, buildContentUrl, buildListUrl } from "../../lib/utils/url.ts";
+import {
+  buildAbsoluteUrl,
+  buildContentUrl,
+  buildListUrl,
+} from "../../lib/utils/url.ts";
 
 // Utils - Slug
 import { slugify } from "../../lib/slugify.ts";
@@ -49,16 +60,16 @@ export const prerender = false;
 /**
  * POST /api/posts
  * Cria ou atualiza um post
- * 
+ *
  * @description
  * - Criação: action="new" sem id
  * - Edição: action="edit" com id
  * - Suporta post_type: post, page, attachment, etc.
  * - Gerencia taxonomias, meta_values e attachments
- * 
+ *
  * @param {Request} request - Request com FormData contendo os dados do post
  * @returns {Promise<Response>} - Redirect para lista ou JSON com {id}
- * 
+ *
  * @example FormData esperado:
  * - post_type: string (obrigatório)
  * - action: "new" | "edit" (obrigatório)
@@ -102,49 +113,63 @@ export async function POST({
     // Extrair author_id e aplicar regra de privilégio (autor só pode ser ele mesmo)
     const authorIdRaw = formData.get("author_id");
     const requestedAuthorId =
-      typeof authorIdRaw === "string" && authorIdRaw.trim() ? authorIdRaw.trim() : null;
+      typeof authorIdRaw === "string" && authorIdRaw.trim()
+        ? authorIdRaw.trim()
+        : null;
     const author_id = resolveAuthorIdForRole(
       requestedAuthorId,
       currentUser.id,
-      currentUser.role ?? 3
+      currentUser.role ?? 3,
     );
-    
+
     // Extrair IDs de taxonomias
     const termIds = getNumberArray(formData, "taxonomy_terms[]", true);
-    
+
     // Extrair ID do thumbnail
-    const thumbnailAttachmentId = getOptionalNumber(formData, "thumbnail_attachment_id");
-    
+    const thumbnailAttachmentId = getOptionalNumber(
+      formData,
+      "thumbnail_attachment_id",
+    );
+
     // Extrair IDs de attachments do blocknote
-    const blocknoteAttachmentIds = getNumberArray(formData, "blocknote_attachment_ids[]", true);
-    
+    const blocknoteAttachmentIds = getNumberArray(
+      formData,
+      "blocknote_attachment_ids[]",
+      true,
+    );
+
     // Extrair parent_id (usado quando criar attachments filhos)
     const parentId = getOptionalNumber(formData, "parent_id");
-    
+
     // Extrair meta_values customizados
     const metaValues = getFieldsWithPrefix(formData, "meta_", true);
-    
+
     // Extrair id_locale_code do formulário (se selecionado no dropdown)
     const localeCodeIdRaw = formData.get("id_locale_code");
     let localeId: number | null = null;
-    if (localeCodeIdRaw != null && localeCodeIdRaw !== "" && /^\d+$/.test(String(localeCodeIdRaw))) {
+    if (
+      localeCodeIdRaw != null &&
+      localeCodeIdRaw !== "" &&
+      /^\d+$/.test(String(localeCodeIdRaw))
+    ) {
       localeId = parseInt(String(localeCodeIdRaw), 10);
     } else {
       // Fallback: usar locale da URL se não houver id_locale_code no formulário
       const LOCALE_MAP: Record<string, string> = {
         en: "en_US",
         "en-US": "en_US",
-        "en_US": "en_US",
+        en_US: "en_US",
         es: "es_ES",
         "es-ES": "es_ES",
-        "es_ES": "es_ES",
+        es_ES: "es_ES",
         "pt-br": "pt_BR",
-        "pt_BR": "pt_BR",
+        pt_BR: "pt_BR",
         "pt-BR": "pt_BR",
       };
       const normalizedLocale = locale.toLowerCase().replace(/-/g, "_");
-      const dbLocaleCode = LOCALE_MAP[normalizedLocale] || LOCALE_MAP[locale] || locale;
-      
+      const dbLocaleCode =
+        LOCALE_MAP[normalizedLocale] || LOCALE_MAP[locale] || locale;
+
       try {
         const [localeRow] = await db
           .select({ id: locales.id })
@@ -157,40 +182,48 @@ export async function POST({
         localeId = null;
       }
     }
-    
+
     // Validar campos obrigatórios
     if (!post_type || !title || !slug) {
       const redirectUrl = buildAbsoluteUrl(
         request,
-        buildContentUrl(locale, post_type || "post", action, postIdParam || undefined)
+        buildContentUrl(
+          locale,
+          post_type || "post",
+          action,
+          postIdParam || undefined,
+        ),
       );
       return redirectResponse(redirectUrl);
     }
-    
+
     // Validar formulário
     const validation = validatePostForm(formData);
     if (!validation.valid) {
       return badRequestResponse(
         getErrorMessage("MISSING_REQUIRED_FIELDS", locale),
-        validation.errors
+        validation.errors,
       );
     }
-    
+
     // Buscar ID do post_type
     const postTypeId = await getPostTypeId(db, post_type);
     if (!postTypeId) {
-      const redirectUrl = buildAbsoluteUrl(request, buildListUrl(locale, "post"));
+      const redirectUrl = buildAbsoluteUrl(
+        request,
+        buildListUrl(locale, "post"),
+      );
       return redirectResponse(redirectUrl);
     }
-    
+
     const now = Date.now();
     let postId: number;
-    
+
     // Processar criação ou edição
     if (action === "edit" && postIdParam && parseNumericId(postIdParam)) {
       // EDIÇÃO
       postId = parseInt(postIdParam, 10);
-      
+
       // Preparar payload de atualização
       const updatePayload = {
         title,
@@ -202,13 +235,13 @@ export async function POST({
         id_locale_code: localeId,
         updated_at: now,
       };
-      
+
       // Atualizar post
       await updatePost(db, postId, postTypeId, updatePayload);
-      
+
       // Atualizar meta_values preservando valores existentes
       const metaToUpdate: Record<string, string> = { ...metaValues };
-      
+
       // Atualizar ou remover post_thumbnail_id baseado em thumbnailAttachmentId
       if (thumbnailAttachmentId !== undefined) {
         if (thumbnailAttachmentId !== null && thumbnailAttachmentId > 0) {
@@ -217,32 +250,46 @@ export async function POST({
           // Se foi enviado mas é null, queremos remover o thumbnail
           // updatePostMetaValues não tem suporte para deletar, então vamos buscar e mesclar manualmente
           const [existing] = await db
-            .select({ meta_values: (await import("../../db/schema.ts")).posts.meta_values })
+            .select({
+              meta_values: (await import("../../db/schema.ts")).posts
+                .meta_values,
+            })
             .from((await import("../../db/schema.ts")).posts)
-            .where((await import("drizzle-orm")).and(
-              (await import("drizzle-orm")).eq((await import("../../db/schema.ts")).posts.id, postId),
-              (await import("drizzle-orm")).eq((await import("../../db/schema.ts")).posts.post_type_id, postTypeId)
-            ))
+            .where(
+              (await import("drizzle-orm")).and(
+                (await import("drizzle-orm")).eq(
+                  (await import("../../db/schema.ts")).posts.id,
+                  postId,
+                ),
+                (await import("drizzle-orm")).eq(
+                  (await import("../../db/schema.ts")).posts.post_type_id,
+                  postTypeId,
+                ),
+              ),
+            )
             .limit(1);
-          
+
           let merged: Record<string, string> = {};
           if (existing?.meta_values) {
             try {
-              merged = { ...JSON.parse(existing.meta_values) as Record<string, string> };
+              merged = {
+                ...(JSON.parse(existing.meta_values) as Record<string, string>),
+              };
             } catch {
               merged = {};
             }
           }
-          
+
           // Mesclar novos valores
           merged = { ...merged, ...metaToUpdate };
-          
+
           // Remover post_thumbnail_id
           delete merged["post_thumbnail_id"];
-          
+
           // Atualizar diretamente
           await updatePost(db, postId, postTypeId, {
-            meta_values: Object.keys(merged).length > 0 ? JSON.stringify(merged) : null,
+            meta_values:
+              Object.keys(merged).length > 0 ? JSON.stringify(merged) : null,
             updated_at: now,
           });
         }
@@ -252,20 +299,27 @@ export async function POST({
           await updatePostMetaValues(db, postId, postTypeId, metaToUpdate);
         }
       }
-      
+
       // Se thumbnailAttachmentId foi definido e não é null, atualizar meta_values com merge
-      if (thumbnailAttachmentId !== undefined && thumbnailAttachmentId !== null) {
+      if (
+        thumbnailAttachmentId !== undefined &&
+        thumbnailAttachmentId !== null
+      ) {
         await updatePostMetaValues(db, postId, postTypeId, metaToUpdate);
       }
     } else {
       // CRIAÇÃO
       const finalMetaValues: Record<string, string> = { ...metaValues };
-      
+
       // Adicionar post_thumbnail_id se existir
-      if (thumbnailAttachmentId !== undefined && thumbnailAttachmentId !== null && thumbnailAttachmentId > 0) {
+      if (
+        thumbnailAttachmentId !== undefined &&
+        thumbnailAttachmentId !== null &&
+        thumbnailAttachmentId > 0
+      ) {
         finalMetaValues["post_thumbnail_id"] = String(thumbnailAttachmentId);
       }
-      
+
       const createPayload = {
         post_type_id: postTypeId,
         parent_id: parentId !== undefined ? parentId : null,
@@ -280,38 +334,38 @@ export async function POST({
         created_at: now,
         updated_at: now,
       };
-      
+
       postId = await createPost(db, createPayload);
     }
-    
+
     // Vincular taxonomias
     if (postId && termIds.length > 0) {
       await linkPostTaxonomies(db, postId, termIds);
     }
-    
+
     // Processar e vincular attachments
     if (postId) {
       await processPostAttachments(
         db,
         postId,
         thumbnailAttachmentId !== undefined ? thumbnailAttachmentId : undefined,
-        blocknoteAttachmentIds
+        blocknoteAttachmentIds,
       );
-      
+
       // Atualizar parent_id e id_locale_code dos attachments relacionados ao post
       // Isso garante que attachments criados durante a criação/edição tenham os campos corretos
       const attachmentTypeId = await getPostTypeId(db, "attachment");
       if (attachmentTypeId) {
         const { posts: postsTable } = await import("../../db/schema.ts");
         const { eq, and, inArray } = await import("drizzle-orm");
-        
+
         // Coletar todos os IDs de attachments relacionados ao post
         const attachmentIds: number[] = [];
         if (thumbnailAttachmentId && thumbnailAttachmentId > 0) {
           attachmentIds.push(thumbnailAttachmentId);
         }
         attachmentIds.push(...blocknoteAttachmentIds);
-        
+
         // Atualizar parent_id e id_locale_code dos attachments relacionados
         if (attachmentIds.length > 0) {
           await db
@@ -323,8 +377,8 @@ export async function POST({
             .where(
               and(
                 eq(postsTable.post_type_id, attachmentTypeId),
-                inArray(postsTable.id, attachmentIds)
-              )
+                inArray(postsTable.id, attachmentIds),
+              ),
             );
         }
       }
@@ -333,15 +387,19 @@ export async function POST({
     // Processar custom fields: deletar os marcados e criar/atualizar os restantes
     const customFieldsToDeleteRaw = formData.get("custom_fields_to_delete");
     const customFieldsDataRaw = formData.get("custom_fields_data");
-    
+
     if (postId) {
       const customFieldsTypeId = await getPostTypeId(db, "custom_fields");
       if (customFieldsTypeId) {
         const { posts: postsTable } = await import("../../db/schema.ts");
         const { eq, and, inArray } = await import("drizzle-orm");
-        
+
         // Deletar custom fields explicitamente marcados para deleção
-        if (customFieldsToDeleteRaw && typeof customFieldsToDeleteRaw === "string" && customFieldsToDeleteRaw.trim()) {
+        if (
+          customFieldsToDeleteRaw &&
+          typeof customFieldsToDeleteRaw === "string" &&
+          customFieldsToDeleteRaw.trim()
+        ) {
           try {
             const idsToDelete = JSON.parse(customFieldsToDeleteRaw) as number[];
             if (Array.isArray(idsToDelete) && idsToDelete.length > 0) {
@@ -351,17 +409,21 @@ export async function POST({
                   and(
                     eq(postsTable.parent_id, postId),
                     eq(postsTable.post_type_id, customFieldsTypeId),
-                    inArray(postsTable.id, idsToDelete)
-                  )
+                    inArray(postsTable.id, idsToDelete),
+                  ),
                 );
             }
           } catch {
             // Ignorar erro de parse
           }
         }
-        
+
         // Criar/atualizar custom fields restantes
-        if (customFieldsDataRaw && typeof customFieldsDataRaw === "string" && customFieldsDataRaw.trim()) {
+        if (
+          customFieldsDataRaw &&
+          typeof customFieldsDataRaw === "string" &&
+          customFieldsDataRaw.trim()
+        ) {
           try {
             const customFieldsItems = JSON.parse(customFieldsDataRaw) as Array<{
               id?: number;
@@ -369,7 +431,10 @@ export async function POST({
               rows: Array<{ id?: number; name?: string; value: string }>;
               template?: boolean;
             }>;
-            if (Array.isArray(customFieldsItems) && customFieldsItems.length > 0) {
+            if (
+              Array.isArray(customFieldsItems) &&
+              customFieldsItems.length > 0
+            ) {
               // Deletar todos os custom fields filhos existentes para recriar a partir do formulário
               // (isso garante que campos removidos do formulário sejam deletados)
               await db
@@ -377,18 +442,23 @@ export async function POST({
                 .where(
                   and(
                     eq(postsTable.parent_id, postId),
-                    eq(postsTable.post_type_id, customFieldsTypeId)
-                  )
+                    eq(postsTable.post_type_id, customFieldsTypeId),
+                  ),
                 );
-              
-              // Criar os custom fields do formulário
-              for (const item of customFieldsItems) {
-                const slug = slugify(item.title) || "custom-field";
+
+              // Criar os custom fields do formulário (slug único com incremental para evitar UNIQUE constraint)
+              for (let i = 0; i < customFieldsItems.length; i++) {
+                const item = customFieldsItems[i];
+                const baseSlug = slugify(item.title) || "custom-field";
+                const slug = `${baseSlug}-${postId}-${i + 1}`;
                 const template = item.template === true;
                 const metaValuesStr =
                   item.rows?.length > 0
                     ? JSON.stringify({
-                        fields: item.rows.map((r) => ({ name: r.name ?? "", value: r.value ?? "" })),
+                        fields: item.rows.map((r) => ({
+                          name: r.name ?? "",
+                          value: r.value ?? "",
+                        })),
                         template,
                       })
                     : JSON.stringify({ template });
@@ -414,11 +484,13 @@ export async function POST({
     }
 
     // Retornar resposta
-    const acceptsJson = request.headers.get("Accept")?.includes("application/json");
+    const acceptsJson = request.headers
+      .get("Accept")
+      ?.includes("application/json");
     if (acceptsJson) {
       return jsonResponse({ id: postId });
     }
-    
+
     const listUrl = buildAbsoluteUrl(request, buildListUrl(locale, post_type));
     return redirectResponse(listUrl);
   } catch (err) {

@@ -85,7 +85,10 @@ const displayColumns = columns.filter((col) => col.key !== "id");
 const computedEmptyColspan =
   (selectable ? 1 : 0) + displayColumns.length + (actionConfig ? 1 : 0);
 
-function expandTemplate(template: string, item: Record<string, unknown>): string {
+function expandTemplate(
+  template: string,
+  item: Record<string, unknown>,
+): string {
   return template.replace(/\{(\w+)\}/g, (_, key) => String(item[key] ?? ""));
 }
 ---
@@ -93,91 +96,130 @@ function expandTemplate(template: string, item: Record<string, unknown>): string
 <table class="table table-zebra">
   <thead>
     <tr>
-      {selectable && (
-        <th class="w-10">
-          <label class="label cursor-pointer justify-center p-0">
-            <input
-              type="checkbox"
-              class="checkbox checkbox-sm"
-              id={selectAllId}
-              aria-label={selectAllLabel}
-            />
-          </label>
-        </th>
-      )}
-      {displayColumns.map((col) => (
-        <th>
-          {col.sortLink ? (
-            <a href={col.sortLink} class="link link-hover">{col.label}</a>
-          ) : (
-            col.label
-          )}
-        </th>
-      ))}
+      {
+        selectable && (
+          <th class="w-10">
+            <label class="label cursor-pointer justify-center p-0">
+              <input
+                type="checkbox"
+                class="checkbox checkbox-sm"
+                id={selectAllId}
+                aria-label={selectAllLabel}
+              />
+            </label>
+          </th>
+        )
+      }
+      {
+        displayColumns.map((col) => (
+          <th>
+            {col.sortLink ? (
+              <a href={col.sortLink} class="link link-hover">
+                {col.label}
+              </a>
+            ) : (
+              col.label
+            )}
+          </th>
+        ))
+      }
       {actionConfig && <th>{actionsColumnLabel}</th>}
     </tr>
   </thead>
   <tbody>
-    {items.length === 0 ? (
-      <tr>
-        <td colspan={computedEmptyColspan} class="text-center py-8 text-base-content/60">
-          {emptyMessage}
-        </td>
-      </tr>
-    ) : (
-      items.map((item) => (
+    {
+      items.length === 0 ? (
         <tr>
-          {selectable && (
-            <td>
-              <label class="label cursor-pointer justify-center p-0">
-                <input
-                  type="checkbox"
-                  class="checkbox checkbox-sm row-select"
-                  value={String(item[selectValueKey])}
-                  aria-label={selectItemLabel(item)}
-                />
-              </label>
-            </td>
-          )}
-          {displayColumns.map((col) => (
-            <td>{String(item[col.key] ?? "—")}</td>
-          ))}
-          {actionConfig && (
-            <td class="text-center">
-              <DataListActions
-                editLink={expandTemplate(actionConfig.editLinkTemplate, item)}
-                deletePath={actionConfig.deletePathTemplate ? expandTemplate(actionConfig.deletePathTemplate, item) : undefined}
-                deleteConfirm={actionConfig.deleteConfirm}
-                duplicatePath={actionConfig.duplicatePathTemplate ? expandTemplate(actionConfig.duplicatePathTemplate, item) : undefined}
-                editLabel={editLabel}
-                deleteLabel={deleteLabel}
-                duplicateLabel={duplicateLabel}
-              />
-            </td>
-          )}
+          <td
+            colspan={computedEmptyColspan}
+            class="text-center py-8 text-base-content/60"
+          >
+            {emptyMessage}
+          </td>
         </tr>
-      ))
-    )}
+      ) : (
+        items.map((item) => (
+          <tr>
+            {selectable && (
+              <td>
+                <label class="label cursor-pointer justify-center p-0">
+                  <input
+                    type="checkbox"
+                    class="checkbox checkbox-sm row-select"
+                    value={String(item[selectValueKey])}
+                    aria-label={selectItemLabel(item)}
+                  />
+                </label>
+              </td>
+            )}
+            {displayColumns.map((col) => {
+              const cellValue = String(item[col.key] ?? "—");
+              // Se for a coluna "title" e houver actionConfig, transformar em link para edição
+              const isTitleColumn = col.key === "title";
+              const shouldLinkTitle = isTitleColumn && actionConfig;
+
+              return (
+                <td>
+                  {shouldLinkTitle ? (
+                    <a
+                      href={expandTemplate(actionConfig.editLinkTemplate, item)}
+                      class="link link-hover text-blue-600"
+                    >
+                      {cellValue}
+                    </a>
+                  ) : (
+                    cellValue
+                  )}
+                </td>
+              );
+            })}
+            {actionConfig && (
+              <td class="text-center">
+                <DataListActions
+                  editLink={expandTemplate(actionConfig.editLinkTemplate, item)}
+                  deletePath={
+                    actionConfig.deletePathTemplate
+                      ? expandTemplate(actionConfig.deletePathTemplate, item)
+                      : undefined
+                  }
+                  deleteConfirm={actionConfig.deleteConfirm}
+                  duplicatePath={
+                    actionConfig.duplicatePathTemplate
+                      ? expandTemplate(actionConfig.duplicatePathTemplate, item)
+                      : undefined
+                  }
+                  editLabel={editLabel}
+                  deleteLabel={deleteLabel}
+                  duplicateLabel={duplicateLabel}
+                />
+              </td>
+            )}
+          </tr>
+        ))
+      )
+    }
   </tbody>
 </table>
 
-{pagination && pagination.totalPages > 1 && (
-  <div class="flex justify-center gap-2 mt-4">
-    <a
-      href={pagination.buildPageUrl(pagination.page - 1)}
-      class={`btn btn-sm ${pagination.page <= 1 ? "invisible" : ""}`}
-    >
-      {previousLabel}
-    </a>
-    <span class="flex items-center px-2 text-sm">{pageOfText}</span>
-    <a
-      href={pagination.buildPageUrl(pagination.page + 1)}
-      class={`btn btn-sm ${pagination.page >= pagination.totalPages ? "invisible" : ""}`}
-    >
-      {nextLabel}
-    </a>
-  </div>
-)}
+{
+  pagination && pagination.totalPages > 1 && (
+    <div class="flex justify-center gap-2 mt-4">
+      <a
+        href={pagination.buildPageUrl(pagination.page - 1)}
+        class={`btn btn-sm ${pagination.page <= 1 ? "invisible" : ""}`}
+      >
+        {previousLabel}
+      </a>
+      <span class="flex items-center px-2 text-sm">{pageOfText}</span>
+      <a
+        href={pagination.buildPageUrl(pagination.page + 1)}
+        class={`btn btn-sm ${pagination.page >= pagination.totalPages ? "invisible" : ""}`}
+      >
+        {nextLabel}
+      </a>
+    </div>
+  )
+}
 
 <style>
   tr.data-list-row-fade-out {
