@@ -1,0 +1,94 @@
+---
+/**
+ * Componente de ações para DataList com dropdown do DaisyUI
+ * Substitui as colunas separadas de "Editar" e "Excluir" por um dropdown
+ */
+export interface DataListActionsProps {
+  editLink: string;
+  deletePath?: string;
+  deleteConfirm: string;
+  editLabel?: string;
+  deleteLabel?: string;
+  actionsLabel?: string;
+}
+
+const {
+  editLink,
+  deletePath,
+  deleteConfirm,
+  editLabel = "Editar",
+  deleteLabel = "Deletar",
+  actionsLabel = "Actions",
+} = Astro.props;
+---
+
+<div class="dropdown dropdown-end flex justify-start">
+  <label tabindex="0" class="btn btn-sm">
+    {actionsLabel}
+  </label>
+  <ul
+    tabindex="0"
+    class="dropdown-content menu bg-base-100 rounded-box z-50 w-40 border border-base-300 p-1 shadow-lg"
+  >
+    <li>
+      <a href={editLink} class="text-sm text-blue-600 focus:text-white">
+        {editLabel}
+      </a>
+    </li>
+    {
+      deletePath && (
+        <li>
+          <button
+            type="button"
+            class="text-sm text-error w-full text-left"
+            data-delete-path={deletePath}
+            data-delete-confirm={deleteConfirm}
+          >
+            {deleteLabel}
+          </button>
+        </li>
+      )
+    }
+  </ul>
+</div>
+
+<script>
+  // Handler para botões de delete que funciona com ou sem HTMX
+  document.addEventListener("DOMContentLoaded", function() {
+    document.body.addEventListener("click", function(ev) {
+      const button = ev.target?.closest?.("button[data-delete-path]");
+      if (!button) return;
+      
+      const deletePath = button.getAttribute("data-delete-path");
+      const deleteConfirm = button.getAttribute("data-delete-confirm");
+      
+      if (!deletePath) return;
+      
+      ev.preventDefault();
+      ev.stopPropagation();
+      
+      // Mostrar confirmação
+      if (deleteConfirm && !window.confirm(deleteConfirm)) {
+        return;
+      }
+      
+      // Encontrar a linha da tabela
+      const tr = button.closest("tr");
+      
+      // Fazer a requisição DELETE
+      fetch(deletePath, { method: "DELETE" })
+        .then(function(res) {
+          if (res.ok && tr && tr.parentNode) {
+            // Adicionar classe de fade-out antes de remover
+            tr.classList.add("data-list-row-fade-out");
+            setTimeout(function() {
+              tr.remove();
+            }, 300);
+          }
+        })
+        .catch(function(err) {
+          console.error("Erro ao deletar:", err);
+        });
+    });
+  });
+</script>

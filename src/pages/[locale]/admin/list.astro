@@ -174,7 +174,7 @@ if (loadFromTable) {
 
 <AdminLayout title={t(locale, "admin.list.title")} locale={locale} menuItems={menuItems} user={currentUser}>
 
-  <div class="p-6 overflow-x-auto">
+  <div class="p-6 overflow-x-auto" style="height: 100%; overflow-y: auto;">
     <form method="get" action={`/${locale}/admin/list`} class="mb-4 flex flex-wrap items-end gap-2">
       <input type="hidden" name="type" value={type} />
       <input type="hidden" name="order" value={order} />
