@@ -138,7 +138,7 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
                         class="file-input file-input-bordered file-input-sm w-full max-w-xs"
                         :data-item-id="item.id"
                         :data-row-id="row.id"
-                        accept="image/*,audio/*,application/pdf"
+                        accept="image/*,image/avif,audio/*,application/pdf"
                         @change="row.value = $event.target.files[0] ? $event.target.files[0].name : ''"
                       />
                     </div>
