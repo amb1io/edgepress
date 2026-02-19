@@ -105,7 +105,17 @@ describe("UppyUpload Component", () => {
         autoProceed: false,
         restrictions: {
           maxFileSize: 20 * 1024 * 1024,
-          allowedFileTypes: ["image/*", "audio/*", "application/pdf"],
+          allowedFileTypes: [
+            "image/*",
+            "image/avif",
+            "image/webp",
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "image/svg+xml",
+            "audio/*",
+            "application/pdf",
+          ],
           maxNumberOfFiles: 50,
         },
       };
@@ -120,7 +130,17 @@ describe("UppyUpload Component", () => {
         autoProceed: true,
         restrictions: {
           maxFileSize: 20 * 1024 * 1024,
-          allowedFileTypes: ["image/*", "audio/*", "application/pdf"],
+          allowedFileTypes: [
+            "image/*",
+            "image/avif",
+            "image/webp",
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "image/svg+xml",
+            "audio/*",
+            "application/pdf",
+          ],
           maxNumberOfFiles: 1,
         },
       };
