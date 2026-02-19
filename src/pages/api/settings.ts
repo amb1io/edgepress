@@ -47,6 +47,57 @@ export const GET: APIRoute = async ({ url }) => {
 
 const ALLOWED_KEYS = ["site_name", "site_description", "setup_done"] as const;
 
+export const POST: APIRoute = async ({ request, locals }) => {
+  const authResult = await requireMinRole(request, 0, locals);
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const contentType = request.headers.get("Content-Type") ?? "";
+    let name: string;
+    let value: string;
+    let autoload: boolean;
+
+    if (contentType.includes("application/json")) {
+      const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+      name = String(body?.name ?? "").trim();
+      value = String(body?.value ?? "").trim();
+      autoload = body?.autoload === true || body?.autoload === "1";
+    } else {
+      const formData = await request.formData();
+      name = (formData.get("name") as string)?.trim() ?? "";
+      value = (formData.get("value") as string)?.trim() ?? "";
+      autoload = formData.get("autoload") === "1" || formData.get("autoload") === "on";
+    }
+
+    if (!name) {
+      return new Response(JSON.stringify({ error: "Name is required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const [inserted] = await db
+      .insert(settingsTable)
+      .values({ name, value, autoload: autoload ?? true })
+      .returning({ id: settingsTable.id });
+
+    const id = inserted?.id;
+    return new Response(
+      JSON.stringify({ ok: true, id }),
+      {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  } catch (err) {
+    console.error("POST /api/settings", err);
+    return new Response(JSON.stringify({ error: "Internal Server Error" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+};
+
 export const PATCH: APIRoute = async ({ request, locals }) => {
   const authResult = await requireMinRole(request, 0, locals);
   if (authResult instanceof Response) return authResult;

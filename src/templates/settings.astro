@@ -1,0 +1,173 @@
+---
+/**
+ * Template para o tipo "settings" (formulário baseado na tabela settings).
+ * Campos: name, value, autoload. Em edit preenche com os dados do registro.
+ */
+import AdminLayout from "../layouts/AdminLayout.astro";
+import { t, type Locale } from "../i18n/index.ts";
+import type { MenuItem } from "../lib/menu.ts";
+
+export interface Props {
+  locale: string;
+  postTypeSlug: string;
+  action: string;
+  idParam: string | null;
+  menuItems: MenuItem[];
+  currentUser: { email: string; name: string };
+  /** Registro da configuração quando action === "edit" */
+  record: { id: number; name: string; value: string; autoload: boolean } | null;
+}
+
+const { locale, postTypeSlug, action, menuItems, currentUser, record } = Astro.props;
+const currentLocale = locale as Locale;
+
+const pageTitle =
+  action === "new"
+    ? t(currentLocale, "admin.content.newTitle", { type: t(currentLocale, "postType.settings") })
+    : t(currentLocale, "admin.content.editTitle", { type: t(currentLocale, "postType.settings") });
+
+const initialName = record?.name ?? "";
+const initialValue = record?.value ?? "";
+const initialAutoload = record?.autoload ?? true;
+const isEdit = action === "edit" && record != null;
+const formAction = isEdit ? `/api/settings/${record.id}` : "/api/settings";
+---
+
+<AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={currentUser}>
+  <div slot="header-actions">
+    <span class="text-sm text-base-content/70">{currentUser.email}</span>
+  </div>
+
+  <script
+    define:vars={{
+      initialName,
+      initialValue,
+      initialAutoload,
+    }}
+  >
+    document.addEventListener("alpine:init", () => {
+      window.Alpine.data("settingsForm", () => ({
+        name: initialName,
+        value: initialValue,
+        autoload: initialAutoload,
+      }));
+    });
+  </script>
+
+  <div class="p-6 max-w-2xl">
+    <form
+      method="post"
+      action={formAction}
+      x-data="settingsForm"
+      class="flex flex-col gap-4 settings-form"
+      data-redirect-url={`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`}
+      data-is-edit={String(isEdit)}
+      data-form-action={formAction}
+    >
+      <div class="form-control">
+        <label for="setting-name" class="label">
+          <span class="label-text">{t(currentLocale, "admin.settings.name")}</span>
+        </label>
+        <input
+          type="text"
+          id="setting-name"
+          name="name"
+          required
+          class="input input-bordered w-full"
+          x-model="name"
+          value={initialName}
+        />
+      </div>
+
+      <div class="form-control">
+        <label for="setting-value" class="label">
+          <span class="label-text">{t(currentLocale, "admin.settings.value")}</span>
+        </label>
+        <textarea
+          id="setting-value"
+          name="value"
+          class="textarea textarea-bordered w-full min-h-24"
+          x-model="value"
+          rows={4}
+        >{initialValue}</textarea>
+      </div>
+
+      <div class="form-control">
+        <label class="label cursor-pointer justify-start gap-2">
+          <input
+            type="checkbox"
+            name="autoload"
+            value="1"
+            class="checkbox checkbox-sm checkbox-primary"
+            x-model="autoload"
+            checked={initialAutoload}
+          />
+          <span class="label-text">{t(currentLocale, "admin.settings.autoload")}</span>
+        </label>
+      </div>
+
+      <div class="flex gap-2 mt-2">
+        <button type="submit" class="btn btn-primary">
+          {isEdit
+            ? t(currentLocale, "admin.content.saveEdit")
+            : t(currentLocale, "admin.content.saveNew")}
+        </button>
+        <a href={`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`} class="btn btn-ghost">
+          {t(currentLocale, "admin.content.cancel")}
+        </a>
+      </div>
+    </form>
+  </div>
+</AdminLayout>
+
+<script>
+  document.querySelectorAll("form.settings-form").forEach((formEl) => {
+    const form = formEl as HTMLFormElement;
+    const isEdit = form.getAttribute("data-is-edit") === "true";
+    const formAction = form.getAttribute("data-form-action");
+    const redirectUrl = form.getAttribute("data-redirect-url");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData(form);
+      const name = formData.get("name")?.toString().trim() ?? "";
+      const value = formData.get("value")?.toString().trim() ?? "";
+      const autoload = formData.get("autoload") === "1" || formData.get("autoload") === "on";
+
+      if (!name) {
+        alert("Name is required");
+        return;
+      }
+
+      try {
+        const body = { name, value, autoload };
+        const method = isEdit ? "PUT" : "POST";
+        
+        const response = await fetch(formAction!, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+          const errorData = (await response.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
+          alert(`Error: ${errorData.error || "Failed to save"}`);
+          return;
+        }
+
+        // Sucesso - redirecionar
+        if (redirectUrl) {
+          window.location.href = redirectUrl;
+        } else {
+          window.location.reload();
+        }
+      } catch (err) {
+        console.error("Error submitting form:", err);
+        alert("Error submitting form. Please try again.");
+      }
+    });
+  });
+</script>
