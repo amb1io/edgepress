@@ -3,6 +3,7 @@
  */
 
 import Uppy from "@uppy/core";
+import { UPLOAD_CONSTANTS } from "./constants/index.ts";
 import Dashboard from "@uppy/dashboard";
 import ImageEditor from "@uppy/image-editor";
 import XHRUpload from "@uppy/xhr-upload";
@@ -76,8 +77,17 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
     locale: uppyLocale,
     autoProceed,
     restrictions: {
+<<<<<<< Updated upstream
       maxFileSize: 20 * 1024 * 1024,
-      allowedFileTypes: ["image/*", "audio/*", "application/pdf"],
+      allowedFileTypes: ["image/*", "audio/*", "application/pdf", ".avif", ".webp"],
+=======
+      maxFileSize: UPLOAD_CONSTANTS.MAX_FILE_SIZE,
+      allowedFileTypes: [
+        ...UPLOAD_CONSTANTS.ALLOWED_IMAGE_TYPES,
+        "audio/*",
+        "application/pdf",
+      ],
+>>>>>>> Stashed changes
       maxNumberOfFiles: maxFiles,
     },
   });
