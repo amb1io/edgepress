@@ -7,7 +7,9 @@ import ContentEditor from "../../../components/ContentEditor.astro";
 import UserTemplate from "../../../templates/user.astro";
 import AttachmentTemplate from "../../../templates/attachment.astro";
 import TranslationsTemplate from "../../../templates/translations_languages.astro";
+import SettingsTemplate from "../../../templates/settings.astro";
 import { db } from "../../../db/index.ts";
+import { getRecordById } from "../../../lib/content-source.ts";
 import TaxonomiesBlocks from "../../../components/TaxonomiesBlocks.astro";
 import TaxonomyAddModal from "../../../components/TaxonomyAddModal.astro";
 import UppyUpload from "../../../components/UppyUpload.astro";
@@ -71,6 +73,22 @@ if (action === "edit" && (!idParam || !isValidEditId(idParam))) {
 const showUserTemplate = postTypeSlug === "user";
 const showAttachmentTemplate = postTypeSlug === "attachment";
 const showTranslationsTemplate = postTypeSlug === "translations_languages";
+const showSettingsTemplate = postTypeSlug === "settings";
+
+/** Registro da configuração para SettingsTemplate (edit). */
+let settingsRecord: { id: number; name: string; value: string; autoload: boolean } | null = null;
+if (showSettingsTemplate && action === "edit" && idParam) {
+  const res = await getRecordById(db, "settings", idParam);
+  if (res.kind === "table" && res.record) {
+    const r = res.record;
+    settingsRecord = {
+      id: Number(r.id),
+      name: String(r.name ?? ""),
+      value: String(r.value ?? ""),
+      autoload: Boolean(r.autoload),
+    };
+  }
+}
 
 let typeRow: { id: number; name: string; meta_schema: unknown } | undefined;
 let typeId: number;
@@ -107,7 +125,7 @@ let initialCustomFields: Array<{ id: number; title: string; rows: Array<{ id: nu
 /** Lista distinta (por título) de custom fields que são templates (meta_values.template = true), sem filtrar por parent_id */
 let templateCustomFieldsList: Array<{ id: number; title: string; meta_values: string | null }> = [];
 
-if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate) {
+if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate && !showSettingsTemplate) {
   const [typeRowResult] = await db
     .select({
       id: postTypes.id,
@@ -432,6 +450,16 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
     idParam={idParam}
     menuItems={menuItems}
     currentUser={user}
+  />
+) : showSettingsTemplate ? (
+  <SettingsTemplate
+    locale={locale}
+    postTypeSlug={postTypeSlug}
+    action={action}
+    idParam={idParam}
+    menuItems={menuItems}
+    currentUser={user}
+    record={settingsRecord}
   />
 ) : (
 <AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={user}>
