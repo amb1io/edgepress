@@ -20,86 +20,9 @@ import { and, eq, inArray } from "drizzle-orm";
 import { getPostMedia } from "../../../lib/services/media-service.ts";
 import { isValidSlug } from "../../../lib/utils/validation.ts";
 import { parseMetaValues } from "../../../lib/utils/meta-parser.ts";
+import { buildBodySmart, type MediaForSmartBody } from "../../../lib/content-post-detail.ts";
 
 export const prerender = false;
-
-type MediaForSmartBody = {
-  id: number;
-  meta_values?: string | null;
-};
-
-function normalizeAttachmentPath(rawPath: string): string {
-  if (!rawPath) return "";
-  let path = rawPath;
-
-  // Se vier como URL completa, extrair apenas o pathname
-  try {
-    if (path.startsWith("http://") || path.startsWith("https://")) {
-      path = new URL(path).pathname;
-    }
-  } catch {
-    // ignora erro de URL inválida
-  }
-
-  // Remover prefixo /api/media ou /api se existir, para chegar em /uploads/...
-  if (path.startsWith("/api/media")) {
-    path = path.slice("/api/media".length);
-  }
-  if (path.startsWith("/api/")) {
-    path = path.slice("/api".length);
-  }
-
-  if (!path.startsWith("/")) {
-    path = `/${path}`;
-  }
-
-  return path;
-}
-
-function buildBodySmart(
-  body: string | null | undefined,
-  media: MediaForSmartBody[] | null | undefined
-): string {
-  if (!body) return "";
-
-  const mediaList = Array.isArray(media) ? media : [];
-
-  // Mapa: attachment_path normalizado -> id da mídia
-  const pathToId = new Map<string, number>();
-  for (const media of mediaList) {
-    const meta = parseMetaValues(media.meta_values ?? null);
-    const attachmentPath = meta.attachment_path;
-    if (attachmentPath) {
-      const normalized = normalizeAttachmentPath(attachmentPath);
-      pathToId.set(normalized, media.id);
-    }
-  }
-
-  let seq = 0;
-
-  return body.replace(/<img\b[^>]*>/gi, (imgTag) => {
-    // Extrair src ou data-url da tag <img>
-    const attrMatch = imgTag.match(/\s(?:data-url|src)=["']([^"']+)["']/i);
-    const url = attrMatch?.[1] ?? "";
-
-    let tokenId: number;
-    if (url) {
-      const normalized = normalizeAttachmentPath(url);
-      const foundId = pathToId.get(normalized);
-      if (typeof foundId === "number") {
-        tokenId = foundId;
-      } else {
-        // fallback: sequência se não houver match exato
-        tokenId = ++seq;
-      }
-    } else {
-      // se não tiver URL, ainda assim gera um token sequencial
-      tokenId = ++seq;
-    }
-
-    return `{media_${tokenId}}`;
-  });
-}
 
 export const GET: APIRoute = async ({ params, url, locals }) => {
   const segment = params.table;
@@ -111,7 +34,10 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
   }
 
   type KVLike = { get(key: string, type?: "json"): Promise<unknown>; put(key: string, value: string): Promise<void> };
-  const kv = (locals as { runtime?: { env?: { edgepress_cache?: KVLike | null } } }).runtime?.env?.edgepress_cache ?? null;
+  const isAuthenticated = Boolean((locals as { user?: unknown })?.user);
+  const kv = !isAuthenticated
+    ? ((locals as { runtime?: { env?: { edgepress_cache?: KVLike | null } } }).runtime?.env?.edgepress_cache ?? null)
+    : null;
 
   // 1) Tentar tratar como nome de tabela (identificador simples)
   const IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -138,7 +64,7 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
 
     try {
       const result = await getTableContentWithCache({
-        kv: kv ?? null,
+        kv,
         db,
         table: segment,
         params: { order, orderDir, limit, page, filter: Object.keys(filter).length ? filter : undefined },
@@ -195,7 +121,7 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
   const statusKey = statusList.join(",");
   const postCacheKey = `post:${slug}:status=${statusKey}`;
 
-  // Primeiro, tentar o KV pela chave do slug
+  // Autenticado: bypass KV e vai direto ao DB. Não autenticado: tenta KV primeiro.
   if (kv) {
     try {
       const cached = (await kv.get(postCacheKey, "json")) as Record<string, unknown> | null;

@@ -28,10 +28,6 @@ export const DEFAULT_PAGINATION = {
 // Upload constants
 export const UPLOAD_CONSTANTS = {
   MAX_FILE_SIZE: 20 * 1024 * 1024, // 20MB
-<<<<<<< Updated upstream
-  ALLOWED_IMAGE_TYPES: ['image/*'],
-  ALLOWED_DOCUMENT_TYPES: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-=======
   /** Tipos de imagem aceitos (incluindo AVIF e outros; image/* cobre genérico, tipos explícitos garantem compatibilidade) */
   ALLOWED_IMAGE_TYPES: [
     "image/*",
@@ -47,7 +43,6 @@ export const UPLOAD_CONSTANTS = {
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ],
->>>>>>> Stashed changes
 } as const;
 
 // Content types

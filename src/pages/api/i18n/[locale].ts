@@ -42,11 +42,14 @@ export const GET: APIRoute = async ({ params, locals }) => {
     );
   }
 
-  const kv = (locals as { runtime?: { env?: { edgepress_cache?: KVLike | null } } }).runtime?.env?.edgepress_cache ?? null;
+  const isAuthenticated = Boolean((locals as { user?: unknown })?.user);
+  const kv = !isAuthenticated
+    ? ((locals as { runtime?: { env?: { edgepress_cache?: KVLike | null } } }).runtime?.env?.edgepress_cache ?? null)
+    : null;
   const dbLocaleCode = normalizeLocaleForDB(localeParam);
   const cacheKey = `i18n:${dbLocaleCode}`;
 
-  // Tentar buscar do cache primeiro
+  // Autenticado: bypass KV e vai direto ao DB. Não autenticado: tenta KV primeiro.
   if (kv) {
     try {
       const cached = await kv.get(cacheKey, "json") as Record<string, string> | null;
