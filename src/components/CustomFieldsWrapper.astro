@@ -78,10 +78,10 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
                       x-model="row.type"
                     />
                     <div
-                      x-show="row.type === 'text' || row.type === 'file'"
+                      x-show="row.type === 'text' || row.type === 'editor' || row.type === 'file'"
                       class="flex items-center gap-1 flex-wrap"
                     >
-                      <span class="text-sm" x-text="row.type === 'text' ? 'Texto' : 'Arquivo'"></span>
+                      <span class="text-sm" x-text="row.type === 'text' ? 'Texto' : row.type === 'editor' ? 'Editor de texto' : 'Arquivo'"></span>
                       <a
                         href="#"
                         class="link link-primary link-hover text-xs"
@@ -93,7 +93,7 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
                   </div>
                   <label
                     class="label py-0 whitespace-nowrap"
-                    x-show="row.type === 'text' || row.type === 'file'"
+                    x-show="row.type === 'text' || row.type === 'editor' || row.type === 'file'"
                   >
                     <span class="label-text text-sm">Valor do Campo:</span>
                   </label>
@@ -105,7 +105,7 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
                       Selecione o tipo ao lado
                     </span>
                   <div
-                    x-show="row.type === 'text' || row.type === 'file'"
+                    x-show="row.type === 'text' || row.type === 'editor' || row.type === 'file'"
                     class="flex items-center gap-2 min-w-0 flex-wrap"
                   >
                     <input
@@ -115,6 +115,12 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
                       placeholder="Valor do campo"
                       x-model="row.value"
                     />
+                    <textarea
+                      x-show="row.type === 'editor'"
+                      class="textarea textarea-bordered textarea-sm w-full min-h-[120px]"
+                      placeholder="Valor do campo"
+                      x-model="row.value"
+                    ></textarea>
                     <div
                       x-show="row.type === 'file'"
                       class="flex flex-col gap-2"
@@ -283,6 +289,14 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
                 <input
                   type="checkbox"
                   class="checkbox checkbox-sm"
+                  x-model="newFieldTypeEditor"
+                />
+                <span class="label-text text-sm">Editor de texto</span>
+              </label>
+              <label class="label cursor-pointer gap-2 py-0">
+                <input
+                  type="checkbox"
+                  class="checkbox checkbox-sm"
                   x-model="newFieldTypeArquivo"
                 />
                 <span class="label-text text-sm">Arquivo</span>
@@ -335,7 +349,7 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
                   id: row.id || Date.now(),
                   name: row.name || "",
                   value: row.value || "",
-                  type: row.type === "file" ? "file" : "text",
+                  type: row.type === "file" ? "file" : row.type === "editor" ? "editor" : "text",
                 }))
               : [{ id: Date.now(), name: "", value: "", type: "text" }],
           template: item.template === true,
@@ -360,6 +374,7 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
         modalTab: "create",
         newFieldName: "",
         newFieldTypeTexto: false,
+        newFieldTypeEditor: false,
         newFieldTypeArquivo: false,
         selectedTemplateId: "",
         templateCustomFields: templateList,
@@ -377,7 +392,7 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
               item.rows = [{ id: Date.now(), name: "", value: "", type: "text" }];
             } else {
               item.rows.forEach((r) => {
-                if (r.type !== "file") r.type = "text";
+                if (r.type !== "file" && r.type !== "editor") r.type = "text";
               });
             }
           });
@@ -390,8 +405,11 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
           if (this.newFieldTypeTexto) {
             rows.push({ id: baseId, name: "", value: "", type: "text" });
           }
+          if (this.newFieldTypeEditor) {
+            rows.push({ id: baseId + (rows.length > 0 ? rows.length : 0), name: "", value: "", type: "editor" });
+          }
           if (this.newFieldTypeArquivo) {
-            rows.push({ id: baseId + 1, name: "", value: "", type: "file" });
+            rows.push({ id: baseId + rows.length, name: "", value: "", type: "file" });
           }
           if (rows.length === 0) {
             rows.push({ id: baseId, name: "", value: "", type: "text" });
@@ -404,6 +422,7 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
           });
           this.newFieldName = "";
           this.newFieldTypeTexto = false;
+          this.newFieldTypeEditor = false;
           this.newFieldTypeArquivo = false;
           this.modalOpen = false;
         },
@@ -428,7 +447,7 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
                   id: base + i,
                   name: typeof f.name === "string" ? f.name : "",
                   value: typeof f.value === "string" ? f.value : "",
-                  type: (f.type === "file" ? "file" : "text"),
+                  type: f.type === "file" ? "file" : f.type === "editor" ? "editor" : "text",
                 }));
               }
             } catch (_) {}

@@ -455,7 +455,13 @@ export async function POST({
                 const rows = item.rows ?? [];
                 const fieldTypeSet = new Set<string>();
                 rows.forEach((r) => {
-                  fieldTypeSet.add(r.type === "file" ? "upload" : "text");
+                  if (r.type === "file") {
+                    fieldTypeSet.add("upload");
+                  } else if (r.type === "editor") {
+                    fieldTypeSet.add("editor");
+                  } else {
+                    fieldTypeSet.add("text");
+                  }
                 });
                 const field_type = Array.from(fieldTypeSet);
                 const metaValuesStr =
@@ -464,7 +470,7 @@ export async function POST({
                         fields: rows.map((r) => ({
                           name: r.name ?? "",
                           value: r.value ?? "",
-                          type: r.type === "file" ? "file" : "text",
+                          type: r.type === "file" ? "file" : r.type === "editor" ? "editor" : "text",
                         })),
                         template,
                         field_type,
