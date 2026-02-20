@@ -1,3 +1,4 @@
+import { getString } from '../utils/form-data.ts';
 import { isNonEmptyString, isValidPostStatus, normalizePostStatus } from '../utils/validation.ts';
 import { POST_STATUSES } from '../constants/index.ts';
 
@@ -36,37 +37,32 @@ export interface PostFormData {
  */
 export function validatePostForm(formData: FormData): ValidationResult {
   const errors: Record<string, string> = {};
-  
-  // Validar post_type
-  const post_type = formData.get('post_type');
-  if (!isNonEmptyString(post_type as string)) {
+
+  const post_type = getString(formData, 'post_type');
+  if (!isNonEmptyString(post_type)) {
     errors.post_type = 'Tipo de post é obrigatório';
   }
-  
-  // Validar title
-  const title = formData.get('title');
-  if (!isNonEmptyString(title as string)) {
+
+  const title = getString(formData, 'title');
+  if (!isNonEmptyString(title)) {
     errors.title = 'Título é obrigatório';
   }
-  
-  // Validar slug
-  const slug = formData.get('slug');
-  if (!isNonEmptyString(slug as string)) {
+
+  const slug = getString(formData, 'slug');
+  if (!isNonEmptyString(slug)) {
     errors.slug = 'Slug é obrigatório';
   }
-  
-  // Validar status
-  const status = formData.get('status') as string;
+
+  const status = getString(formData, 'status');
   if (!isValidPostStatus(status)) {
     errors.status = 'Status inválido';
   }
-  
-  // Validar action (aceitar 'new' como sinônimo de 'create')
-  const action = formData.get('action') as string;
+
+  const action = getString(formData, 'action');
   if (!['create', 'edit', 'new'].includes(action)) {
     errors.action = 'Ação inválida';
   }
-  
+
   return {
     valid: Object.keys(errors).length === 0,
     errors,
@@ -111,22 +107,22 @@ export function validatePostType(postType: string | null | undefined, allowedTyp
  * @returns PostFormData normalizado
  */
 export function normalizePostFormData(formData: FormData): Partial<PostFormData> {
-  const post_type = (formData.get('post_type') as string)?.trim();
-  const action = formData.get('action') as string;
-  const idParam = formData.get('id') as string | null;
-  const locale = (formData.get('locale') as string)?.trim() || 'pt-br';
-  const title = (formData.get('title') as string)?.trim();
-  const slug = (formData.get('slug') as string)?.trim();
-  const excerpt = (formData.get('excerpt') as string) ?? '';
-  const body = (formData.get('body') as string) ?? '';
-  const status = normalizePostStatus(formData.get('status') as string);
-  const authorIdRaw = formData.get('author_id');
-  const author_id = typeof authorIdRaw === 'string' && authorIdRaw.trim() ? authorIdRaw.trim() : null;
-  
+  const post_type = getString(formData, 'post_type');
+  const action = getString(formData, 'action');
+  const idParam = getString(formData, 'id');
+  const locale = getString(formData, 'locale', 'pt-br');
+  const title = getString(formData, 'title');
+  const slug = getString(formData, 'slug');
+  const excerpt = getString(formData, 'excerpt', '');
+  const body = getString(formData, 'body', '');
+  const status = normalizePostStatus(getString(formData, 'status'));
+  const authorIdRaw = getString(formData, 'author_id');
+  const author_id = authorIdRaw === '' ? null : authorIdRaw;
+
   return {
     post_type,
     action,
-    id: idParam ? parseInt(idParam, 10) : undefined,
+    id: idParam !== '' ? parseInt(idParam, 10) : undefined,
     locale,
     title,
     slug,

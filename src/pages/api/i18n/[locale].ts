@@ -7,13 +7,9 @@ import type { APIRoute } from "astro";
 import { db } from "../../../db/index.ts";
 import { translations as translationsTable, translationsLanguages as translationsLanguagesTable, locales as localesTable } from "../../../db/schema.ts";
 import { eq } from "drizzle-orm";
+import { getCacheKvFromLocals } from "../../../lib/utils/runtime-locals.ts";
 
 export const prerender = false;
-
-type KVLike = {
-  get(key: string, type?: "text" | "json"): Promise<string | unknown | null>;
-  put(key: string, value: string): Promise<void>;
-};
 
 // Mapeamento de locales para locale_code da tabela
 const LOCALE_MAP: Record<string, string> = {
@@ -42,10 +38,7 @@ export const GET: APIRoute = async ({ params, locals }) => {
     );
   }
 
-  const isAuthenticated = Boolean((locals as { user?: unknown })?.user);
-  const kv = !isAuthenticated
-    ? ((locals as { runtime?: { env?: { edgepress_cache?: KVLike | null } } }).runtime?.env?.edgepress_cache ?? null)
-    : null;
+  const kv = getCacheKvFromLocals(locals);
   const dbLocaleCode = normalizeLocaleForDB(localeParam);
   const cacheKey = `i18n:${dbLocaleCode}`;
 

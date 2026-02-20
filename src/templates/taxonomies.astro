@@ -5,6 +5,7 @@
  * type e parent_id vêm da URL e do registro pai do type.
  */
 import AdminLayout from "../layouts/AdminLayout.astro";
+import AdminTwoColumns from "../components/admin/AdminTwoColumns.astro";
 import DataList from "../components/DataList.astro";
 import LanguageDropdown from "../components/LanguageDropdown.astro";
 import { db } from "../db/index.ts";
@@ -233,8 +234,8 @@ const emptyColspan = columns.length;
     });
   </script>
 
-  <div class="p-6 flex gap-6">
-    <div class="w-5/12 shrink-0">
+  <AdminTwoColumns>
+    <div slot="left">
       <form
         class="flex flex-col gap-3 taxonomy-form"
         data-base-url={baseUrl}
@@ -312,8 +313,8 @@ const emptyColspan = columns.length;
       </form>
     </div>
     <div
+      slot="right"
       id="taxonomy-list-wrapper"
-      class="w-6/12 min-w-0 overflow-x-auto"
       data-edit-link-template={`/${locale}/admin/${slug}?domain=${domain}&type=${encodeURIComponent(type)}&action=edit&id={id}`}
       data-delete-path-template="/api/taxonomies/{id}"
       data-edit-label={t(locale, "admin.list.edit")}
@@ -338,7 +339,7 @@ const emptyColspan = columns.length;
         }}
       />
     </div>
-  </div>
+  </AdminTwoColumns>
 </AdminLayout>
 
 <script is:inline>

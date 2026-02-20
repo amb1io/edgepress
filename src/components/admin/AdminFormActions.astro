@@ -1,0 +1,25 @@
+---
+/**
+ * Botões de ação padrão de formulário: Salvar/Enviar + Cancelar.
+ */
+export interface Props {
+  submitLabel: string;
+  cancelHref: string;
+  cancelLabel: string;
+  /** Conteúdo extra após o botão de cancelar (ex.: botão Excluir) */
+  class?: string;
+}
+
+const { submitLabel, cancelHref, cancelLabel, class: className = "" } = Astro.props;
+const classList = ["flex flex-wrap gap-2 mt-2", className].filter(Boolean).join(" ");
+---
+
+<div class={classList}>
+  <button type="submit" class="btn btn-primary">
+    {submitLabel}
+  </button>
+  <a href={cancelHref} class="btn btn-ghost">
+    {cancelLabel}
+  </a>
+  <slot name="extra" />
+</div>

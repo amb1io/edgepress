@@ -36,14 +36,27 @@ declare module "dropzone/dist/dropzone.css" {
   export default url;
 }
 
-declare namespace App {
-  interface Locals {
-    user: import("better-auth").User | null;
-    session: import("better-auth").Session | null;
-  }
-}
-
 declare global {
+  namespace App {
+    /** Interface mínima do KV (edgepress_cache) para tipagem em Locals. */
+    interface KVLike {
+      get(key: string, type?: "text" | "json"): Promise<unknown>;
+      put(key: string, value: string): Promise<void>;
+      list?(options?: { prefix?: string; limit?: number; cursor?: string }): Promise<{
+        keys: { name: string }[];
+        list_complete: boolean;
+        cursor?: string;
+      }>;
+      delete?(key: string): Promise<void>;
+    }
+
+    interface Locals {
+      user: import("better-auth").User | null;
+      session: import("better-auth").Session | null;
+      runtime?: { env?: { edgepress_cache?: App.KVLike | null } };
+    }
+  }
+
   interface Window {
     Alpine?: { $data: (el: Element) => Record<string, unknown> };
     slugify?: (text: string) => string;

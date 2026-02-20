@@ -1,0 +1,19 @@
+/* Content editor page: full-height editor and sidebar accordion */
+.content-editor-fullheight,
+.content-editor-fullheight .content-editor,
+.content-editor-fullheight .content-editor-wrapper {
+  height: 100%;
+  min-height: 0;
+}
+.content-editor-fullheight .content-editor-wrapper .bn-editor {
+  min-height: 100%;
+}
+.content-editor-wrapper {
+  border: 1px solid oklch(var(--bc) / 0.2);
+}
+.content-editor-wrapper .bn-container {
+  border: none;
+}
+.language-accordion input[type="radio"]:checked ~ .collapse-content {
+  min-height: 400px;
+}

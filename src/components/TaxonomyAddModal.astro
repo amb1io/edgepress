@@ -1,8 +1,8 @@
 ---
 /**
  * Modal de adição de termo de taxonomia. Deve ser renderizado fora do form
- * principal (ex.: após </form>) para evitar form aninhado. O script em
- * TaxonomiesBlocks preenche parent_id, type e label ao abrir via [data-taxonomy-add].
+ * principal. O script em TaxonomiesBlocks preenche parent_id, type e label ao abrir via [data-taxonomy-add].
+ * Submit via HTMX (hx-post); a API retorna HX-Trigger: taxonomy-added para o client atualizar a lista.
  */
 import { Icon } from "astro-icon/components";
 import { t } from "../i18n/index.ts";
@@ -28,6 +28,9 @@ const { locale } = Astro.props;
       method="post"
       action="/api/taxonomies"
       class="flex flex-col gap-3 pt-6"
+      hx-post="/api/taxonomies"
+      hx-target="#taxonomy-modal-error-container"
+      hx-swap="innerHTML"
     >
       <input type="hidden" name="parent_id" id="taxonomy-form-parent-id" value="" />
       <input type="hidden" name="type" id="taxonomy-form-type" value="" />
@@ -54,19 +57,12 @@ const { locale } = Astro.props;
 </div>
 
 <script>
-  interface TaxonomyApiResponse {
-    success?: boolean;
-    taxonomy?: { id: number; name: string; slug: string };
-  }
-
-  // Função auxiliar para escapar HTML (escopo local)
   function escapeHtml(text: string): string {
     const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
   }
 
-  // Handler para o evento taxonomy-added: atualiza a lista no accordion e fecha o modal
   function handleTaxonomyAdded(event: Event) {
     const customEvent = event as CustomEvent<{ id: number; name: string; slug: string; parent_id: number | null }>;
     const { id, name, parent_id } = customEvent.detail;
@@ -88,10 +84,10 @@ const { locale } = Astro.props;
     `;
     list.appendChild(li);
 
-    const modalToggle = document.getElementById("taxonomy-add-modal-toggle") as HTMLInputElement;
+    const modalToggle = document.getElementById("taxonomy-add-modal-toggle") as HTMLInputElement | null;
     if (modalToggle) modalToggle.checked = false;
 
-    const form = document.getElementById("taxonomy-add-form") as HTMLFormElement;
+    const form = document.getElementById("taxonomy-add-form") as HTMLFormElement | null;
     if (form) {
       form.reset();
       const errorContainer = document.getElementById("taxonomy-modal-error-container");
@@ -100,55 +96,4 @@ const { locale } = Astro.props;
   }
 
   document.body.addEventListener("taxonomy-added", handleTaxonomyAdded);
-
-  // Submit via fetch para não redirecionar; em sucesso dispara taxonomy-added e fecha o modal
-  const form = document.getElementById("taxonomy-add-form") as HTMLFormElement;
-  form?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const target = e.currentTarget as HTMLFormElement;
-    const action = target.getAttribute("action") || "/api/taxonomies";
-    const errorContainer = document.getElementById("taxonomy-modal-error-container");
-    const submitBtn = target.querySelector('button[type="submit"]') as HTMLButtonElement;
-    const parentIdInput = document.getElementById("taxonomy-form-parent-id") as HTMLInputElement;
-    const parentIdVal = parentIdInput?.value?.trim();
-    const parent_id =
-      parentIdVal && /^\d+$/.test(parentIdVal) ? parseInt(parentIdVal, 10) : null;
-
-    if (submitBtn) submitBtn.disabled = true;
-    if (errorContainer) errorContainer.innerHTML = "";
-
-    try {
-      const res = await fetch(action, {
-        method: "POST",
-        body: new FormData(target),
-      });
-      const contentType = res.headers.get("Content-Type") || "";
-
-      if (contentType.includes("application/json")) {
-        const data = (await res.json()) as TaxonomyApiResponse;
-        if (data.success && data.taxonomy) {
-          document.body.dispatchEvent(
-            new CustomEvent("taxonomy-added", {
-              detail: {
-                id: data.taxonomy.id,
-                name: data.taxonomy.name,
-                slug: data.taxonomy.slug,
-                parent_id,
-              },
-            })
-          );
-          return;
-        }
-      }
-
-      const html = await res.text();
-      if (errorContainer) errorContainer.innerHTML = html;
-    } catch (err) {
-      if (errorContainer) {
-        errorContainer.innerHTML = '<p class="text-error text-sm mt-2">Erro de conexão.</p>';
-      }
-    } finally {
-      if (submitBtn) submitBtn.disabled = false;
-    }
-  });
 </script>

@@ -1,0 +1,27 @@
+---
+/**
+ * Container padrão para páginas de formulário do admin (p-6 + max-width).
+ * Usado em settings, user, attachment e outros templates de formulário.
+ */
+export interface Props {
+  /** Classe CSS adicional. Padrão: max-w-2xl */
+  class?: string;
+  /** Largura máxima: "sm" (max-w-xl), "md" (max-w-2xl), "lg" (max-w-4xl), "full" (sem max). Padrão: md */
+  maxWidth?: "sm" | "md" | "lg" | "full";
+}
+
+const { class: className = "", maxWidth = "md" } = Astro.props;
+const maxWidthClass =
+  maxWidth === "sm"
+    ? "max-w-xl"
+    : maxWidth === "md"
+      ? "max-w-2xl"
+      : maxWidth === "lg"
+        ? "max-w-4xl"
+        : "";
+const classList = ["p-6", maxWidthClass, className].filter(Boolean).join(" ");
+---
+
+<div class={classList}>
+  <slot />
+</div>

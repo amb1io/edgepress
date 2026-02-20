@@ -5,31 +5,18 @@
  */
 import type { APIRoute } from "astro";
 import { requireMinRole } from "../../lib/api-auth.ts";
+import { getKvFromLocals } from "../../lib/utils/runtime-locals.ts";
+import { htmxRefreshResponse, internalServerErrorResponse } from "../../lib/utils/http-responses.ts";
 
 export const prerender = false;
-
-type KVLike = {
-  list(options?: {
-    prefix?: string;
-    limit?: number;
-    cursor?: string;
-  }): Promise<{
-    keys: { name: string }[];
-    list_complete: boolean;
-    cursor?: string;
-  }>;
-  delete(key: string): Promise<void>;
-};
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const authResult = await requireMinRole(request, 0, locals);
   if (authResult instanceof Response) return authResult;
 
-  const kv =
-    (locals as { runtime?: { env?: { edgepress_cache?: KVLike | null } } })
-      .runtime?.env?.edgepress_cache ?? null;
+  const kv = getKvFromLocals(locals);
 
-  if (!kv) {
+  if (!kv || typeof kv.list !== "function" || typeof kv.delete !== "function") {
     return new Response(
       JSON.stringify({
         ok: false,
@@ -43,7 +30,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
     let cleared = 0;
     let cursor: string | undefined;
     do {
-      const result = await kv.list({ limit: 1000, cursor });
+      const result = await kv.list!({ limit: 1000, ...(cursor !== undefined && { cursor }) });
       for (const key of result.keys) {
         await kv.delete(key.name);
         cleared++;
@@ -51,6 +38,10 @@ export const GET: APIRoute = async ({ request, locals }) => {
       cursor = result.list_complete ? undefined : result.cursor;
     } while (cursor);
 
+    const isHtmx = request.headers.get("HX-Request") === "true";
+    if (isHtmx) {
+      return htmxRefreshResponse();
+    }
     return new Response(
       JSON.stringify({
         ok: true,
@@ -61,9 +52,6 @@ export const GET: APIRoute = async ({ request, locals }) => {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : "KV error";
-    return new Response(JSON.stringify({ ok: false, message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return internalServerErrorResponse(message);
   }
 };

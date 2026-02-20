@@ -6,6 +6,7 @@
 import { auth } from "../../lib/auth.ts";
 import { USER_ROLE_IDS } from "../../db/schema.ts";
 import type { APIRoute } from "astro";
+import { getString } from "../../lib/utils/form-data.ts";
 import { applyRateLimit, getRateLimits } from "../../lib/utils/rate-limiter.ts";
 import { sanitizeCallbackURL } from "../../lib/utils/url-validator.ts";
 import { getSession } from "../../lib/api-auth.ts";
@@ -38,13 +39,17 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
     contentType.includes("multipart/form-data")
   ) {
     const formData = await request.formData();
-    name = (formData.get("name") as string)?.trim() ?? "";
-    email = (formData.get("email") as string)?.trim() ?? "";
+    name = getString(formData, "name");
+    email = getString(formData, "email");
     password = (formData.get("password") as string) ?? "";
-    image = (formData.get("image") as string)?.trim() || undefined;
-    role = (formData.get("role") as string)?.trim() || undefined;
-    callbackURL = (formData.get("callbackURL") as string)?.trim() || undefined;
-    locale = (formData.get("locale") as string)?.trim() || undefined;
+    const imageRaw = getString(formData, "image");
+    image = imageRaw === "" ? undefined : imageRaw;
+    const roleRaw = getString(formData, "role");
+    role = roleRaw === "" ? undefined : roleRaw;
+    const callbackURLRaw = getString(formData, "callbackURL");
+    callbackURL = callbackURLRaw === "" ? undefined : callbackURLRaw;
+    const localeRaw = getString(formData, "locale");
+    locale = localeRaw === "" ? undefined : localeRaw;
   } else {
     return redirect(
       `/${locale || "pt-br"}/admin/content?post_type=user&action=new&error=invalid_request`,

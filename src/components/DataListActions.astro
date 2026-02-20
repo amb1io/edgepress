@@ -1,7 +1,7 @@
 ---
 /**
- * Componente de ações para DataList com dropdown do DaisyUI
- * Substitui as colunas separadas de "Editar" e "Excluir" por um dropdown
+ * Componente de ações para DataList com dropdown do DaisyUI.
+ * Usa HTMX (hx-delete, hx-post) para deletar e duplicar; HX-Refresh na resposta recarrega a página.
  */
 export interface DataListActionsProps {
   editLink: string;
@@ -45,7 +45,8 @@ const {
           <button
             type="button"
             class="text-sm w-full text-left"
-            data-duplicate-path={duplicatePath}
+            hx-post={duplicatePath}
+            hx-swap="none"
           >
             {duplicateLabel}
           </button>
@@ -58,8 +59,9 @@ const {
           <button
             type="button"
             class="text-sm text-error w-full text-left"
-            data-delete-path={deletePath}
-            data-delete-confirm={deleteConfirm}
+            hx-delete={deletePath}
+            hx-confirm={deleteConfirm}
+            hx-swap="none"
           >
             {deleteLabel}
           </button>
@@ -68,94 +70,3 @@ const {
     }
   </ul>
 </div>
-
-<script>
-  // Handler para botões de delete e duplicate
-  document.addEventListener("DOMContentLoaded", function() {
-    document.body.addEventListener("click", function(ev: Event) {
-      const target = ev.target;
-      if (!(target instanceof Element)) return;
-      
-      // Handler para delete
-      const deleteButton = target.closest("button[data-delete-path]") as HTMLButtonElement | null;
-      if (deleteButton) {
-        const deletePath = deleteButton.getAttribute("data-delete-path");
-        const deleteConfirm = deleteButton.getAttribute("data-delete-confirm");
-        
-        if (!deletePath) return;
-        
-        ev.preventDefault();
-        ev.stopPropagation();
-        
-        // Mostrar confirmação
-        if (deleteConfirm && !window.confirm(deleteConfirm)) {
-          return;
-        }
-        
-        // Encontrar a linha da tabela
-        const tr = deleteButton.closest("tr");
-        
-        // Fazer a requisição DELETE
-        fetch(deletePath, { method: "DELETE" })
-          .then(function(res) {
-            if (res.ok && tr && tr.parentNode) {
-              // Adicionar classe de fade-out antes de remover
-              tr.classList.add("data-list-row-fade-out");
-              setTimeout(function() {
-                tr.remove();
-              }, 300);
-            }
-          })
-          .catch(function(err) {
-            console.error("Erro ao deletar:", err);
-          });
-        return;
-      }
-
-      // Handler para duplicate
-      const duplicateButton = target.closest("button[data-duplicate-path]") as HTMLButtonElement | null;
-      if (duplicateButton) {
-        const duplicatePath = duplicateButton.getAttribute("data-duplicate-path");
-        
-        if (!duplicatePath) return;
-        
-        ev.preventDefault();
-        ev.stopPropagation();
-        
-        // Desabilitar o botão durante o processamento
-        const btn = duplicateButton as HTMLButtonElement;
-        btn.disabled = true;
-        const originalText = btn.textContent;
-        btn.textContent = "Duplicando...";
-        
-        // Fazer a requisição POST para duplicar
-        fetch(duplicatePath, { method: "POST" })
-          .then(function(res) {
-            return res.json();
-          })
-          .then(function(data: unknown) {
-            const result = data as { success?: boolean; error?: string };
-            if (result.success) {
-              // Recarregar a página para mostrar o novo registro
-              window.location.reload();
-            } else {
-              alert("Erro ao duplicar: " + (result.error || "Erro desconhecido"));
-              btn.disabled = false;
-              if (originalText !== null) {
-                btn.textContent = originalText;
-              }
-            }
-          })
-          .catch(function(err) {
-            console.error("Erro ao duplicar:", err);
-            alert("Erro ao duplicar o registro");
-            btn.disabled = false;
-            if (originalText !== null) {
-              btn.textContent = originalText;
-            }
-          });
-        return;
-      }
-    });
-  });
-</script>

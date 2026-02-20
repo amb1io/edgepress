@@ -154,3 +154,25 @@ export function getFieldsWithPrefix(
   
   return result;
 }
+
+/**
+ * Aplica trim em valor de formulário (string, null ou undefined).
+ * @param value - Valor bruto do campo
+ * @returns String trimada ou string vazia
+ */
+export function trimFormValue(value: string | null | undefined): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/**
+ * Escapa caracteres especiais para uso seguro em HTML.
+ * @param s - String a ser escapada
+ * @returns String segura para inserção em HTML
+ */
+export function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}

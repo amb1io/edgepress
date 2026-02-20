@@ -4,11 +4,10 @@
  */
 import { sql } from "drizzle-orm";
 import type { Database } from "./types/database.ts";
-
-const VALID_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+import { VALID_TABLE_IDENTIFIER } from "./db-utils.ts";
 
 function safeIdentifier(name: string): string | null {
-  return VALID_IDENTIFIER.test(name) ? name : null;
+  return VALID_TABLE_IDENTIFIER.test(name) ? name : null;
 }
 
 export type GetTableListParams = {
