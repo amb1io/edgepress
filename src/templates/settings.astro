@@ -4,6 +4,8 @@
  * Campos: name, value, autoload. Em edit preenche com os dados do registro.
  */
 import AdminLayout from "../layouts/AdminLayout.astro";
+import AdminFormContainer from "../components/admin/AdminFormContainer.astro";
+import AdminFormActions from "../components/admin/AdminFormActions.astro";
 import { t, type Locale } from "../i18n/index.ts";
 import type { MenuItem } from "../lib/menu.ts";
 
@@ -31,6 +33,7 @@ const initialValue = record?.value ?? "";
 const initialAutoload = record?.autoload ?? true;
 const isEdit = action === "edit" && record != null;
 const formAction = isEdit ? `/api/settings/${record.id}` : "/api/settings";
+const listUrl = `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`;
 ---
 
 <AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={currentUser}>
@@ -54,15 +57,17 @@ const formAction = isEdit ? `/api/settings/${record.id}` : "/api/settings";
     });
   </script>
 
-  <div class="p-6 max-w-2xl">
+  <AdminFormContainer>
+    <div id="settings-form-error" class="min-h-6"></div>
     <form
       method="post"
       action={formAction}
       x-data="settingsForm"
       class="flex flex-col gap-4 settings-form"
-      data-redirect-url={`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`}
-      data-is-edit={String(isEdit)}
-      data-form-action={formAction}
+      hx-target="#settings-form-error"
+      hx-swap="innerHTML"
+      hx-post={!isEdit ? "/api/settings" : undefined}
+      hx-put={isEdit ? formAction : undefined}
     >
       <div class="form-control">
         <label for="setting-name" class="label">
@@ -106,68 +111,31 @@ const formAction = isEdit ? `/api/settings/${record.id}` : "/api/settings";
         </label>
       </div>
 
-      <div class="flex gap-2 mt-2">
-        <button type="submit" class="btn btn-primary">
-          {isEdit
-            ? t(currentLocale, "admin.content.saveEdit")
-            : t(currentLocale, "admin.content.saveNew")}
-        </button>
-        <a href={`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`} class="btn btn-ghost">
-          {t(currentLocale, "admin.content.cancel")}
-        </a>
-      </div>
+      <AdminFormActions
+        submitLabel={isEdit
+          ? t(currentLocale, "admin.content.saveEdit")
+          : t(currentLocale, "admin.content.saveNew")}
+        cancelHref={listUrl}
+        cancelLabel={t(currentLocale, "admin.content.cancel")}
+      />
     </form>
-  </div>
+  </AdminFormContainer>
 </AdminLayout>
 
 <script>
-  document.querySelectorAll("form.settings-form").forEach((formEl) => {
-    const form = formEl as HTMLFormElement;
-    const isEdit = form.getAttribute("data-is-edit") === "true";
-    const formAction = form.getAttribute("data-form-action");
-    const redirectUrl = form.getAttribute("data-redirect-url");
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-
-      const formData = new FormData(form);
-      const name = formData.get("name")?.toString().trim() ?? "";
-      const value = formData.get("value")?.toString().trim() ?? "";
-      const autoload = formData.get("autoload") === "1" || formData.get("autoload") === "on";
-
-      if (!name) {
-        alert("Name is required");
-        return;
-      }
-
-      try {
-        const body = { name, value, autoload };
-        const method = isEdit ? "PUT" : "POST";
-        
-        const response = await fetch(formAction!, {
-          method,
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(body),
-        });
-
-        if (!response.ok) {
-          const errorData = (await response.json().catch(() => ({ error: "Unknown error" }))) as { error?: string };
-          alert(`Error: ${errorData.error || "Failed to save"}`);
-          return;
+  document.body.addEventListener("htmx:afterRequest", (ev) => {
+    const detail = ev.detail;
+    if (!detail?.successful && detail?.xhr?.status === 400) {
+      const errorEl = document.getElementById("settings-form-error");
+      if (errorEl) {
+        try {
+          const data = JSON.parse(detail?.xhr?.responseText ?? "{}");
+          const err = typeof data?.error === "string" ? data.error : "Erro ao salvar.";
+          errorEl.innerHTML = `<p class="text-error text-sm">${err}</p>`;
+        } catch {
+          errorEl.textContent = "Erro ao salvar.";
         }
-
-        // Sucesso - redirecionar
-        if (redirectUrl) {
-          window.location.href = redirectUrl;
-        } else {
-          window.location.reload();
-        }
-      } catch (err) {
-        console.error("Error submitting form:", err);
-        alert("Error submitting form. Please try again.");
       }
-    });
+    }
   });
 </script>

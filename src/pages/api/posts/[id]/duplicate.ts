@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 
 // Database
 import { db } from "../../../../db/index.ts";
+import { htmxRefreshResponse } from "../../../../lib/utils/http-responses.ts";
 import { posts, postsMedia, postsTaxonomies, postTypes } from "../../../../db/schema.ts";
 
 // ORM
@@ -216,6 +217,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       }
     }
 
+    if (request.headers.get("HX-Request") === "true") {
+      return htmxRefreshResponse();
+    }
     return new Response(JSON.stringify({ success: true, id: newPostId }), {
       status: 200,
       headers: { "Content-Type": "application/json" },

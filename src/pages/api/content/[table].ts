@@ -14,44 +14,39 @@
 import type { APIRoute } from "astro";
 import { db } from "../../../db/index.ts";
 import { getTableContentWithCache } from "../../../lib/content-cache.ts";
-import { getTableNames } from "../../../lib/db-utils.ts";
+import { getTableNames, getContentApiRuntime, getSafeTableName, VALID_TABLE_IDENTIFIER } from "../../../lib/db-utils.ts";
 import { posts } from "../../../db/schema.ts";
 import { and, eq, inArray } from "drizzle-orm";
 import { isValidSlug } from "../../../lib/utils/validation.ts";
 import { parseMetaValues } from "../../../lib/utils/meta-parser.ts";
 import { buildContentPostPayload } from "../../../lib/content-post-payload.ts";
+import {
+  badRequestResponse,
+  errorResponse,
+  internalServerErrorResponse,
+  jsonResponse,
+  notFoundResponse,
+} from "../../../lib/utils/http-responses.ts";
+import { HTTP_STATUS_CODES } from "../../../lib/constants/index.ts";
 
 export const prerender = false;
 
 export const GET: APIRoute = async ({ params, url, locals }) => {
-  const segment = params.table;
+  const segment = params["table"];
   if (!segment) {
-    return new Response(
-      JSON.stringify({ error: "invalid_param", message: "Path segment is required" }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
-    );
+    return badRequestResponse("Path segment is required");
   }
 
-  type KVLike = { get(key: string, type?: "json"): Promise<unknown>; put(key: string, value: string): Promise<void> };
-  const isAuthenticated = Boolean((locals as { user?: unknown })?.user);
-  const kv = !isAuthenticated
-    ? ((locals as { runtime?: { env?: { edgepress_cache?: KVLike | null } } }).runtime?.env?.edgepress_cache ?? null)
-    : null;
-
-  // 1) Tentar tratar como nome de tabela (identificador simples)
-  const IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+  const { kv } = getContentApiRuntime(locals);
   const allowedTables = await getTableNames(db);
-  const isIdentifier = IDENTIFIER.test(segment);
+  const safeTable = getSafeTableName(segment, allowedTables);
 
-  if (isIdentifier) {
-    // Se é identificador mas não está na lista de tabelas conhecidas, responde 404 de tabela
-    if (!allowedTables.includes(segment)) {
-      return new Response(
-        JSON.stringify({ error: "table_not_found", message: "Table not found or not allowed" }),
-        { status: 404, headers: { "Content-Type": "application/json" } }
-      );
-    }
+  if (safeTable === null && VALID_TABLE_IDENTIFIER.test(segment)) {
+    return notFoundResponse("Table not found or not allowed");
+  }
 
+  // 1) Tratar como nome de tabela quando for identificador permitido
+  if (safeTable !== null) {
     const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") ?? "10", 10) || 10));
     const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10) || 1);
     const order = url.searchParams.get("order") ?? undefined;
@@ -72,43 +67,41 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
     }
 
     try {
+      const filterParam = Object.keys(filter).length ? filter : undefined;
       const result = await getTableContentWithCache({
         kv,
         db,
-        table: segment,
-        params: { order, orderDir, limit, page, filter: Object.keys(filter).length ? filter : undefined },
+        table: safeTable,
+        params: {
+          ...(order != null && order !== "" && { order }),
+          orderDir,
+          limit,
+          page,
+          ...(filterParam != null && { filter: filterParam }),
+        },
       });
 
       if (result.columns.includes("meta_values")) {
         result.items = result.items.map((item) => ({
           ...item,
           meta_values:
-            item.meta_values != null
-              ? parseMetaValues(String(item.meta_values))
+            item["meta_values"] != null
+              ? parseMetaValues(String(item["meta_values"]))
               : ({} as Record<string, string>),
         }));
       }
 
-      return new Response(JSON.stringify(result), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return jsonResponse(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Internal server error";
-      return new Response(JSON.stringify({ error: "server_error", message }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+      return internalServerErrorResponse(message);
     }
   }
 
   // 2) Caso não seja tabela conhecida, tratar como slug de post
   const slug = segment;
   if (!isValidSlug(slug)) {
-    return new Response(
-      JSON.stringify({ error: "invalid_slug", message: "Slug inválido" }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
-    );
+    return badRequestResponse("Slug inválido");
   }
 
   // Filtro de status: por padrão apenas 'published'
@@ -135,10 +128,7 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
     try {
       const cached = (await kv.get(postCacheKey, "json")) as Record<string, unknown> | null;
       if (cached && typeof cached === "object") {
-        return new Response(JSON.stringify(cached), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
+        return jsonResponse(cached);
       }
     } catch {
       // Se o KV falhar, segue para o banco
@@ -187,10 +177,7 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
       updated_at: number | null;
     } | undefined;
     if (!post) {
-      return new Response(
-        JSON.stringify({ error: "post_not_found", message: "Post not found", slug }),
-        { status: 404, headers: { "Content-Type": "application/json" } }
-      );
+      return errorResponse("Post not found", HTTP_STATUS_CODES.NOT_FOUND, { slug });
     }
 
     const payload = await buildContentPostPayload(db, post);
@@ -203,15 +190,9 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
       }
     }
 
-    return new Response(JSON.stringify(payload), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse(payload);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal server error";
-    return new Response(JSON.stringify({ error: "server_error", message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return internalServerErrorResponse(message);
   }
 };

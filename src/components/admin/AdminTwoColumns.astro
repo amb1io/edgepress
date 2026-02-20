@@ -1,0 +1,28 @@
+---
+/**
+ * Layout de duas colunas para páginas do admin (ex.: taxonomies: form à esquerda, lista à direita).
+ */
+export interface Props {
+  /** Classe da coluna esquerda. Padrão: w-5/12 shrink-0 */
+  leftClass?: string;
+  /** Classe da coluna direita. Padrão: w-6/12 min-w-0 overflow-x-auto */
+  rightClass?: string;
+  /** Classe do container. Padrão: p-6 flex gap-6 */
+  class?: string;
+}
+
+const {
+  leftClass = "w-5/12 shrink-0",
+  rightClass = "w-6/12 min-w-0 overflow-x-auto",
+  class: className = "p-6 flex gap-6",
+} = Astro.props;
+---
+
+<div class={className}>
+  <div class={leftClass}>
+    <slot name="left" />
+  </div>
+  <div class={rightClass}>
+    <slot name="right" />
+  </div>
+</div>

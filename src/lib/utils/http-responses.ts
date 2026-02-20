@@ -1,4 +1,6 @@
 import { CONTENT_TYPES, HTTP_STATUS_CODES } from '../constants/index.ts';
+import { t } from '../../i18n/index.ts';
+import { escapeHtml } from './form-data.ts';
 
 /**
  * Utilitários para criar respostas HTTP padronizadas
@@ -140,4 +142,60 @@ export function unauthorizedResponse(message: string = 'Unauthorized'): Response
  */
 export function badRequestResponse(message: string = 'Bad Request', details?: unknown): Response {
   return errorResponse(message, HTTP_STATUS_CODES.BAD_REQUEST, details);
+}
+
+/**
+ * Resposta vazia com header HX-Refresh para o cliente HTMX recarregar a página
+ * @returns Response object
+ */
+export function htmxRefreshResponse(): Response {
+  return new Response('', {
+    status: HTTP_STATUS_CODES.OK,
+    headers: {
+      'Content-Type': CONTENT_TYPES.HTML,
+      'HX-Refresh': 'true',
+    },
+  });
+}
+
+/**
+ * Resposta para HTMX redirecionar o cliente (200 + HX-Redirect)
+ * @param url - URL de destino
+ * @returns Response object
+ */
+export function htmxRedirectResponse(url: string): Response {
+  return new Response('', {
+    status: HTTP_STATUS_CODES.OK,
+    headers: {
+      'Content-Type': CONTENT_TYPES.HTML,
+      'HX-Redirect': url,
+    },
+  });
+}
+
+/**
+ * Resposta 400 com fragmento HTML para HTMX fazer swap em elemento de erro
+ * @param message - Mensagem de erro (será escapada)
+ * @returns Response object
+ */
+export function badRequestHtmlResponse(message: string): Response {
+  const html = `<p class="text-error text-sm mt-2">${escapeHtml(message)}</p>`;
+  return htmlResponse(html, HTTP_STATUS_CODES.BAD_REQUEST);
+}
+
+/**
+ * Resposta HTML de erro reutilizável (ex.: para modais HTMX).
+ * @param locale - Locale para a mensagem traduzida
+ * @param messageKey - Chave i18n da mensagem (padrão: admin.taxonomy.errorMessage)
+ * @param elementId - id do elemento &lt;p&gt; (padrão: taxonomy-modal-error)
+ * @returns Response object com HTML 200
+ */
+export function errorHtmlResponse(
+  locale: string,
+  messageKey: string = 'admin.taxonomy.errorMessage',
+  elementId: string = 'taxonomy-modal-error'
+): Response {
+  const msg = t(locale, messageKey);
+  const html = `<p class="text-error text-sm mt-2" id="${escapeHtml(elementId)}">${escapeHtml(msg)}</p>`;
+  return htmlResponse(html, HTTP_STATUS_CODES.OK);
 }

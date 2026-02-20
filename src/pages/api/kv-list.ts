@@ -5,21 +5,9 @@
  */
 import type { APIRoute } from "astro";
 import { requireMinRole } from "../../lib/api-auth.ts";
+import { getKvFromLocals } from "../../lib/utils/runtime-locals.ts";
 
 export const prerender = false;
-
-type KVLike = {
-  list(options?: {
-    prefix?: string;
-    limit?: number;
-    cursor?: string;
-  }): Promise<{
-    keys: { name: string }[];
-    list_complete: boolean;
-    cursor?: string;
-  }>;
-  get(key: string, type?: "text" | "json"): Promise<string | unknown | null>;
-};
 
 const MAX_KEYS = 500;
 const VALUE_PREVIEW_LENGTH = 200;
@@ -28,11 +16,9 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const authResult = await requireMinRole(request, 0, locals);
   if (authResult instanceof Response) return authResult;
 
-  const kv =
-    (locals as { runtime?: { env?: { edgepress_cache?: KVLike | null } } })
-      .runtime?.env?.edgepress_cache ?? null;
+  const kv = getKvFromLocals(locals);
 
-  if (!kv) {
+  if (!kv || typeof kv.list !== "function") {
     return new Response(
       JSON.stringify({
         ok: false,
@@ -48,7 +34,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
     let total = 0;
 
     do {
-      const result = await kv.list({ limit: 100, cursor });
+      const result = await kv.list!({ limit: 100, ...(cursor !== undefined && { cursor }) });
       for (const { name } of result.keys) {
         if (total >= MAX_KEYS) break;
         let valuePreview = "—";

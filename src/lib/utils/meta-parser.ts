@@ -119,3 +119,45 @@ export function stringifyMetaValues(values: Record<string, string>): string | nu
   }
   return JSON.stringify(values);
 }
+
+type MetaSchemaItem = { key: string; default?: unknown };
+
+/**
+ * Obtém uma opção do meta_schema de um post type (array de { key, default? }).
+ * Usado para taxonomy, post_thumbnail, post_types, etc.
+ * @param metaSchema - meta_schema do post type (array ou null/undefined)
+ * @param key - Chave do item (ex: "taxonomy", "post_thumbnail", "post_types")
+ * @param defaultValue - Valor padrão se a chave não existir ou tipo incompatível
+ * @returns Valor da opção ou defaultValue
+ */
+export function getMetaSchemaOption<T>(metaSchema: unknown, key: string, defaultValue: T): T {
+  const schema = (Array.isArray(metaSchema) ? metaSchema : []) as MetaSchemaItem[];
+  const item = schema.find((s) => s.key === key);
+  const def = item?.default;
+  if (def === undefined) return defaultValue;
+  return def as T;
+}
+
+/**
+ * Retorna os tipos de taxonomia do meta_schema (array de strings). Default: ["category"].
+ */
+export function getMetaSchemaTaxonomyTypes(metaSchema: unknown): string[] {
+  const def = getMetaSchemaOption<unknown>(metaSchema, "taxonomy", ["category"]);
+  return Array.isArray(def) ? (def as string[]) : ["category"];
+}
+
+/**
+ * Retorna se o post type tem post_thumbnail habilitado. Default: false.
+ */
+export function getMetaSchemaPostThumbnail(metaSchema: unknown): boolean {
+  const def = getMetaSchemaOption<unknown>(metaSchema, "post_thumbnail", false);
+  return typeof def === "boolean" ? def : false;
+}
+
+/**
+ * Retorna se o post type tem custom_fields (post_types inclui "custom_fields"). Default: false.
+ */
+export function getMetaSchemaHasCustomFields(metaSchema: unknown): boolean {
+  const def = getMetaSchemaOption<unknown>(metaSchema, "post_types", []);
+  return Array.isArray(def) && def.includes("custom_fields");
+}

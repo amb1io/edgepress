@@ -19,6 +19,7 @@ import { validatePostForm } from "../../lib/validators/post-validator.ts";
 // Utils - Form Data
 import {
   getFieldsWithPrefix,
+  getNumber,
   getNumberArray,
   getOptionalNumber,
   getString,
@@ -35,8 +36,10 @@ import { stringifyMetaValues } from "../../lib/utils/meta-parser.ts";
 import { handleApiError } from "../../lib/utils/error-handler.ts";
 import {
   badRequestResponse,
+  badRequestHtmlResponse,
   jsonResponse,
   redirectResponse,
+  htmxRedirectResponse,
 } from "../../lib/utils/http-responses.ts";
 
 // Utils - URLs
@@ -98,6 +101,7 @@ export async function POST({
     const { user: currentUser } = authResult;
 
     const formData = await request.formData();
+    const isHtmx = request.headers.get("HX-Request") === "true";
 
     // Extrair dados básicos do formulário
     const post_type = getString(formData, "post_type");
@@ -111,11 +115,8 @@ export async function POST({
     const status = normalizePostStatus(getString(formData, "status"));
 
     // Extrair author_id e aplicar regra de privilégio (autor só pode ser ele mesmo)
-    const authorIdRaw = formData.get("author_id");
-    const requestedAuthorId =
-      typeof authorIdRaw === "string" && authorIdRaw.trim()
-        ? authorIdRaw.trim()
-        : null;
+    const authorIdRaw = getString(formData, "author_id");
+    const requestedAuthorId = authorIdRaw === "" ? null : authorIdRaw;
     const author_id = resolveAuthorIdForRole(
       requestedAuthorId,
       currentUser.id,
@@ -145,15 +146,8 @@ export async function POST({
     const metaValues = getFieldsWithPrefix(formData, "meta_", true);
 
     // Extrair id_locale_code do formulário (se selecionado no dropdown)
-    const localeCodeIdRaw = formData.get("id_locale_code");
-    let localeId: number | null = null;
-    if (
-      localeCodeIdRaw != null &&
-      localeCodeIdRaw !== "" &&
-      /^\d+$/.test(String(localeCodeIdRaw))
-    ) {
-      localeId = parseInt(String(localeCodeIdRaw), 10);
-    } else {
+    let localeId: number | null = getNumber(formData, "id_locale_code", null);
+    if (localeId === null) {
       // Fallback: usar locale da URL se não houver id_locale_code no formulário
       const LOCALE_MAP: Record<string, string> = {
         en: "en_US",
@@ -185,6 +179,8 @@ export async function POST({
 
     // Validar campos obrigatórios
     if (!post_type || !title || !slug) {
+      const msg = getErrorMessage("MISSING_REQUIRED_FIELDS", locale);
+      if (isHtmx) return badRequestHtmlResponse(msg);
       const redirectUrl = buildAbsoluteUrl(
         request,
         buildContentUrl(
@@ -200,20 +196,17 @@ export async function POST({
     // Validar formulário
     const validation = validatePostForm(formData);
     if (!validation.valid) {
-      return badRequestResponse(
-        getErrorMessage("MISSING_REQUIRED_FIELDS", locale),
-        validation.errors,
-      );
+      const msg = getErrorMessage("MISSING_REQUIRED_FIELDS", locale);
+      if (isHtmx) return badRequestHtmlResponse(msg);
+      return badRequestResponse(msg, validation.errors);
     }
 
     // Buscar ID do post_type
     const postTypeId = await getPostTypeId(db, post_type);
     if (!postTypeId) {
-      const redirectUrl = buildAbsoluteUrl(
-        request,
-        buildListUrl(locale, "post"),
-      );
-      return redirectResponse(redirectUrl);
+      const listUrl = buildAbsoluteUrl(request, buildListUrl(locale, "post"));
+      if (isHtmx) return htmxRedirectResponse(listUrl);
+      return redirectResponse(listUrl);
     }
 
     const now = Date.now();
@@ -385,8 +378,8 @@ export async function POST({
     }
 
     // Processar custom fields: deletar os marcados e criar/atualizar os restantes
-    const customFieldsToDeleteRaw = formData.get("custom_fields_to_delete");
-    const customFieldsDataRaw = formData.get("custom_fields_data");
+    const customFieldsToDeleteRaw = getString(formData, "custom_fields_to_delete");
+    const customFieldsDataRaw = getString(formData, "custom_fields_data");
 
     if (postId) {
       const customFieldsTypeId = await getPostTypeId(db, "custom_fields");
@@ -395,11 +388,7 @@ export async function POST({
         const { eq, and, inArray } = await import("drizzle-orm");
 
         // Deletar custom fields explicitamente marcados para deleção
-        if (
-          customFieldsToDeleteRaw &&
-          typeof customFieldsToDeleteRaw === "string" &&
-          customFieldsToDeleteRaw.trim()
-        ) {
+        if (customFieldsToDeleteRaw !== "") {
           try {
             const idsToDelete = JSON.parse(customFieldsToDeleteRaw) as number[];
             if (Array.isArray(idsToDelete) && idsToDelete.length > 0) {
@@ -419,11 +408,7 @@ export async function POST({
         }
 
         // Criar/atualizar custom fields restantes
-        if (
-          customFieldsDataRaw &&
-          typeof customFieldsDataRaw === "string" &&
-          customFieldsDataRaw.trim()
-        ) {
+        if (customFieldsDataRaw !== "") {
           try {
             const customFieldsItems = JSON.parse(customFieldsDataRaw) as Array<{
               id?: number;
@@ -498,14 +483,12 @@ export async function POST({
     }
 
     // Retornar resposta
+    const listUrl = buildAbsoluteUrl(request, buildListUrl(locale, post_type));
     const acceptsJson = request.headers
       .get("Accept")
       ?.includes("application/json");
-    if (acceptsJson) {
-      return jsonResponse({ id: postId });
-    }
-
-    const listUrl = buildAbsoluteUrl(request, buildListUrl(locale, post_type));
+    if (acceptsJson) return jsonResponse({ id: postId });
+    if (isHtmx) return htmxRedirectResponse(listUrl);
     return redirectResponse(listUrl);
   } catch (err) {
     return handleApiError(err, "POST /api/posts");

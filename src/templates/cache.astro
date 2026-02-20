@@ -27,6 +27,12 @@ const listItems = kvItems.map((item) => ({
   key: item.key,
   valuePreview: item.valuePreview,
 }));
+
+const resetConfirm =
+  t(currentLocale, "admin.cache.resetConfirm") !== "admin.cache.resetConfirm"
+    ? t(currentLocale, "admin.cache.resetConfirm")
+    : "Tem certeza que deseja resetar todo o cache? Todas as chaves serão removidas.";
+const resetButtonLabel = t(currentLocale, "admin.cache.resetButton");
 ---
 
 <AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={currentUser}>
@@ -34,17 +40,23 @@ const listItems = kvItems.map((item) => ({
     <span class="text-sm text-base-content/70">{currentUser.email}</span>
   </div>
 
-  <div class="p-6">
+  <div class="p-6" x-data="{ loading: false }">
     <div class="flex flex-col gap-4">
       <div class="flex justify-end">
         <button
           type="button"
           id="cache-reset-btn"
           class="btn btn-error text-white"
-          data-locale={locale}
-          data-label={t(currentLocale, "admin.cache.resetButton")}
+          hx-get="/api/kv-clear"
+          hx-trigger="click"
+          hx-confirm={resetConfirm}
+          hx-swap="none"
+          @htmx:before-request="loading = true"
+          @htmx:after-request="loading = false"
+          :disabled="loading"
         >
-          {t(currentLocale, "admin.cache.resetButton")}
+          <span x-show="!loading" x-cloak>{resetButtonLabel}</span>
+          <span x-show="loading" x-cloak>…</span>
         </button>
       </div>
 
@@ -57,33 +69,3 @@ const listItems = kvItems.map((item) => ({
     </div>
   </div>
 </AdminLayout>
-
-<script>
-  document.getElementById("cache-reset-btn")?.addEventListener("click", async () => {
-    const btn = document.getElementById("cache-reset-btn");
-    if (!confirm("Tem certeza que deseja resetar todo o cache? Todas as chaves serão removidas.")) {
-      return;
-    }
-    if (btn instanceof HTMLButtonElement) {
-      btn.disabled = true;
-      btn.textContent = "…";
-    }
-    try {
-      const res = await fetch("/api/kv-clear", { method: "GET", credentials: "include" });
-      const data = (await res.json()) as { ok?: boolean; message?: string };
-      if (data.ok) {
-        window.location.reload();
-      } else {
-        alert(data.message ?? "Erro ao resetar cache.");
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Erro ao resetar cache.");
-    } finally {
-      if (btn instanceof HTMLButtonElement) {
-        btn.disabled = false;
-        btn.textContent = btn.getAttribute("data-label") ?? "Resetar cache";
-      }
-    }
-  });
-</script>
