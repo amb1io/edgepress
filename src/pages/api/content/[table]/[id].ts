@@ -11,10 +11,9 @@ import { sql, eq, and, inArray } from "drizzle-orm";
 import { db } from "../../../../db/index.ts";
 import { getTableNames } from "../../../../lib/db-utils.ts";
 import { posts } from "../../../../db/schema.ts";
-import { getPostMedia } from "../../../../lib/services/media-service.ts";
 import { parseMetaValues } from "../../../../lib/utils/meta-parser.ts";
 import { isValidSlug } from "../../../../lib/utils/validation.ts";
-import { buildBodySmart, type MediaForSmartBody } from "../../../../lib/content-post-detail.ts";
+import { buildContentPostPayload } from "../../../../lib/content-post-payload.ts";
 
 export const prerender = false;
 
@@ -24,32 +23,6 @@ function escapeIdentifier(name: string): string {
 }
 
 type KVLike = { get(key: string, type?: "json"): Promise<unknown>; put(key: string, value: string): Promise<void> };
-
-function buildPostPayload(
-  post: {
-    id: number;
-    post_type_id: number;
-    author_id: string | null;
-    title: string;
-    slug: string;
-    excerpt: string | null;
-    body: string | null;
-    status: string;
-    meta_values: string | null;
-    published_at: number | null;
-    created_at: number | null;
-    updated_at: number | null;
-  },
-  media: { meta_values?: string | null }[]
-) {
-  const meta = parseMetaValues(post.meta_values);
-  const body_smart = buildBodySmart(post.body, media as MediaForSmartBody[]);
-  const mediaWithParsedMeta = media.map((m) => ({
-    ...m,
-    meta_values: parseMetaValues(m.meta_values ?? null),
-  }));
-  return { ...post, meta_values: meta, body_smart, media: mediaWithParsedMeta };
-}
 
 export const GET: APIRoute = async ({ params, url, locals }) => {
   const tableParam = params.table;
@@ -152,8 +125,7 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
         );
       }
 
-      const media = await getPostMedia(db as never, post.id);
-      const payload = buildPostPayload(post, media as { meta_values?: string | null }[]);
+      const payload = await buildContentPostPayload(db, post);
 
       if (kv) {
         try {

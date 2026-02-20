@@ -95,7 +95,7 @@ Comportamento por tipo de segmento:
 
 - **Auth:** não obrigatória.
 - **Query:**  
-  `page`, `limit`, `order`, `orderDir` (asc/desc), `filter_<col>=value` (LIKE).
+  `page`, `limit`, `order`, `orderDir` (asc/desc), `filter_<col>=value` (LIKE). Para filtrar por tipo de post use **`filter_post_type`** com **id** (número) ou **slug** (ex: `post`, `page`, `custom_fields`): `filter_post_type=8` ou `filter_post_type=post`.
 - **Resposta:** `200` — `{ items, total, page, limit, totalPages, columns }`. Itens podem incluir colunas de tabelas relacionadas (ex: `locales_language`, `user_name`). Para tabela `posts`, colunas de self-join usam prefixo `posts_ref_*`.
 - **Cache:** não autenticado → KV; autenticado → DB direto.
 
@@ -103,7 +103,7 @@ Comportamento por tipo de segmento:
 
 - **Auth:** não obrigatória.
 - **Query:** `status` (opcional) — valores permitidos: `published`, `draft`, `archived`. Padrão: só `published`.
-- **Resposta:** `200` — objeto do post com `id`, `title`, `slug`, `excerpt`, `body`, `body_smart`, `status`, `meta_values`, `media`, `published_at`, `created_at`, `updated_at`, etc. `body_smart` substitui URLs de imagens por tokens `{media_N}`; `media` é array de anexos com `meta_values` parseados.
+- **Resposta:** `200` — objeto **hierárquico**: o pai é o post/post_type; dentro dele: **meta_schema** (JSON estruturado do tipo do post), **meta_values** (JSON estruturado), **custom_fields** (JSON estruturado — campos personalizados filhos), **body_smart**, **media**. Campos do post: `id`, `post_type_id`, `title`, `slug`, `excerpt`, `body`, `status`, `published_at`, `created_at`, `updated_at`, etc.
 - **Erros:** `400` (slug inválido), `404` (post não encontrado).
 - **Cache:** não autenticado → KV primeiro; autenticado → DB direto.
 
@@ -112,7 +112,7 @@ Comportamento por tipo de segmento:
 - **Auth:** não obrigatória.
 - **Params:** `table` — nome da tabela (ex: `posts`, `settings`); segundo segmento — **id** (numérico) ou **slug** (apenas para `posts`).
 - **Comportamento:**
-  - **table = "posts":** aceita **id** ou **slug** no segundo segmento. Ex.: `/api/content/posts/42` ou `/api/content/posts/meu-post`. Query `?status=` opcional (padrão: `published`). Retorna o post com `body_smart`, `media`, `meta_values` parseados.
+  - **table = "posts":** aceita **id** ou **slug** no segundo segmento. Retorna o mesmo payload hierárquico: post (pai) + **meta_schema**, **meta_values**, **custom_fields**, **body_smart**, **media**.
   - **Outras tabelas:** apenas **id** numérico. Retorna uma linha com `WHERE id = ?`. Se tiver coluna `meta_values`, é retornada parseada.
 - **Resposta:** `200` — objeto do registro ou `404` (not found) / `400` (id ou slug inválido).
 - **Cache (só para posts):** não autenticado → KV primeiro (`post:id:{id}` ou `post:{slug}:status=...`); autenticado → DB direto.
@@ -218,12 +218,13 @@ Comportamento por tipo de segmento:
 - **Limites:** tamanho máximo 20 MB; extensões de código/script bloqueadas; imagens e PDF permitidos (tipos e extensões validados).
 - **Resposta:** `200` — `{ key, path, mimeType, filename }` ou `400` / `413` / `503` (bucket não configurado). Rate limit configurável (ex.: 20 uploads/hora).
 
-### `GET /api/media/[...path]`
+### `GET /api/media/[...path]` e `GET /api/media/{id}`
 
 - **Auth:** não obrigatória.
-- **Params:** `path` — segmentos de caminho (ex: `uploads/2024/01/arquivo.jpg`). Se não começar com `uploads/`, o prefixo é adicionado.
+- **Por id:** `GET /api/media/123` — `123` é o id do attachment (post tipo attachment). O servidor busca o registro no banco, lê `attachment_path` (ou `file_path`) em `meta_values`, e serve o arquivo do R2.
+- **Por path:** `GET /api/media/uploads/2024/01/arquivo.jpg` — path do arquivo no R2. Se não começar com `uploads/`, o prefixo é adicionado.
 - **Resposta:** stream do arquivo no R2 com headers `Content-Type` e `Content-Length` quando disponíveis.
-- **Erros:** `404` (arquivo não encontrado), `503` (R2 não configurado).
+- **Erros:** `404` (arquivo ou attachment não encontrado), `503` (R2 não configurado).
 
 ---
 

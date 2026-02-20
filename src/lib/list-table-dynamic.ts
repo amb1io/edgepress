@@ -198,9 +198,14 @@ export async function getTableList(
   
   const whereParts: string[] = [];
   for (const col of filterCols) {
-    const escaped = escapeSqliteString(filter[col]);
+    const rawValue = filter[col];
+    const escaped = escapeSqliteString(rawValue);
     if (columns.includes(col)) {
-      whereParts.push(`${quotedTable}."${escapeIdentifier(col)}" LIKE '%${escaped}%'`);
+      if (col === "post_type_id" && /^\d+$/.test(rawValue)) {
+        whereParts.push(`${quotedTable}."${escapeIdentifier(col)}" = ${parseInt(rawValue, 10)}`);
+      } else {
+        whereParts.push(`${quotedTable}."${escapeIdentifier(col)}" LIKE '%${escaped}%'`);
+      }
     } else {
       // Campo relacionado (formato: alias_coluna, ex: posts_ref_title ou locales_title)
       const related = relatedWithAliases.find((r) => {

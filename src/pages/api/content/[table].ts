@@ -17,10 +17,9 @@ import { getTableContentWithCache } from "../../../lib/content-cache.ts";
 import { getTableNames } from "../../../lib/db-utils.ts";
 import { posts } from "../../../db/schema.ts";
 import { and, eq, inArray } from "drizzle-orm";
-import { getPostMedia } from "../../../lib/services/media-service.ts";
 import { isValidSlug } from "../../../lib/utils/validation.ts";
 import { parseMetaValues } from "../../../lib/utils/meta-parser.ts";
-import { buildBodySmart, type MediaForSmartBody } from "../../../lib/content-post-detail.ts";
+import { buildContentPostPayload } from "../../../lib/content-post-payload.ts";
 
 export const prerender = false;
 
@@ -59,7 +58,17 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
     const orderDir = (url.searchParams.get("orderDir") === "asc" ? "asc" : "desc") as "asc" | "desc";
     const filter: Record<string, string> = {};
     for (const [key, value] of url.searchParams) {
-      if (key.startsWith("filter_") && value) filter[key.replace(/^filter_/, "")] = value;
+      if (!key.startsWith("filter_") || !value) continue;
+      const filterKey = key.replace(/^filter_/, "");
+      if (filterKey === "post_type") {
+        if (/^\d+$/.test(value)) {
+          filter["post_type_id"] = value;
+        } else {
+          filter["post_types_slug"] = value;
+        }
+      } else {
+        filter[filterKey] = value;
+      }
     }
 
     try {
@@ -184,21 +193,7 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
       );
     }
 
-    const media = await getPostMedia(db as never, post.id);
-    const meta = parseMetaValues(post.meta_values);
-    const body_smart = buildBodySmart(post.body, media as MediaForSmartBody[]);
-
-    const mediaWithParsedMeta = (media as { meta_values?: string | null }[]).map((m) => ({
-      ...m,
-      meta_values: parseMetaValues(m.meta_values ?? null),
-    }));
-
-    const payload = {
-      ...post,
-      meta_values: meta,
-      body_smart,
-      media: mediaWithParsedMeta,
-    };
+    const payload = await buildContentPostPayload(db, post);
 
     if (kv) {
       try {
