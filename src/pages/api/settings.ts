@@ -11,12 +11,34 @@ import { requireMinRole } from "../../lib/api-auth.ts";
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ url }) => {
+type KVLike = { get(key: string, type?: "json"): Promise<unknown>; put(key: string, value: string): Promise<void> };
+
+export const GET: APIRoute = async ({ url, locals }) => {
   try {
+    const isAuthenticated = Boolean((locals as { user?: unknown })?.user);
+    const kv = !isAuthenticated
+      ? ((locals as { runtime?: { env?: { edgepress_cache?: KVLike | null } } }).runtime?.env?.edgepress_cache ?? null)
+      : null;
+
     const namesParam = url.searchParams.get("names");
     const names = namesParam
       ? namesParam.split(",").map((n) => n.trim()).filter(Boolean)
       : null;
+    const cacheKey = `settings:${namesParam ?? "autoload"}`;
+
+    if (!isAuthenticated && kv) {
+      try {
+        const cached = (await kv.get(cacheKey, "json")) as Record<string, string> | null;
+        if (cached != null && typeof cached === "object") {
+          return new Response(JSON.stringify(cached), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      } catch {
+        // Ignora erro de KV e segue para o banco
+      }
+    }
 
     let rows: { name: string; value: string }[];
     if (names && names.length > 0) {
@@ -32,6 +54,15 @@ export const GET: APIRoute = async ({ url }) => {
     }
 
     const record = Object.fromEntries(rows.map((r) => [r.name, r.value]));
+
+    if (!isAuthenticated && kv && Object.keys(record).length > 0) {
+      try {
+        await kv.put(cacheKey, JSON.stringify(record));
+      } catch {
+        // Não falha a resposta se o KV não aceitar o put
+      }
+    }
+
     return new Response(JSON.stringify(record), {
       status: 200,
       headers: { "Content-Type": "application/json" },

@@ -1,0 +1,89 @@
+---
+/**
+ * Template da página "Cache" em Settings: lista chaves/valores do KV e botão para resetar cache.
+ */
+import AdminLayout from "../layouts/AdminLayout.astro";
+import DataList from "../components/DataList.astro";
+import { t, type Locale } from "../i18n/index.ts";
+import type { MenuItem } from "../lib/menu.ts";
+
+export interface Props {
+  locale: string;
+  menuItems: MenuItem[];
+  currentUser: { email: string; name: string };
+  kvItems: { key: string; valuePreview: string }[];
+}
+
+const { locale, menuItems, currentUser, kvItems } = Astro.props;
+const currentLocale = locale as Locale;
+
+const pageTitle = t(currentLocale, "admin.cache.title");
+const columns = [
+  { key: "key", label: t(currentLocale, "admin.cache.key") },
+  { key: "valuePreview", label: t(currentLocale, "admin.cache.valuePreview") },
+];
+
+const listItems = kvItems.map((item) => ({
+  key: item.key,
+  valuePreview: item.valuePreview,
+}));
+---
+
+<AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={currentUser}>
+  <div slot="header-actions">
+    <span class="text-sm text-base-content/70">{currentUser.email}</span>
+  </div>
+
+  <div class="p-6">
+    <div class="flex flex-col gap-4">
+      <div class="flex justify-end">
+        <button
+          type="button"
+          id="cache-reset-btn"
+          class="btn btn-error text-white"
+          data-locale={locale}
+          data-label={t(currentLocale, "admin.cache.resetButton")}
+        >
+          {t(currentLocale, "admin.cache.resetButton")}
+        </button>
+      </div>
+
+      <DataList
+        columns={columns}
+        items={listItems}
+        emptyMessage={t(currentLocale, "admin.cache.noItems")}
+        emptyColspan={2}
+      />
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  document.getElementById("cache-reset-btn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("cache-reset-btn");
+    if (!confirm("Tem certeza que deseja resetar todo o cache? Todas as chaves serão removidas.")) {
+      return;
+    }
+    if (btn instanceof HTMLButtonElement) {
+      btn.disabled = true;
+      btn.textContent = "…";
+    }
+    try {
+      const res = await fetch("/api/kv-clear", { method: "GET", credentials: "include" });
+      const data = (await res.json()) as { ok?: boolean; message?: string };
+      if (data.ok) {
+        window.location.reload();
+      } else {
+        alert(data.message ?? "Erro ao resetar cache.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao resetar cache.");
+    } finally {
+      if (btn instanceof HTMLButtonElement) {
+        btn.disabled = false;
+        btn.textContent = btn.getAttribute("data-label") ?? "Resetar cache";
+      }
+    }
+  });
+</script>

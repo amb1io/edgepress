@@ -854,8 +854,9 @@ const initialThumbnailAttachmentId = thumbnailAttachmentId;
       method="post"
       action="/api/posts"
       class="flex flex-col gap-4 w-full min-h-0 flex-1"
+      data-is-edit={String(action === "edit")}
       x-data="contentForm"
-      x-init="slugifyFromTitle()"
+      x-init="if ($el.dataset.isEdit !== 'true') slugifyFromTitle()"
       @blocknote-excerpt.window="excerpt = $event.detail.text"
     >
       <!-- Notificação -->
