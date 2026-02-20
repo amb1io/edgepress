@@ -256,18 +256,12 @@ Comportamento por tipo de segmento:
 
 - **Auth:** não exigida (uso único na primeira instalação).
 - **Body:** Form: `name`, `email`, `password`, `site_name`, `site_description`.
-- **Fluxo:** executa migrações se necessário, seed (se setup não estava concluído), cria primeiro usuário (admin, role 0), atualiza `site_name`, `site_description` e `setup_done=Y`.
+- **Fluxo:** executa migrações se necessário, cria primeiro usuário (admin, role 0), atualiza `site_name`, `site_description` e `setup_done=Y`. O seed do banco deve ser executado apenas via npm (ex.: `npm run db:seed`).
 - **Resposta:** redirect para `/[locale]/login?setup=success` com cookie `setup_done=Y`.
 
 ---
 
 ## Utilitários
-
-### `GET /api/seed`
-
-- **Auth:** Admin (role 0).
-- **Resposta:** `200` — `{ success: true, message: "Seed executado com sucesso" }` ou `500` com `{ success: false, error }`.
-- **Uso:** executa o seed do banco (dados iniciais).
 
 ### `GET /api/kv-test`
 
@@ -296,7 +290,6 @@ Comportamento por tipo de segmento:
 | `/api/translations` | — | Autor+ | — | — | — |
 | `/api/upload` | — | Autor+ | — | — | — |
 | `/api/media/*` | Público | — | — | — | — |
-| `/api/seed` | Admin | — | — | — | — |
 | `/api/login` | — | Público | — | — | — |
 | `/api/register` | — | Público (rate limit) | — | — | — |
 | `/api/setup` | — | Público (1ª vez) | — | — | — |

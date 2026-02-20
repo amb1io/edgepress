@@ -1,6 +1,6 @@
 /**
  * Aplica migrações Drizzle no D1 quando o banco existe mas as tabelas ainda não foram criadas.
- * Usado no setup inicial antes de criar o usuário e rodar o seed.
+ * Usado no setup inicial antes de criar o usuário.
  *
  * As migrações são importadas em build time (Vite inclui no bundle).
  */
