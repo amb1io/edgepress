@@ -123,6 +123,7 @@
   "admin.postTypes.postThumbnail": "¿Miniatura del post?",
   "admin.postTypes.extraFields": "Otros campos",
   "admin.postTypes.postTypesLabel": "Tipos de entrada (custom fields, etc.)",
+  "admin.postTypes.taxonomyLabel": "Taxonomías",
   "admin.postTypes.deleteConfirm": "Si elimina el tipo de entrada, todas las entradas asociadas serán eliminadas.",
   "admin.postTypes.confirmYes": "Sí"
 }

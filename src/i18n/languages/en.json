@@ -123,6 +123,7 @@
   "admin.postTypes.postThumbnail": "Post thumbnail?",
   "admin.postTypes.extraFields": "Other fields",
   "admin.postTypes.postTypesLabel": "Post types (custom fields, etc.)",
+  "admin.postTypes.taxonomyLabel": "Taxonomies",
   "admin.postTypes.deleteConfirm": "If you delete this post type, all associated posts will be deleted.",
   "admin.postTypes.confirmYes": "Yes"
 }

@@ -50,7 +50,7 @@ function defaultToDisplay(value: unknown): string {
   return String(value);
 }
 
-const FIXED_META_KEYS = new Set(["show_in_menu", "menu_order", "menu_options", "icon", "post_thumbnail", "post_types"]);
+const FIXED_META_KEYS = new Set(["show_in_menu", "menu_order", "menu_options", "icon", "post_thumbnail", "post_types", "taxonomy"]);
 
 function parseMetaSchema(meta: unknown): MetaSchemaItem[] {
   if (Array.isArray(meta)) return meta as MetaSchemaItem[];
@@ -97,7 +97,9 @@ function getFixedMetaInitial(meta: unknown, values?: Record<string, unknown> | n
   const postThumbnail = (v["post_thumbnail"] as boolean) ?? (getMetaByKey(arr, "post_thumbnail")?.default as boolean) ?? false;
   const postTypesVal = v["post_types"] ?? getMetaByKey(arr, "post_types")?.default;
   const postTypesSelected = Array.isArray(postTypesVal) ? (postTypesVal as string[]) : [];
-  return { showInMenu, menuOrder, menuOptionsDisplay, icon, postThumbnail, postTypesSelected };
+  const taxonomyVal = v["taxonomy"] ?? getMetaByKey(arr, "taxonomy")?.default;
+  const taxonomySelected = Array.isArray(taxonomyVal) ? (taxonomyVal as string[]) : [];
+  return { showInMenu, menuOrder, menuOptionsDisplay, icon, postThumbnail, postTypesSelected, taxonomySelected };
 }
 
 const { locale, menuItems, currentUser, items, editRecord, menuPostMetaValues, postTypeTranslations, postTypesNotInMenu = [] } = Astro.props;
@@ -266,6 +268,32 @@ const listUrl = `/${locale}/admin/settings?page=post_types`;
                 <input type="checkbox" id="fixed-post-thumbnail" class="checkbox checkbox-sm checkbox-primary" data-fixed-post-thumbnail checked={fixedInitial.postThumbnail} />
                 <span class="label-text">{t(currentLocale, "admin.postTypes.postThumbnail")}</span>
               </label>
+
+              <div class="form-control border-t border-base-300 pt-3 mt-2">
+                <label class="label py-1">
+                  <span class="label-text font-medium">{t(currentLocale, "admin.postTypes.taxonomyLabel") || "Taxonomias"}</span>
+                </label>
+                <div class="flex flex-wrap gap-3">
+                  <label class="label cursor-pointer justify-start gap-2 py-0">
+                    <input
+                      type="checkbox"
+                      class="checkbox checkbox-sm checkbox-primary fixed-taxonomy-cb"
+                      data-fixed-taxonomy-type="category"
+                      checked={fixedInitial.taxonomySelected.includes("category")}
+                    />
+                    <span class="label-text text-sm">{t(currentLocale, "taxonomy.type.category")}</span>
+                  </label>
+                  <label class="label cursor-pointer justify-start gap-2 py-0">
+                    <input
+                      type="checkbox"
+                      class="checkbox checkbox-sm checkbox-primary fixed-taxonomy-cb"
+                      data-fixed-taxonomy-type="tag"
+                      checked={fixedInitial.taxonomySelected.includes("tag")}
+                    />
+                    <span class="label-text text-sm">{t(currentLocale, "taxonomy.type.tag")}</span>
+                  </label>
+                </div>
+              </div>
 
               {postTypesNotInMenu.length > 0 && (
                 <div class="form-control border-t border-base-300 pt-3 mt-2">
@@ -450,6 +478,12 @@ const listUrl = `/${locale}/admin/settings?page=post_types`;
         .filter(Boolean) as string[];
       arr.push({ key: "post_types", type: "array", default: postTypesSlugs });
 
+      const taxonomyChecked = document.querySelectorAll(".fixed-taxonomy-cb:checked");
+      const taxonomyTypes = Array.from(taxonomyChecked)
+        .map((el) => (el as HTMLElement).dataset["fixedTaxonomyType"])
+        .filter(Boolean) as string[];
+      arr.push({ key: "taxonomy", type: "array", default: taxonomyTypes });
+
       const rows = document.querySelectorAll("#meta-schema-fields .meta-schema-row");
       rows.forEach((row) => {
         const keyInput = row.querySelector("[data-ms-key]") as HTMLInputElement;
@@ -490,6 +524,10 @@ const listUrl = `/${locale}/admin/settings?page=post_types`;
       const postTypesCheckedForValues = document.querySelectorAll(".fixed-post-types-cb:checked");
       metaValues["post_types"] = Array.from(postTypesCheckedForValues)
         .map((el) => (el as HTMLElement).dataset["fixedPostTypeSlug"])
+        .filter(Boolean);
+      const taxonomyCheckedForValues = document.querySelectorAll(".fixed-taxonomy-cb:checked");
+      metaValues["taxonomy"] = Array.from(taxonomyCheckedForValues)
+        .map((el) => (el as HTMLElement).dataset["fixedTaxonomyType"])
         .filter(Boolean);
       rows.forEach((row) => {
         const keyInput = row.querySelector("[data-ms-key]") as HTMLInputElement;
@@ -602,9 +640,15 @@ const listUrl = `/${locale}/admin/settings?page=post_types`;
           if (errorEl) errorEl.textContent = "Erro ao salvar.";
         }
       } else if (detail?.successful) {
-        const targetId = detail?.target?.id;
         const trigger = detail?.trigger;
-        if (targetId === "post-types-form-error" || trigger?.getAttribute?.("hx-put") || trigger?.getAttribute?.("hx-post")) {
+        const form = trigger?.closest?.("form") ?? (trigger as HTMLFormElement | null);
+        const hxPost = form?.getAttribute?.("hx-post");
+        const hxPut = form?.getAttribute?.("hx-put");
+        const isCreatePostType = hxPost === "/api/post-types";
+        const isEditPostType = hxPut?.startsWith?.("/api/post-types/");
+        const targetId = detail?.target?.id;
+        const wantsRefresh = (detail?.xhr as XMLHttpRequest | undefined)?.getResponseHeader?.("HX-Refresh") === "true";
+        if (isCreatePostType || isEditPostType || targetId === "post-types-form-error" || wantsRefresh) {
           window.location.reload();
         }
       }
