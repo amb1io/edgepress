@@ -7,36 +7,11 @@ import {
   locales,
   translations,
   translationsLanguages,
-  defaultMetaSchema,
-  buildMetaSchema,
 } from "./schema.ts";
+import { DEFAULT_POST_TYPES, META_ONLY_POST_TYPE_SLUGS } from "./default-post-types.ts";
 import enTranslations from "../i18n/languages/en.json";
 import esTranslations from "../i18n/languages/es.json";
 import ptBrTranslations from "../i18n/languages/pt_br.json";
-
-const postMetaSchema = buildMetaSchema([
-  { key: "taxonomy", type: "array", default: ["category", "tag"] },
-  { key: "post_thumbnail", type: "boolean", default: true },
-  { key: "post_types", type: "array", default: ["custom_fields"] },
-]);
-
-const attachmentMetaSchema = buildMetaSchema([
-  { key: "show_in_menu", type: "boolean", default: true },
-  { key: "menu_options", type: "array", default: ["new", "list"] },
-  { key: "icon", type: "string", default: "line-md:file" },
-  { key: "mime_type", type: "string" },
-  { key: "attachment_file", type: "string" },
-  { key: "attachment_path", type: "string" },
-  { key: "attachment_alt", type: "string" },
-]);
-
-const translationsMetaSchema = buildMetaSchema([
-  { key: "show_in_menu", type: "boolean", default: true },
-  { key: "menu_options", type: "array", default: ["new", "list"] },
-]);
-
-/** Post types que existem só para referência em meta_values (ex.: post_types no post). Não aparecem no menu. */
-const META_ONLY_POST_TYPES = new Set(["custom_fields"]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function clearSeedData(db: any): Promise<number> {
@@ -48,21 +23,13 @@ export async function clearSeedData(db: any): Promise<number> {
   return deleted.length;
 }
 
+/**
+ * Garante que os post types padrão existam no banco (insere ou atualiza).
+ * Usado pelo seed e pode ser usado pela UI "Carregar padrões".
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function runSeed(db: any): Promise<void> {
+export async function ensurePostTypesFromDefaults(db: any): Promise<Record<string, number>> {
   const now = Date.now();
-
-  const types = [
-    { slug: "post", name: "Post" },
-    { slug: "page", name: "Página" },
-    { slug: "dashboard", name: "Dashboard" },
-    { slug: "settings", name: "Configurações" },
-    { slug: "user", name: "User" },
-    { slug: "attachment", name: "Attachment" },
-    { slug: "translations_languages", name: "Translations Languages" },
-    { slug: "custom_fields", name: "Custom Fields" }, // meta-only: referenciado em meta_values (ex.: post_types), não aparece no menu
-  ];
-
   const existing = await db
     .select({ id: postTypes.id, slug: postTypes.slug })
     .from(postTypes);
@@ -70,60 +37,35 @@ export async function runSeed(db: any): Promise<void> {
     existing.map((r: { id: number; slug: string }) => [r.slug, r.id]),
   );
 
-  const pageMetaSchema = buildMetaSchema([
-    { key: "post_thumbnail", type: "boolean", default: true },
-  ]);
-
-  for (const pt of types) {
-    const metaSchema =
-      pt.slug === "post"
-        ? postMetaSchema
-        : pt.slug === "page"
-          ? pageMetaSchema
-          : pt.slug === "attachment"
-            ? attachmentMetaSchema
-            : pt.slug === "translations_languages"
-              ? translationsMetaSchema
-              : defaultMetaSchema;
+  for (const pt of DEFAULT_POST_TYPES) {
     if (!bySlug.has(pt.slug)) {
       const [inserted] = await db
         .insert(postTypes)
         .values({
           slug: pt.slug,
           name: pt.name,
-          meta_schema: metaSchema,
+          meta_schema: pt.meta_schema,
           created_at: now,
           updated_at: now,
         })
         .returning();
-      if (inserted) bySlug.set(pt.slug, inserted.id);
-    } else if (pt.slug === "post") {
+      if (inserted) bySlug.set(pt.slug, (inserted as { id: number }).id);
+    } else {
       await db
         .update(postTypes)
-        .set({ meta_schema: postMetaSchema, updated_at: now })
-        .where(eq(postTypes.slug, "post"));
-    } else if (pt.slug === "page") {
-      const pageMetaSchema = buildMetaSchema([
-        { key: "post_thumbnail", type: "boolean", default: true },
-      ]);
-      await db
-        .update(postTypes)
-        .set({ meta_schema: pageMetaSchema, updated_at: now })
-        .where(eq(postTypes.slug, "page"));
-    } else if (pt.slug === "attachment") {
-      await db
-        .update(postTypes)
-        .set({ meta_schema: attachmentMetaSchema, updated_at: now })
-        .where(eq(postTypes.slug, "attachment"));
-    } else if (pt.slug === "translations_languages") {
-      await db
-        .update(postTypes)
-        .set({ meta_schema: translationsMetaSchema, updated_at: now })
-        .where(eq(postTypes.slug, "translations_languages"));
+        .set({ name: pt.name, meta_schema: pt.meta_schema, updated_at: now })
+        .where(eq(postTypes.slug, pt.slug));
     }
   }
 
-  const typeIds = Object.fromEntries(bySlug) as Record<string, number>;
+  return Object.fromEntries(bySlug) as Record<string, number>;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function runSeed(db: any): Promise<void> {
+  const now = Date.now();
+
+  const typeIds = await ensurePostTypesFromDefaults(db);
 
   // Taxonomias: Categoria (raiz) e Uncategorized (filha)
   const nowTax = Date.now();
@@ -178,7 +120,6 @@ export async function runSeed(db: any): Promise<void> {
   }
 
   // Locales: Popular tabela com idiomas e países
-  const nowLocales = Date.now();
   const existingLocales = await db
     .select({ id: locales.id, locale_code: locales.locale_code })
     .from(locales);
@@ -282,22 +223,19 @@ export async function runSeed(db: any): Promise<void> {
   function extractNamespaceAndKey(keyString: string): { namespace: string; key: string } {
     const parts = keyString.split(".");
     if (parts.length >= 3) {
-      // Se length >= 3, namespace são todos os blocos exceto o último
       return {
         namespace: parts.slice(0, -1).join("."),
-        key: parts[parts.length - 1],
+        key: parts[parts.length - 1] ?? "",
       };
     } else if (parts.length === 2) {
-      // Se length = 2, namespace é o primeiro bloco, key é o segundo
       return {
-        namespace: parts[0],
-        key: parts[1],
+        namespace: parts[0] ?? "",
+        key: parts[1] ?? "",
       };
     } else {
-      // Se length = 1, usar "default" como namespace
       return {
         namespace: "default",
-        key: parts[0],
+        key: parts[0] ?? "",
       };
     }
   }
@@ -540,7 +478,7 @@ export async function runSeed(db: any): Promise<void> {
     },
     {
       typeSlug: "settings",
-      menu_options: ["list", "new"],
+      menu_options: ["post_types", "list", "new"],
       menu_order: 4,
       icon: "line-md:cog",
     },
@@ -565,7 +503,7 @@ export async function runSeed(db: any): Promise<void> {
   ];
 
   for (const config of menuConfig) {
-    if (META_ONLY_POST_TYPES.has(config.typeSlug)) continue;
+    if (META_ONLY_POST_TYPE_SLUGS.has(config.typeSlug)) continue;
     const typeId = typeIds[config.typeSlug];
     if (!typeId) continue;
 

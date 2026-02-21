@@ -1,8 +1,11 @@
 ---
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import CacheTemplate from "../../../templates/cache.astro";
+import PostTypesTemplate from "../../../templates/post-types.astro";
 import { t, locales, defaultLocale } from "../../../i18n/index.ts";
 import { db } from "../../../db/index.ts";
+import { postTypes, posts, translations, translationsLanguages, locales as localesTable } from "../../../db/schema.ts";
+import { and, eq, like } from "drizzle-orm";
 import { getMenuItems } from "../../../lib/menu.ts";
 import { ensureTranslationsLoaded } from "../../../lib/i18n-helpers.ts";
 
@@ -21,6 +24,8 @@ if (!user) {
 
 const menuItems = await getMenuItems(db);
 const domain = Astro.url.searchParams.get("domain");
+const page = Astro.url.searchParams.get("page");
+const editId = Astro.url.searchParams.get("edit");
 
 let kvItems: { key: string; valuePreview: string }[] = [];
 if (domain === "cache") {
@@ -38,6 +43,70 @@ if (domain === "cache") {
     kvItems = [];
   }
 }
+
+const showPostTypes = page === "post_types";
+let postTypesList: { id: number; slug: string; name: string; meta_schema: unknown; created_at: number | null; updated_at: number | null }[] = [];
+let postTypesEditRecord: typeof postTypesList[0] | null = null;
+let menuPostMetaValues: Record<string, unknown> | null = null;
+let postTypeTranslations: { pt_BR: string; es_ES: string; en_US: string } | null = null;
+
+if (showPostTypes) {
+  postTypesList = await db
+    .select({
+      id: postTypes.id,
+      slug: postTypes.slug,
+      name: postTypes.name,
+      meta_schema: postTypes.meta_schema,
+      created_at: postTypes.created_at,
+      updated_at: postTypes.updated_at,
+    })
+    .from(postTypes)
+    .orderBy(postTypes.slug);
+
+  if (editId) {
+    const idNum = parseInt(editId, 10);
+    if (!Number.isNaN(idNum)) {
+      postTypesEditRecord = postTypesList.find((r) => r.id === idNum) ?? null;
+      if (postTypesEditRecord) {
+        const [menuPost] = await db
+          .select({ meta_values: posts.meta_values })
+          .from(posts)
+          .where(and(eq(posts.post_type_id, postTypesEditRecord.id), like(posts.slug, "menu-%")))
+          .limit(1);
+        if (menuPost?.meta_values) {
+          try {
+            menuPostMetaValues = JSON.parse(menuPost.meta_values) as Record<string, unknown>;
+          } catch {
+            menuPostMetaValues = null;
+          }
+        }
+        const [translationRow] = await db
+          .select({ id: translations.id })
+          .from(translations)
+          .where(and(eq(translations.namespace, "postType"), eq(translations.key, postTypesEditRecord.slug)))
+          .limit(1);
+        if (translationRow) {
+          const langRows = await db
+            .select({
+              locale_code: localesTable.locale_code,
+              value: translationsLanguages.value,
+            })
+            .from(translationsLanguages)
+            .innerJoin(localesTable, eq(translationsLanguages.id_locale_code, localesTable.id))
+            .where(eq(translationsLanguages.id_translations, translationRow.id));
+          const byCode = Object.fromEntries(
+            (langRows as { locale_code: string; value: string }[]).map((r) => [r.locale_code, r.value ?? ""])
+          );
+          postTypeTranslations = {
+            pt_BR: byCode["pt_BR"] ?? "",
+            es_ES: byCode["es_ES"] ?? "",
+            en_US: byCode["en_US"] ?? "",
+          };
+        }
+      }
+    }
+  }
+}
 ---
 
 {domain === "cache" ? (
@@ -46,6 +115,16 @@ if (domain === "cache") {
     menuItems={menuItems}
     currentUser={{ email: user.email ?? "", name: user.name ?? "" }}
     kvItems={kvItems}
+  />
+) : showPostTypes ? (
+  <PostTypesTemplate
+    locale={locale}
+    menuItems={menuItems}
+    currentUser={{ email: user.email ?? "", name: user.name ?? "" }}
+    items={postTypesList}
+    editRecord={postTypesEditRecord}
+    menuPostMetaValues={menuPostMetaValues}
+    postTypeTranslations={postTypeTranslations}
   />
 ) : (
   <AdminLayout title={t(locale, "admin.menu.settings")} locale={locale} menuItems={menuItems} user={user}>
