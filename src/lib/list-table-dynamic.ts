@@ -196,6 +196,10 @@ export async function getTableList(
   const filterCols = Object.keys(filter).filter((k) => displayColumns.includes(k) && filter[k]);
   
   const whereParts: string[] = [];
+  // Na listagem de posts, excluir status "trash"
+  if (safeTable === "posts") {
+    whereParts.push(`${quotedTable}."status" != 'trash'`);
+  }
   for (const col of filterCols) {
     const rawValue = filter[col];
     const escaped = escapeSqliteString(rawValue);

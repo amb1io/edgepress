@@ -20,6 +20,7 @@ import {
   getSettingsWithCache,
   updateSettingsByKeys,
 } from "../../lib/services/settings-service.ts";
+import { invalidateSettingsCache } from "../../lib/kv-cache-sync.ts";
 
 export const prerender = false;
 
@@ -69,6 +70,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
 
     await createSetting(db, { name, value, autoload: autoload ?? true });
+    await invalidateSettingsCache(locals);
     return htmxRefreshResponse();
   } catch (err) {
     console.error("POST /api/settings", err);
@@ -87,6 +89,7 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
     }
 
     await updateSettingsByKeys(db, body, ALLOWED_PATCH_KEYS);
+    await invalidateSettingsCache(locals);
     return jsonResponse({ ok: true });
   } catch (err) {
     console.error("PATCH /api/settings", err);

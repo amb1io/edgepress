@@ -13,12 +13,14 @@ import {
   jsonResponse,
 } from "../../../lib/utils/http-responses.ts";
 import { HTTP_STATUS_CODES } from "../../../lib/constants/index.ts";
+import { invalidateContentListByTable } from "../../../lib/kv-cache-sync.ts";
 
 export const prerender = false;
 
 async function handleTaxonomyUpdate(
   termId: number,
-  request: Request
+  request: Request,
+  locals: App.Locals,
 ): Promise<Response> {
   try {
     const formData = await request.formData();
@@ -58,6 +60,8 @@ async function handleTaxonomyUpdate(
       })
       .where(eq(taxonomies.id, termId));
 
+    await invalidateContentListByTable(locals, "taxonomies");
+
     let language = "—";
     if (id_locale_code != null) {
       const [loc] = await db
@@ -91,7 +95,7 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
   if (!id || !/^\d+$/.test(id)) {
     return badRequestResponse("Bad Request");
   }
-  return handleTaxonomyUpdate(parseInt(id, 10), request);
+  return handleTaxonomyUpdate(parseInt(id, 10), request, locals);
 };
 
 /** POST no mesmo path é aceito como fallback quando o form é enviado como POST (ex.: HTMX não intercepta). */
@@ -103,7 +107,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   if (!id || !/^\d+$/.test(id)) {
     return badRequestResponse("Bad Request");
   }
-  return handleTaxonomyUpdate(parseInt(id, 10), request);
+  return handleTaxonomyUpdate(parseInt(id, 10), request, locals);
 };
 
 export const DELETE: APIRoute = async ({ params, request, locals }) => {
@@ -122,6 +126,7 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
       .where(eq(taxonomies.parent_id, termId));
     await db.delete(postsTaxonomies).where(eq(postsTaxonomies.term_id, termId));
     await db.delete(taxonomies).where(eq(taxonomies.id, termId));
+    await invalidateContentListByTable(locals, "taxonomies");
     return htmlResponse("", 200);
   } catch (err) {
     console.error("DELETE /api/taxonomies/[id]", err);

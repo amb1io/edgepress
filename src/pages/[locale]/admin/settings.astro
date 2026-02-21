@@ -5,7 +5,7 @@ import PostTypesTemplate from "../../../templates/post-types.astro";
 import { t, locales, defaultLocale } from "../../../i18n/index.ts";
 import { db } from "../../../db/index.ts";
 import { postTypes, posts, translations, translationsLanguages, locales as localesTable } from "../../../db/schema.ts";
-import { and, eq, like } from "drizzle-orm";
+import { and, eq, like, sql } from "drizzle-orm";
 import { getMenuItems } from "../../../lib/menu.ts";
 import { ensureTranslationsLoaded } from "../../../lib/i18n-helpers.ts";
 
@@ -49,6 +49,7 @@ let postTypesList: { id: number; slug: string; name: string; meta_schema: unknow
 let postTypesEditRecord: typeof postTypesList[0] | null = null;
 let menuPostMetaValues: Record<string, unknown> | null = null;
 let postTypeTranslations: { pt_BR: string; es_ES: string; en_US: string } | null = null;
+let postTypesNotInMenu: { id: number; slug: string; name: string }[] = [];
 
 if (showPostTypes) {
   postTypesList = await db
@@ -62,6 +63,18 @@ if (showPostTypes) {
     })
     .from(postTypes)
     .orderBy(postTypes.slug);
+
+  // Post types que têm show_in_menu = true (possui post menu com meta show_in_menu)
+  const postTypeIdsWithShowInMenu = await db
+    .selectDistinct({ post_type_id: posts.post_type_id })
+    .from(posts)
+    .where(sql`json_extract(${posts.meta_values}, '$.show_in_menu') = 1`);
+  const idsInMenu = new Set(
+    (postTypeIdsWithShowInMenu as { post_type_id: number }[]).map((r) => r.post_type_id).filter(Boolean)
+  );
+  postTypesNotInMenu = postTypesList
+    .filter((pt) => !idsInMenu.has(pt.id))
+    .map((pt) => ({ id: pt.id, slug: pt.slug, name: pt.name }));
 
   if (editId) {
     const idNum = parseInt(editId, 10);
@@ -125,6 +138,7 @@ if (showPostTypes) {
     editRecord={postTypesEditRecord}
     menuPostMetaValues={menuPostMetaValues}
     postTypeTranslations={postTypeTranslations}
+    postTypesNotInMenu={postTypesNotInMenu}
   />
 ) : (
   <AdminLayout title={t(locale, "admin.menu.settings")} locale={locale} menuItems={menuItems} user={user}>

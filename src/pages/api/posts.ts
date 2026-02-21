@@ -55,6 +55,9 @@ import { slugify } from "../../lib/slugify.ts";
 // Constants
 import { getErrorMessage } from "../../lib/constants/error-messages.ts";
 
+// KV cache sync
+import { syncPostCache } from "../../lib/kv-cache-sync.ts";
+
 // Auth
 import { requireMinRole, resolveAuthorIdForRole } from "../../lib/api-auth.ts";
 
@@ -481,6 +484,9 @@ export async function POST({
         }
       }
     }
+
+    // Atualizar cache KV com o post atual (create ou update)
+    await syncPostCache(locals, db, postId);
 
     // Retornar resposta
     const listUrl = buildAbsoluteUrl(request, buildListUrl(locale, post_type));

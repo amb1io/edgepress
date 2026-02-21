@@ -10,6 +10,7 @@ import {
 } from "../../lib/utils/http-responses.ts";
 import { HTTP_STATUS_CODES } from "../../lib/constants/index.ts";
 import { emailExists, createUser } from "../../lib/services/user-service.ts";
+import { invalidateContentListByTable } from "../../lib/kv-cache-sync.ts";
 
 export const prerender = false;
 
@@ -42,6 +43,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       role: roleNum ?? undefined,
     });
 
+    await invalidateContentListByTable(locals, "user");
     return htmxRefreshResponse();
   } catch (err) {
     console.error("POST /api/users", err);

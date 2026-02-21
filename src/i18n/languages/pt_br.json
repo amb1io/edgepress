@@ -105,7 +105,6 @@
   "admin.settings.name": "Nome",
   "admin.settings.value": "Valor",
   "admin.settings.autoload": "Autoload",
-  "admin.postTypes.loadDefaults": "Carregar padrões",
   "admin.postTypes.new": "Novo tipo de post",
   "admin.postTypes.name": "Nome",
   "admin.postTypes.metaSchema": "Meta schema (JSON)",
@@ -122,5 +121,8 @@
   "admin.postTypes.icon": "Ícone",
   "admin.postTypes.iconPlaceholder": "line-md:document",
   "admin.postTypes.postThumbnail": "Post thumbnail?",
-  "admin.postTypes.extraFields": "Outros campos"
+  "admin.postTypes.extraFields": "Outros campos",
+  "admin.postTypes.postTypesLabel": "Tipos de post (custom fields, etc.)",
+  "admin.postTypes.deleteConfirm": "Se apagar o post type todos os posts associados serão deletados.",
+  "admin.postTypes.confirmYes": "Sim"
 }

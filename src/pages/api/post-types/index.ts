@@ -17,6 +17,8 @@ import {
 import type { MetaSchemaItem } from "../../../db/schema/meta_schema.ts";
 import { normalizeLineMdIcon } from "../../../lib/line-md-icons.ts";
 import { upsertPostTypeTranslations } from "../../../lib/post-type-translations.ts";
+import { invalidateContentListByTable, invalidateI18nCache } from "../../../lib/kv-cache-sync.ts";
+import { invalidateTranslationsCache } from "../../../i18n/translations.ts";
 
 export const prerender = false;
 
@@ -154,6 +156,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
       en_US: translationEnUs,
     });
 
+    await invalidateContentListByTable(locals, "post_types");
+    await invalidateI18nCache(locals);
+    invalidateTranslationsCache();
     return htmxRefreshResponse();
   } catch (err) {
     console.error("POST /api/post-types", err);

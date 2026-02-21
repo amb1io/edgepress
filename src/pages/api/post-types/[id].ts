@@ -18,6 +18,11 @@ import {
 import type { MetaSchemaItem } from "../../../db/schema/meta_schema.ts";
 import { normalizeLineMdIcon } from "../../../lib/line-md-icons.ts";
 import { upsertPostTypeTranslations } from "../../../lib/post-type-translations.ts";
+import {
+  invalidateContentListByTable,
+  invalidateI18nCache,
+} from "../../../lib/kv-cache-sync.ts";
+import { invalidateTranslationsCache } from "../../../i18n/translations.ts";
 
 export const prerender = false;
 
@@ -42,11 +47,14 @@ function parseMetaSchema(value: unknown): MetaSchemaItem[] {
 
 function parseMetaValues(value: unknown): Record<string, unknown> {
   if (value == null) return {};
-  if (typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value === "object" && !Array.isArray(value))
+    return value as Record<string, unknown>;
   if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value) as unknown;
-      return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      return typeof parsed === "object" &&
+        parsed !== null &&
+        !Array.isArray(parsed)
         ? (parsed as Record<string, unknown>)
         : {};
     } catch {
@@ -106,8 +114,14 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
     let translationEnUs = "";
 
     if (contentType.includes("application/json")) {
-      const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-      slug = String(body?.slug ?? "").trim().toLowerCase().replace(/\s+/g, "_");
+      const body = (await request.json().catch(() => ({}))) as Record<
+        string,
+        unknown
+      >;
+      slug = String(body?.slug ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_");
       name = String(body?.name ?? "").trim();
       meta_schema = parseMetaSchema(body?.meta_schema);
       meta_values = parseMetaValues(body?.meta_values);
@@ -116,7 +130,10 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
       translationEnUs = String(body?.translation_en_US ?? "").trim();
     } else {
       const formData = await request.formData();
-      slug = (getString(formData, "slug") ?? "").trim().toLowerCase().replace(/\s+/g, "_");
+      slug = (getString(formData, "slug") ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_");
       name = getString(formData, "name") ?? "";
       meta_schema = parseMetaSchema(formData.get("meta_schema"));
       meta_values = parseMetaValues(formData.get("meta_values"));
@@ -125,7 +142,10 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
       translationEnUs = (getString(formData, "translation_en_US") ?? "").trim();
     }
     if (typeof meta_values["icon"] !== "undefined") {
-      meta_values = { ...meta_values, icon: normalizeLineMdIcon(meta_values["icon"]) };
+      meta_values = {
+        ...meta_values,
+        icon: normalizeLineMdIcon(meta_values["icon"]),
+      };
     }
 
     if (!slug || !name) {
@@ -174,6 +194,9 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
       en_US: translationEnUs,
     });
 
+    await invalidateContentListByTable(locals, "post_types");
+    await invalidateI18nCache(locals);
+    invalidateTranslationsCache();
     return htmxRefreshResponse();
   } catch (err) {
     console.error("PUT /api/post-types/[id]", err);
@@ -196,17 +219,14 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
 
   if (!existing) return notFoundResponse("Not Found");
 
-  const [postWithType] = await db
-    .select({ id: posts.id })
-    .from(posts)
-    .where(eq(posts.post_type_id, id))
-    .limit(1);
-  if (postWithType) {
-    return badRequestResponse(
-      "Não é possível excluir este tipo de post: existem posts associados. Remova ou altere os posts antes de excluir."
-    );
-  }
+  // Marcar como trash e depois remover os posts (post_type_id é NOT NULL no banco)
+  await db
+    .update(posts)
+    .set({ status: "trash" as typeof posts.$inferSelect.status })
+    .where(eq(posts.post_type_id, id));
 
+  await db.delete(posts).where(eq(posts.post_type_id, id));
   await db.delete(postTypes).where(eq(postTypes.id, id));
+  await invalidateContentListByTable(locals, "post_types");
   return htmxRefreshResponse();
 };

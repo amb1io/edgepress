@@ -38,6 +38,8 @@ export interface Props {
   menuPostMetaValues?: Record<string, unknown> | null;
   /** Traduções do nome do post type (PT_BR, ES, EN_US) quando em edição */
   postTypeTranslations?: PostTypeTranslations | null;
+  /** Post types que não têm show_in_menu = true (para checkbox "post_types" no meta schema) */
+  postTypesNotInMenu?: { id: number; slug: string; name: string }[];
 }
 
 function defaultToDisplay(value: unknown): string {
@@ -48,7 +50,7 @@ function defaultToDisplay(value: unknown): string {
   return String(value);
 }
 
-const FIXED_META_KEYS = new Set(["show_in_menu", "menu_order", "menu_options", "icon", "post_thumbnail"]);
+const FIXED_META_KEYS = new Set(["show_in_menu", "menu_order", "menu_options", "icon", "post_thumbnail", "post_types"]);
 
 function parseMetaSchema(meta: unknown): MetaSchemaItem[] {
   if (Array.isArray(meta)) return meta as MetaSchemaItem[];
@@ -93,10 +95,12 @@ function getFixedMetaInitial(meta: unknown, values?: Record<string, unknown> | n
   const iconRaw = (v["icon"] as string) ?? (getMetaByKey(arr, "icon")?.default as string) ?? "";
   const icon = isValidLineMdIcon(iconRaw) ? iconRaw : DEFAULT_ICON;
   const postThumbnail = (v["post_thumbnail"] as boolean) ?? (getMetaByKey(arr, "post_thumbnail")?.default as boolean) ?? false;
-  return { showInMenu, menuOrder, menuOptionsDisplay, icon, postThumbnail };
+  const postTypesVal = v["post_types"] ?? getMetaByKey(arr, "post_types")?.default;
+  const postTypesSelected = Array.isArray(postTypesVal) ? (postTypesVal as string[]) : [];
+  return { showInMenu, menuOrder, menuOptionsDisplay, icon, postThumbnail, postTypesSelected };
 }
 
-const { locale, menuItems, currentUser, items, editRecord, menuPostMetaValues, postTypeTranslations } = Astro.props;
+const { locale, menuItems, currentUser, items, editRecord, menuPostMetaValues, postTypeTranslations, postTypesNotInMenu = [] } = Astro.props;
 const currentLocale = locale as Locale;
 const isEdit = editRecord != null;
 
@@ -122,18 +126,6 @@ const listUrl = `/${locale}/admin/settings?page=post_types`;
   <div class="p-6 flex flex-col gap-6">
     <div class="flex flex-wrap items-center gap-2 justify-between">
       <h2 class="text-xl font-semibold">{t(currentLocale, "menu.option.post_types") || "Post Types"}</h2>
-      <form
-        method="post"
-        action="/api/post-types/load-defaults"
-        class="inline"
-        hx-post="/api/post-types/load-defaults"
-        hx-swap="none"
-        id="load-defaults-form"
-      >
-        <button type="submit" class="btn btn-outline btn-sm">
-          {t(currentLocale, "admin.postTypes.loadDefaults") || "Carregar padrões"}
-        </button>
-      </form>
     </div>
 
     <div class="grid gap-6 lg:grid-cols-2">
@@ -274,6 +266,29 @@ const listUrl = `/${locale}/admin/settings?page=post_types`;
                 <input type="checkbox" id="fixed-post-thumbnail" class="checkbox checkbox-sm checkbox-primary" data-fixed-post-thumbnail checked={fixedInitial.postThumbnail} />
                 <span class="label-text">{t(currentLocale, "admin.postTypes.postThumbnail")}</span>
               </label>
+
+              {postTypesNotInMenu.length > 0 && (
+                <div class="form-control border-t border-base-300 pt-3 mt-2">
+                  <label class="label py-1">
+                    <span class="label-text font-medium">{t(currentLocale, "admin.postTypes.postTypesLabel") || "Tipos de post (custom fields, etc.)"}</span>
+                  </label>
+                  <div class="flex flex-wrap gap-3">
+                    {postTypesNotInMenu.map((pt) => (
+                      <div>
+                        <label class="label cursor-pointer justify-start gap-2 py-0">
+                          <input
+                            type="checkbox"
+                            class="checkbox checkbox-sm checkbox-primary fixed-post-types-cb"
+                            data-fixed-post-type-slug={pt.slug}
+                            checked={fixedInitial.postTypesSelected.includes(pt.slug)}
+                          />
+                          <span class="label-text text-sm">{pt.name}</span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <p class="text-sm text-base-content/70 mt-2">{t(currentLocale, "admin.postTypes.extraFields")}</p>
@@ -340,11 +355,9 @@ const listUrl = `/${locale}/admin/settings?page=post_types`;
                   </a>
                   <button
                     type="button"
-                    class="btn btn-ghost btn-sm text-error"
-                    hx-delete={`/api/post-types/${row.id}`}
-                    hx-confirm={t(currentLocale, "admin.list.deleteConfirm")}
-                    hx-target="closest li"
-                    hx-swap="outerHTML swap:1s"
+                    class="btn btn-ghost btn-sm text-error post-type-delete-btn"
+                    data-delete-url={`/api/post-types/${row.id}`}
+                    data-row-id={row.id}
                   >
                     {t(currentLocale, "admin.list.delete")}
                   </button>
@@ -356,6 +369,23 @@ const listUrl = `/${locale}/admin/settings?page=post_types`;
       </div>
     </div>
   </div>
+
+  <dialog id="delete-post-type-modal" class="modal">
+    <div class="modal-box">
+      <p id="delete-post-type-modal-message" class="py-2">
+        {t(currentLocale, "admin.postTypes.deleteConfirm") || "Se apagar o post type todos os posts associados serão deletados."}
+      </p>
+      <div class="modal-action">
+        <form method="dialog">
+          <button type="button" class="btn btn-ghost btn-sm cancel-delete-post-type">{t(currentLocale, "admin.content.cancel") || "Cancelar"}</button>
+          <button type="button" class="btn btn-error btn-sm confirm-delete-post-type">{t(currentLocale, "admin.postTypes.confirmYes") || "Sim"}</button>
+        </form>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button type="submit">fechar</button>
+    </form>
+  </dialog>
 </AdminLayout>
 
 <style>
@@ -414,6 +444,12 @@ const listUrl = `/${locale}/admin/settings?page=post_types`;
       const postThumbnail = (document.querySelector("[data-fixed-post-thumbnail]") as HTMLInputElement)?.checked ?? false;
       arr.push({ key: "post_thumbnail", type: "boolean", default: postThumbnail });
 
+      const postTypesChecked = document.querySelectorAll(".fixed-post-types-cb:checked");
+      const postTypesSlugs = Array.from(postTypesChecked)
+        .map((el) => (el as HTMLElement).dataset["fixedPostTypeSlug"])
+        .filter(Boolean) as string[];
+      arr.push({ key: "post_types", type: "array", default: postTypesSlugs });
+
       const rows = document.querySelectorAll("#meta-schema-fields .meta-schema-row");
       rows.forEach((row) => {
         const keyInput = row.querySelector("[data-ms-key]") as HTMLInputElement;
@@ -451,6 +487,10 @@ const listUrl = `/${locale}/admin/settings?page=post_types`;
         metaValues["icon"] = (document.querySelector("[data-fixed-icon]") as HTMLSelectElement | null)?.value?.trim() || "line-md:document";
       }
       metaValues["post_thumbnail"] = postThumbnail;
+      const postTypesCheckedForValues = document.querySelectorAll(".fixed-post-types-cb:checked");
+      metaValues["post_types"] = Array.from(postTypesCheckedForValues)
+        .map((el) => (el as HTMLElement).dataset["fixedPostTypeSlug"])
+        .filter(Boolean);
       rows.forEach((row) => {
         const keyInput = row.querySelector("[data-ms-key]") as HTMLInputElement;
         const typeSelect = row.querySelector("[data-ms-type]") as unknown as HTMLSelectElement | null;
@@ -504,6 +544,45 @@ const listUrl = `/${locale}/admin/settings?page=post_types`;
       btn.addEventListener("click", () => btn.closest(".meta-schema-row")?.remove());
     });
 
+    const deleteModal = document.getElementById("delete-post-type-modal") as HTMLDialogElement | null;
+    const confirmDeleteBtn = document.querySelector(".confirm-delete-post-type");
+    const cancelDeleteBtn = document.querySelector(".cancel-delete-post-type");
+    let pendingDeleteUrl: string | null = null;
+
+    document.querySelectorAll(".post-type-delete-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        pendingDeleteUrl = (btn as HTMLElement).dataset["deleteUrl"] ?? null;
+        if (deleteModal && pendingDeleteUrl) {
+          deleteModal.showModal();
+        }
+      });
+    });
+
+    confirmDeleteBtn?.addEventListener("click", async () => {
+      if (!pendingDeleteUrl || !deleteModal) return;
+      try {
+        const res = await fetch(pendingDeleteUrl, {
+          method: "DELETE",
+          headers: { "HX-Request": "true" },
+        });
+        if (res.ok) {
+          deleteModal.close();
+          pendingDeleteUrl = null;
+          window.location.reload();
+        } else {
+          const data = await res.json().catch(() => ({})) as { error?: string };
+          alert(typeof data?.error === "string" ? data.error : "Erro ao excluir.");
+        }
+      } catch (e) {
+        alert("Erro ao excluir.");
+      }
+    });
+
+    cancelDeleteBtn?.addEventListener("click", () => {
+      deleteModal?.close();
+      pendingDeleteUrl = null;
+    });
+
     document.body.addEventListener("htmx:afterRequest", (ev: Event) => {
       const evt = ev as CustomEvent & { detail?: { successful?: boolean; target?: HTMLElement; trigger?: HTMLElement; xhr?: { status?: number; responseText?: string; responseURL?: string } } };
       const detail = evt.detail;
@@ -525,8 +604,7 @@ const listUrl = `/${locale}/admin/settings?page=post_types`;
       } else if (detail?.successful) {
         const targetId = detail?.target?.id;
         const trigger = detail?.trigger;
-        const isLoadDefaults = trigger?.closest?.("#load-defaults-form");
-        if (isLoadDefaults || targetId === "post-types-form-error" || trigger?.getAttribute?.("hx-put") || trigger?.getAttribute?.("hx-post")) {
+        if (targetId === "post-types-form-error" || trigger?.getAttribute?.("hx-put") || trigger?.getAttribute?.("hx-post")) {
           window.location.reload();
         }
       }
