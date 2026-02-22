@@ -46,31 +46,6 @@ const currentLocale = locale as Locale;
         </main>
       </div>
     </div>
-    <script>
-      import { authClient } from "../lib/auth-client.ts";
-
-      // Handler para logout - executa quando o DOM estiver pronto
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", () => {
-          const logoutLink = document.getElementById("logout-link");
-          if (logoutLink) {
-            logoutLink.addEventListener("click", async (e) => {
-              e.preventDefault();
-              await authClient.signOut();
-              window.location.href = "/login";
-            });
-          }
-        });
-      } else {
-        const logoutLink = document.getElementById("logout-link");
-        if (logoutLink) {
-          logoutLink.addEventListener("click", async (e) => {
-            e.preventDefault();
-            await authClient.signOut();
-            window.location.href = "/login";
-          });
-        }
-      }
-    </script>
+    <!-- Logout: link "Sair" no AdminHeader aponta para /api/logout -->
   </body>
 </html>

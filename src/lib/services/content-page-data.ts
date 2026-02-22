@@ -105,8 +105,10 @@ export async function getContentPageData(params: {
   action: string;
   idParam: string | null;
   userId: string;
+  /** Quando definido (perfil autor), edição só permitida se post.author_id === authorIdRestrict. */
+  authorIdRestrict?: string | null;
 }): Promise<ContentPageDataResponse> {
-  const { db, locale, postTypeSlug, action, idParam, userId } = params;
+  const { db, locale, postTypeSlug, action, idParam, userId, authorIdRestrict } = params;
 
   const [typeRowResult] = await db
     .select({
@@ -206,6 +208,11 @@ export async function getContentPageData(params: {
     post = row ?? null;
 
     if (!post) {
+      return redirect(
+        `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`
+      );
+    }
+    if (authorIdRestrict != null && post.author_id !== authorIdRestrict) {
       return redirect(
         `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`
       );

@@ -33,12 +33,20 @@ if (!locales.includes(locale as "en" | "es" | "pt-br")) {
 await ensureTranslationsLoaded(locale);
 
 const user = Astro.locals.user;
-
 if (!user) {
   return Astro.redirect("/login");
 }
 
-const menuItems = await getMenuItems(db);
+const { getRoleFromUser, canAccessRoute, filterMenuItemsByRole, isAuthorRole } = await import("../../../lib/permissions.ts");
+const roleId = getRoleFromUser(user);
+const pathname = Astro.url.pathname;
+const allowed = await canAccessRoute(db, roleId, pathname);
+if (!allowed) {
+  return Astro.redirect(`/${locale}/admin`);
+}
+
+const allMenuItems = await getMenuItems(db);
+const menuItems = await filterMenuItemsByRole(db, allMenuItems, roleId);
 const postTypesWithNew = menuItems
   .filter((item) => item.menuOptions.includes("new"))
   .map((item) => item.postTypeSlug);
@@ -127,6 +135,7 @@ if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate &&
     action,
     idParam,
     userId: user?.id ?? "",
+    authorIdRestrict: isAuthorRole(roleId) && user?.id ? user.id : null,
   });
   if (isContentPageRedirect(result)) {
     return Astro.redirect(result.url);

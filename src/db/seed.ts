@@ -4,6 +4,7 @@ import {
   posts,
   taxonomies,
   settings,
+  roleCapability,
   locales,
   translations,
   translationsLanguages,
@@ -445,6 +446,46 @@ export async function runSeed(db: any): Promise<void> {
       await db.insert(settings).values(row);
       existingNames.add(row.name);
     }
+  }
+
+  // Permissões por perfil (0=admin, 1=editor, 2=autor, 3=leitor)
+  const capabilityRows: { roleId: number; capability: string }[] = [
+    { roleId: 0, capability: "*" },
+    { roleId: 1, capability: "admin.dashboard" },
+    { roleId: 1, capability: "admin.content" },
+    { roleId: 1, capability: "admin.list" },
+    { roleId: 1, capability: "admin.media" },
+    { roleId: 1, capability: "action.delete" },
+    { roleId: 1, capability: "menu.full" },
+    { roleId: 2, capability: "admin.dashboard" },
+    { roleId: 2, capability: "admin.content" },
+    { roleId: 2, capability: "admin.list" },
+    { roleId: 2, capability: "admin.media" },
+    { roleId: 2, capability: "menu.full" },
+    { roleId: 3, capability: "admin.dashboard" },
+  ];
+  const existingCapabilities = await db
+    .select({ roleId: roleCapability.roleId, capability: roleCapability.capability })
+    .from(roleCapability);
+  const existingCapSet = new Set(
+    existingCapabilities.map((r: { roleId: number; capability: string }) => `${r.roleId}:${r.capability}`),
+  );
+  for (const row of capabilityRows) {
+    const key = `${row.roleId}:${row.capability}`;
+    if (!existingCapSet.has(key)) {
+      await db.insert(roleCapability).values(row);
+      existingCapSet.add(key);
+    }
+  }
+
+  // Documentar origem do permissionamento em settings (sistematização)
+  if (!existingNames.has("admin_permission_source")) {
+    await db.insert(settings).values({
+      name: "admin_permission_source",
+      value: "role_capability",
+      autoload: true,
+    });
+    existingNames.add("admin_permission_source");
   }
 
   const menuConfig: {

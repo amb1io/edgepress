@@ -17,12 +17,21 @@ if (!locales.includes(locale as "en" | "es" | "pt-br")) {
 // Pré-carregar traduções
 await ensureTranslationsLoaded(locale);
 
-const user = (Astro.locals as { user?: { email?: string; name?: string } | null }).user;
+const user = (Astro.locals as { user?: { email?: string; name?: string; role?: number } | null }).user;
 if (!user) {
   return Astro.redirect("/login");
 }
 
-const menuItems = await getMenuItems(db);
+const { getRoleFromUser, canAccessRoute, filterMenuItemsByRole } = await import("../../../lib/permissions.ts");
+const roleId = getRoleFromUser(user);
+const pathname = Astro.url.pathname;
+const allowed = await canAccessRoute(db, roleId, pathname);
+if (!allowed) {
+  return Astro.redirect(`/${locale}/admin`);
+}
+
+const allMenuItems = await getMenuItems(db);
+const menuItems = await filterMenuItemsByRole(db, allMenuItems, roleId);
 const domain = Astro.url.searchParams.get("domain");
 const page = Astro.url.searchParams.get("page");
 const editId = Astro.url.searchParams.get("edit");
