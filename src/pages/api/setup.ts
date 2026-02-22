@@ -5,7 +5,6 @@
  * O seed do banco deve ser executado apenas via npm (ex.: npm run db:seed).
  */
 import type { APIRoute } from "astro";
-import { env } from "cloudflare:workers";
 import { auth } from "../../lib/auth.ts";
 import { db } from "../../db/index.ts";
 import { settings as settingsTable } from "../../db/schema.ts";
@@ -13,7 +12,6 @@ import { eq } from "drizzle-orm";
 import { getString } from "../../lib/utils/form-data.ts";
 import { sanitizeCallbackURL } from "../../lib/utils/url-validator.ts";
 import { badRequestHtmlResponse, htmxRedirectResponse } from "../../lib/utils/http-responses.ts";
-import { runMigrationsIfNeeded } from "../../db/run-migrations-d1.ts";
 
 export const prerender = false;
 
@@ -61,8 +59,6 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     origin,
     defaultCallback,
   );
-
-  await runMigrationsIfNeeded(env.DB);
 
   const authRequest = new Request(`${origin}/api/auth/sign-up/email`, {
     method: "POST",
