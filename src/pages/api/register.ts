@@ -141,14 +141,18 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
     data?.url ?? `/${locale || "pt-br"}/admin/list?type=user&limit=10&page=1`;
 
   const responseHeaders = new Headers({ Location: location });
-  const cookies = authResponse.headers.getSetCookie?.() ?? [];
-  if (cookies.length > 0) {
-    for (const cookie of cookies) {
-      responseHeaders.append("Set-Cookie", cookie);
+  // Só repassa Set-Cookie quando NÃO for admin criando usuário: assim a sessão atual
+  // (do admin) é preservada e o novo usuário fica apenas cadastrado.
+  if (!isAdmin) {
+    const cookies = authResponse.headers.getSetCookie?.() ?? [];
+    if (cookies.length > 0) {
+      for (const cookie of cookies) {
+        responseHeaders.append("Set-Cookie", cookie);
+      }
+    } else {
+      const setCookie = authResponse.headers.get("set-cookie");
+      if (setCookie) responseHeaders.append("Set-Cookie", setCookie);
     }
-  } else {
-    const setCookie = authResponse.headers.get("set-cookie");
-    if (setCookie) responseHeaders.append("Set-Cookie", setCookie);
   }
 
   return new Response(null, {

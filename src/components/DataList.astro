@@ -13,7 +13,8 @@ export interface DataListColumn {
 
 export interface DataListActionConfig {
   editLinkTemplate: string;
-  deletePathTemplate: string;
+  /** Omitir ou undefined para ocultar botão deletar (ex.: perfil autor). */
+  deletePathTemplate?: string;
   deleteConfirm: string;
   duplicatePathTemplate?: string;
 }

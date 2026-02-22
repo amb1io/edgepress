@@ -18,7 +18,16 @@ if (!user) {
   return Astro.redirect("/login");
 }
 
-const menuItems = await getMenuItems(db);
+const { getRoleFromUser, canAccessRoute, filterMenuItemsByRole } = await import("../../../lib/permissions.ts");
+const roleId = getRoleFromUser(user);
+const pathname = Astro.url.pathname;
+const allowed = await canAccessRoute(db, roleId, pathname);
+if (!allowed) {
+  return Astro.redirect(`/${locale}/admin`);
+}
+
+const allMenuItems = await getMenuItems(db);
+const menuItems = await filterMenuItemsByRole(db, allMenuItems, roleId);
 ---
 
 <AdminLayout title={t(locale, "admin.menu.media")} locale={locale} menuItems={menuItems} user={user}>

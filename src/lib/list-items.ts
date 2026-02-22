@@ -29,6 +29,8 @@ export type GetListItemsParams = {
   page?: number;
   /** Optional filters: column name -> search string (LIKE) */
   filter?: Record<string, string>;
+  /** Quando definido (ex.: perfil autor), lista apenas posts deste autor. */
+  authorId?: string;
 };
 
 export type GetListItemsResult = {
@@ -94,6 +96,9 @@ export async function getListItems(
   }
   if (filter.author) {
     conditions.push(like(user.name, `%${filter.author}%`));
+  }
+  if (params.authorId) {
+    conditions.push(eq(posts.author_id, params.authorId));
   }
 
   if (filter.categories) {

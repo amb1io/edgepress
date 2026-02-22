@@ -94,7 +94,7 @@ const currentLocale = locale as Locale;
               <span>{user.name || user.email}</span>
             </li>
             <li>
-              <a id="logout-link" href="/login">
+              <a id="logout-link" href={`/api/logout?redirect=${encodeURIComponent(`/${currentLocale}/login`)}`}>
                 <Icon name="line-md:logout" size={18} aria-hidden="true" />
                 {t(currentLocale, "admin.signOut")}
               </a>
@@ -107,32 +107,7 @@ const currentLocale = locale as Locale;
   </div>
 </header>
 
-<script>
-  import { authClient } from "../lib/auth-client.ts";
-
-  // Handler para logout - executa quando o DOM estiver pronto
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => {
-      const logoutLink = document.getElementById("logout-link");
-      if (logoutLink) {
-        logoutLink.addEventListener("click", async (e) => {
-          e.preventDefault();
-          await authClient.signOut();
-          window.location.href = "/login";
-        });
-      }
-    });
-  } else {
-    const logoutLink = document.getElementById("logout-link");
-    if (logoutLink) {
-      logoutLink.addEventListener("click", async (e) => {
-        e.preventDefault();
-        await authClient.signOut();
-        window.location.href = "/login";
-      });
-    }
-  }
-</script>
+<!-- Logout é feito via GET /api/logout?redirect=/{locale}/login (o link acima) -->
 <script is:inline>
   (function () {
     const KEY = "edgepress-theme";
