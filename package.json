@@ -40,6 +40,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:migrate:local": "wrangler d1 migrations apply edgepress --local -c wrangler.jsonc",
     "db:migrate:remote": "wrangler d1 migrations apply edgepress --remote -c wrangler.jsonc",
+    "db:migrate:remote:dev": "wrangler d1 migrations apply edgepress-dev-1 --remote -c wrangler.jsonc",
     "db:baseline:remote": "wrangler d1 execute edgepress --remote --file=./drizzle/baseline.sql -c wrangler.jsonc",
     "db:studio": "drizzle-kit studio",
     "seed": "tsx scripts/seed-local.ts",
