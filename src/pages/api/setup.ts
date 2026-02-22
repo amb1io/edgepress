@@ -1,8 +1,8 @@
 /**
  * API de conclusão do setup inicial.
  * POST: aplica migrações se necessário (cria tabelas se não existirem), cria o primeiro usuário (better-auth),
- * executa seed apenas quando não havia tabelas ou setup_done = "N", atualiza site_name, site_description e seta setup_done=Y.
- * A função de seed não é exposta como API; só é chamada neste fluxo.
+ * atualiza site_name, site_description e seta setup_done=Y.
+ * O seed do banco deve ser executado apenas via npm (ex.: npm run db:seed).
  */
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
@@ -13,7 +13,6 @@ import { eq } from "drizzle-orm";
 import { getString } from "../../lib/utils/form-data.ts";
 import { sanitizeCallbackURL } from "../../lib/utils/url-validator.ts";
 import { badRequestHtmlResponse, htmxRedirectResponse } from "../../lib/utils/http-responses.ts";
-import { runSeed } from "../../db/seed.ts";
 import { runMigrationsIfNeeded } from "../../db/run-migrations-d1.ts";
 
 export const prerender = false;
@@ -64,21 +63,6 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   );
 
   await runMigrationsIfNeeded(env.DB);
-
-  let needSeed = true;
-  try {
-    const [row] = await db
-      .select({ value: settingsTable.value })
-      .from(settingsTable)
-      .where(eq(settingsTable.name, "setup_done"))
-      .limit(1);
-    if (row?.value === "Y") needSeed = false;
-  } catch {
-    needSeed = true;
-  }
-  if (needSeed) {
-    await runSeed(db);
-  }
 
   const authRequest = new Request(`${origin}/api/auth/sign-up/email`, {
     method: "POST",

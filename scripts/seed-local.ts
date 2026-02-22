@@ -1,38 +1,68 @@
 /**
- * Script para executar o seed no banco D1 local
- * 
- * Como o seed precisa acessar o banco D1 que só está disponível no contexto
- * do Cloudflare Workers, este script fornece instruções para executar o seed.
- * 
- * O seed pode ser executado de duas formas:
- * 1. Via API /api/seed (requer autenticação de admin)
- * 2. Via página de setup /pt-br/setup (executa automaticamente)
+ * Executa o seed no banco D1 local.
+ * Uso: npm run db:seed
+ *
+ * Requer que o banco local já exista (rode antes: npm run db:migrate:local).
+ * Usa o arquivo SQLite em .wrangler/state/v3/d1/ gerado pelo wrangler.
  */
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
+import { createClient } from "@libsql/client/node";
+import { drizzle } from "drizzle-orm/libsql";
+import * as schema from "../src/db/schema.ts";
+import { runSeed } from "../src/db/seed.ts";
 
-console.log(`
-╔══════════════════════════════════════════════════════════════╗
-║                    Executar Seed                             ║
-╚══════════════════════════════════════════════════════════════╝
+const WRANGLER_STATE = join(process.cwd(), ".wrangler", "state", "v3", "d1");
 
-Para executar o seed do banco de dados, você tem duas opções:
+function findLocalD1Sqlite(dir: string): string | null {
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    for (const e of entries) {
+      const full = join(dir, e.name);
+      if (e.isDirectory()) {
+        const found = findLocalD1Sqlite(full);
+        if (found) return found;
+      } else if (e.isFile() && e.name.endsWith(".sqlite")) {
+        return full;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
 
-📌 Opção 1: Via API (Recomendado)
-   1. Inicie o servidor: npm run dev
-   2. Faça login como administrador
-   3. Acesse: http://localhost:4321/api/seed
-   
-   Ou via curl (após autenticação):
-   curl -X GET http://localhost:4321/api/seed \\
-     -H "Cookie: better-auth.session_token=SEU_TOKEN"
+async function main(): Promise<void> {
+  const sqlitePath = findLocalD1Sqlite(WRANGLER_STATE);
+  if (!sqlitePath) {
+    console.error(`
+⚠️  Banco D1 local não encontrado em ${WRANGLER_STATE}
 
-📌 Opção 2: Via Página de Setup
-   1. Acesse: http://localhost:4321/pt-br/setup
-   2. O seed será executado automaticamente durante o setup inicial
+Rode antes as migrações locais:
 
-⚠️  Nota: O seed popula as tabelas:
-   - locales (en_US, es_ES, pt_BR)
-   - translations (chaves de tradução)
-   - translations_languages (traduções por locale)
-   - post_types, taxonomies, settings, etc.
+  npm run db:migrate:local
 
+Depois execute o seed novamente:
+
+  npm run db:seed
 `);
+    process.exit(1);
+  }
+
+  const url = `file:${sqlitePath}`;
+  const client = createClient({ url });
+  const db = drizzle(client, { schema });
+
+  try {
+    console.log("Executando seed no banco local...");
+    await runSeed(db);
+    console.log("Seed concluído com sucesso.");
+  } catch (err) {
+    console.error("Erro ao executar seed:", err);
+    process.exit(1);
+  } finally {
+    client.close();
+  }
+}
+
+main();

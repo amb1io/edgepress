@@ -19,6 +19,8 @@ interface Props {
   action: string;
   users: { id: string; name: string }[];
   initialLocaleId: number | null;
+  initialSlug: string;
+  initialExcerpt: string;
   hasPostThumbnail: boolean;
   thumbnailUrl: string;
   taxonomyBlocks: TaxonomyBlock[];
@@ -31,6 +33,8 @@ const {
   action,
   users,
   initialLocaleId,
+  initialSlug = "",
+  initialExcerpt = "",
   hasPostThumbnail,
   thumbnailUrl,
   taxonomyBlocks,
@@ -89,6 +93,7 @@ const {
                 name="slug"
                 required
                 class="input input-bordered input-sm w-full font-mono text-sm"
+                value={initialSlug}
                 x-model="slug"
               />
             </div>
@@ -125,7 +130,9 @@ const {
                 class="textarea textarea-bordered textarea-sm w-full text-sm resize-y"
                 placeholder={t(locale, "admin.content.excerpt")}
                 x-model="excerpt"
-              />
+              >
+                {initialExcerpt}
+              </textarea>
               <p class="text-xs text-base-content/50 mt-1" x-text="excerpt.length + '/250'" />
             </div>
           </div>

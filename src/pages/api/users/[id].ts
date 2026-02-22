@@ -16,6 +16,7 @@ import {
   deleteUser,
   userExists,
 } from "../../../lib/services/user-service.ts";
+import { invalidateContentListByTable } from "../../../lib/kv-cache-sync.ts";
 
 export const prerender = false;
 
@@ -34,6 +35,7 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
     }
 
     await deleteUser(db, id);
+    await invalidateContentListByTable(locals, "user");
     return htmxRefreshResponse();
   } catch (err) {
     console.error("DELETE /api/users/[id]", err);
@@ -91,6 +93,7 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
       role,
     });
 
+    await invalidateContentListByTable(locals, "user");
     return htmxRefreshResponse();
   } catch (err) {
     console.error("PUT /api/users/[id]", err);

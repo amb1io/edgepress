@@ -15,6 +15,7 @@ import {
   deleteSettingById,
   settingExists,
 } from "../../../lib/services/settings-service.ts";
+import { invalidateSettingsCache } from "../../../lib/kv-cache-sync.ts";
 
 export const prerender = false;
 
@@ -61,6 +62,7 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
   }
 
   await deleteSettingById(db, id);
+  await invalidateSettingsCache(locals);
   return htmxRefreshResponse();
 };
 
@@ -101,6 +103,7 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
     }
 
     await updateSettingById(db, id, { name, value, autoload });
+    await invalidateSettingsCache(locals);
     return htmxRefreshResponse();
   } catch (err) {
     console.error("PUT /api/settings/[id]", err);

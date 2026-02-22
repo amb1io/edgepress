@@ -5,6 +5,7 @@ import {
   getTrustedOrigins,
   isValidOrigin,
 } from "./lib/utils/csrf-protection.ts";
+import { ensureTranslationsLoaded } from "./lib/i18n-helpers.ts";
 import { db } from "./db/index.ts";
 import { settings as settingsTable } from "./db/schema.ts";
 import { eq } from "drizzle-orm";
@@ -159,6 +160,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   if (isAuthPage && session) {
     return context.redirect(`/${defaultLocale}/admin`);
+  }
+
+  // Pré-carregar traduções (DB + fallback JSON) para rotas [locale] para que t() use o banco
+  const localeMatch = pathname.match(/^\/(en|es|pt-br)(\/|$)/);
+  if (!isApi && localeMatch) {
+    await ensureTranslationsLoaded(localeMatch[1]);
   }
 
   return next();

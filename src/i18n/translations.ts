@@ -67,8 +67,10 @@ export async function loadTranslationsFromAPI(locale: Locale, baseUrl: string = 
     const response = await fetch(apiUrl);
     if (response.ok) {
       const data = await response.json() as Record<string, string>;
-      translationsCache[locale] = data;
-      return data;
+      // API retorna DB + fallback; garantir merge local para chaves só nos JSON
+      const merged = { ...fallbackTranslations[locale], ...data };
+      translationsCache[locale] = merged;
+      return merged;
     }
   } catch (error) {
     console.warn(`Failed to load translations for locale ${locale}:`, error);
@@ -129,8 +131,10 @@ export async function loadTranslationsFromDB(
       translationsMap[fullKey] = row.value;
     }
 
-    translationsCache[locale] = translationsMap;
-    return translationsMap;
+    // DB sobrescreve fallback; chaves só nos JSON continuam disponíveis
+    const merged = { ...fallbackTranslations[locale], ...translationsMap };
+    translationsCache[locale] = merged;
+    return merged;
   } catch (error) {
     console.warn(`Failed to load translations from DB for locale ${locale}:`, error);
     return fallbackTranslations[locale];
@@ -171,6 +175,21 @@ export async function loadTranslations(
 
   // Caso contrário, usar API
   return loadTranslationsFromAPI(locale, options?.baseUrl);
+}
+
+/**
+ * Invalida o cache em memória das traduções.
+ * Chamar após criar/editar post types ou traduções para que a próxima carga use dados do DB/API.
+ * @param locale - Se informado, invalida só esse locale; senão invalida todos.
+ */
+export function invalidateTranslationsCache(locale?: Locale): void {
+  if (locale !== undefined) {
+    translationsCache[locale] = null;
+    return;
+  }
+  translationsCache.en = null;
+  translationsCache.es = null;
+  translationsCache["pt-br"] = null;
 }
 
 /**

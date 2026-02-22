@@ -1,15 +1,27 @@
 /**
  * GET /api/i18n/[locale]
- * Retorna todas as traduções para um locale específico da tabela translations_languages
- * Com cache em KV
+ * Retorna traduções do banco (DB) com fallback dos arquivos JSON.
+ * Ordem: DB sobrescreve JSON; chaves só nos JSON permanecem.
  */
 import type { APIRoute } from "astro";
 import { db } from "../../../db/index.ts";
 import { translations as translationsTable, translationsLanguages as translationsLanguagesTable, locales as localesTable } from "../../../db/schema.ts";
 import { eq } from "drizzle-orm";
 import { getCacheKvFromLocals } from "../../../lib/utils/runtime-locals.ts";
+import enFallback from "../../../i18n/languages/en.json";
+import esFallback from "../../../i18n/languages/es.json";
+import ptBrFallback from "../../../i18n/languages/pt_br.json";
 
 export const prerender = false;
+
+const FALLBACK_BY_LOCALE: Record<string, Record<string, string>> = {
+  en: enFallback as Record<string, string>,
+  es: esFallback as Record<string, string>,
+  "pt-br": ptBrFallback as Record<string, string>,
+  en_US: enFallback as Record<string, string>,
+  es_ES: esFallback as Record<string, string>,
+  pt_BR: ptBrFallback as Record<string, string>,
+};
 
 // Mapeamento de locales para locale_code da tabela
 const LOCALE_MAP: Record<string, string> = {
@@ -29,6 +41,11 @@ function normalizeLocaleForDB(locale: string): string {
   return LOCALE_MAP[normalized] || LOCALE_MAP[locale] || locale;
 }
 
+function getFallbackForParam(localeParam: string): Record<string, string> {
+  const key = localeParam.toLowerCase().replace(/-/g, "_");
+  return FALLBACK_BY_LOCALE[key] ?? FALLBACK_BY_LOCALE.en ?? {};
+}
+
 export const GET: APIRoute = async ({ params, locals }) => {
   const localeParam = params.locale;
   if (!localeParam) {
@@ -41,6 +58,8 @@ export const GET: APIRoute = async ({ params, locals }) => {
   const kv = getCacheKvFromLocals(locals);
   const dbLocaleCode = normalizeLocaleForDB(localeParam);
   const cacheKey = `i18n:${dbLocaleCode}`;
+
+  const fallback = getFallbackForParam(localeParam);
 
   // Autenticado: bypass KV e vai direto ao DB. Não autenticado: tenta KV primeiro.
   if (kv) {
@@ -69,10 +88,13 @@ export const GET: APIRoute = async ({ params, locals }) => {
       .limit(1);
 
     if (!localeRow) {
-      return new Response(
-        JSON.stringify({ error: "locale_not_found", message: `Locale ${dbLocaleCode} not found` }),
-        { status: 404, headers: { "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify(fallback), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=3600",
+        },
+      });
     }
 
     // Buscar todas as traduções para este locale
@@ -93,16 +115,18 @@ export const GET: APIRoute = async ({ params, locals }) => {
       translationsMap[fullKey] = row.value;
     }
 
-    // Salvar no cache
-    if (kv && Object.keys(translationsMap).length > 0) {
+    // DB sobrescreve fallback; chaves só nos JSON permanecem
+    const merged = { ...fallback, ...translationsMap };
+
+    if (kv) {
       try {
-        await kv.put(cacheKey, JSON.stringify(translationsMap));
+        await kv.put(cacheKey, JSON.stringify(merged));
       } catch {
         // Não falha a resposta se o KV não aceitar o put
       }
     }
 
-    return new Response(JSON.stringify(translationsMap), {
+    return new Response(JSON.stringify(merged), {
       status: 200,
       headers: {
         "Content-Type": "application/json",
@@ -111,9 +135,12 @@ export const GET: APIRoute = async ({ params, locals }) => {
     });
   } catch (error) {
     console.error("Error fetching translations:", error);
-    return new Response(
-      JSON.stringify({ error: "internal_error", message: "Failed to fetch translations" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify(fallback), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+      },
+    });
   }
 };

@@ -5,6 +5,7 @@ import { slugify } from "../../lib/slugify.ts";
 import { requireMinRole } from "../../lib/api-auth.ts";
 import { getString, getNumber } from "../../lib/utils/form-data.ts";
 import { errorHtmlResponse, jsonResponse } from "../../lib/utils/http-responses.ts";
+import { invalidateContentListByTable } from "../../lib/kv-cache-sync.ts";
 
 export const prerender = false;
 
@@ -71,6 +72,8 @@ export async function POST({
     if (!inserted) {
       return errorHtmlResponse(locale);
     }
+
+    await invalidateContentListByTable(locals, "taxonomies");
 
     let language = "—";
     if (id_locale_code != null) {

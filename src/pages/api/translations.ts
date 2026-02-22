@@ -13,6 +13,8 @@ import { requireMinRole } from "../../lib/api-auth.ts";
 import { getString, getNumber } from "../../lib/utils/form-data.ts";
 import { badRequestResponse, badRequestHtmlResponse, jsonResponse, redirectResponse, htmxRedirectResponse } from "../../lib/utils/http-responses.ts";
 import { buildAbsoluteUrl, buildContentUrl, buildListUrl } from "../../lib/utils/url.ts";
+import { invalidateI18nCache } from "../../lib/kv-cache-sync.ts";
+import { invalidateTranslationsCache } from "../../i18n/translations.ts";
 
 export const prerender = false;
 
@@ -147,6 +149,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
         value: translationValue,
       });
     }
+
+    await invalidateI18nCache(locals);
+    invalidateTranslationsCache();
 
     const acceptsJson = request.headers.get("Accept")?.includes("application/json");
     if (acceptsJson) return jsonResponse({ id: translationId });

@@ -1,3 +1,1 @@
--- Add id_locale_code foreign key to taxonomies table
-ALTER TABLE "taxonomies" ADD COLUMN "id_locale_code" INTEGER REFERENCES "locales"("id") ON DELETE SET NULL;
-CREATE INDEX IF NOT EXISTS "taxonomies_id_locale_code_idx" ON "taxonomies" ("id_locale_code");
+-- id_locale_code already added to taxonomies in 0013_amused_deathbird.sql; this migration is a no-op to avoid duplicate column error.
