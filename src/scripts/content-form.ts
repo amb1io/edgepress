@@ -79,9 +79,9 @@ export function initContentForm(props: ContentFormInitProps): void {
   document.addEventListener("alpine:init", () => {
     if (!window.Alpine) return;
     window.Alpine.data("contentForm", () => ({
-      title: String(initialTitle || ""),
-      slug: String(initialSlug || ""),
-      excerpt: String(initialExcerpt || ""),
+      title: safeStr(initialTitle),
+      slug: safeStr(initialSlug),
+      excerpt: safeStr(initialExcerpt),
       status: String(initialStatus || "draft"),
       author_id: String(initialAuthorId || ""),
       thumbnail_path: String(thumbnailPath || ""),
@@ -280,15 +280,19 @@ export function initContentForm(props: ContentFormInitProps): void {
 
       const titleInput = form.querySelector('input[name="title"]');
       const slugInput = form.querySelector('input[name="slug"]');
+      const excerptInput = form.querySelector('textarea[name="excerpt"]');
       const safeTitle = safeStr(ctx.title);
       const safeSlug = safeStr(ctx.slug);
+      const safeExcerpt = safeStr(ctx.excerpt).slice(0, 250);
       if (titleInput instanceof HTMLInputElement) titleInput.value = safeTitle;
       if (slugInput instanceof HTMLInputElement) slugInput.value = safeSlug;
+      if (excerptInput instanceof HTMLTextAreaElement) excerptInput.value = safeExcerpt;
 
       try {
         const formData = new FormData(form);
         formData.set("title", safeTitle);
         formData.set("slug", safeSlug);
+        formData.set("excerpt", safeExcerpt);
 
         const wrapperEl = document.getElementById("custom-fields-wrapper");
         if (wrapperEl && window.Alpine) {

@@ -183,6 +183,7 @@ const showAlternateTemplate =
 )}
 {!showAlternateTemplate && (
 <AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={user}>
+  <!-- Dados iniciais para o form (script sem import para não quebrar como módulo) -->
   <script
     define:vars={{
       initialTitle: String(initialTitle || ""),
@@ -195,9 +196,7 @@ const showAlternateTemplate =
       initialThumbnailAttachmentId: initialThumbnailAttachmentId !== null && initialThumbnailAttachmentId !== undefined ? Number(initialThumbnailAttachmentId) : 0,
     }}
   >
-    import { initContentForm, deleteContentThumbnail } from "../../../scripts/content-form.ts";
-    window.deleteContentThumbnail = deleteContentThumbnail;
-    initContentForm({
+    window.__contentFormProps = {
       initialTitle,
       initialSlug,
       initialExcerpt,
@@ -206,7 +205,10 @@ const showAlternateTemplate =
       thumbnailPath,
       thumbnailUrl,
       initialThumbnailAttachmentId,
-    });
+    };
+  </script>
+  <script>
+    import "../../../scripts/content-form-init.ts";
   </script>
 
   <div class="h-full flex flex-col min-h-0 py-6 pl-6 pr-0">
@@ -216,8 +218,8 @@ const showAlternateTemplate =
       class="flex flex-col gap-4 w-full min-h-0 flex-1"
       data-is-edit={String(action === "edit")}
       x-data="contentForm"
-      x-init="if ($el.dataset.isEdit !== 'true') slugifyFromTitle()"
-      @blocknote-excerpt.window="excerpt = $event.detail.text"
+      x-init="if ($el.dataset.isEdit !== 'true') slug = (window.slugify && window.slugify(title)) || ''"
+      @blocknote-excerpt.window="excerpt = ($event.detail.text || '').slice(0, 250)"
     >
       <ContentFormNotification />
 
@@ -245,8 +247,9 @@ const showAlternateTemplate =
             name="title"
             required
             class="input input-bordered w-full"
+            value={initialTitle}
             x-model="title"
-            @input="slugifyFromTitle()"
+            @input="slug = (window.slugify && window.slugify(title)) || ''"
           />
         </div>
 
@@ -277,6 +280,8 @@ const showAlternateTemplate =
         action={action}
         users={users}
         initialLocaleId={initialLocaleId}
+        initialSlug={initialSlug}
+        initialExcerpt={initialExcerpt}
         hasPostThumbnail={hasPostThumbnail}
         thumbnailUrl={thumbnailUrl}
         taxonomyBlocks={taxonomyBlocks}

@@ -36,12 +36,7 @@ const selectedSet = new Set(selectedTermIds);
 
 {siblings ? (
   <>
-    {taxonomyBlocks.length === 0 ? (
-      <p class="text-sm text-base-content/60 join-item">
-        {t(locale, "admin.taxonomy.noTaxonomyConfigured")}
-      </p>
-    ) : (
-      taxonomyBlocks.map((root, index) => (
+    {taxonomyBlocks.length > 0 && taxonomyBlocks.map((root, index) => (
         <div class="collapse collapse-arrow join-item border border-base-300">
           <input
             type="radio"
@@ -81,16 +76,11 @@ const selectedSet = new Set(selectedTermIds);
             </a>
           </div>
         </div>
-      ))
-    )}
+      ))}
   </>
 ) : (
   <div class="flex flex-col gap-4">
-    {taxonomyBlocks.length === 0 ? (
-      <p class="text-sm text-base-content/60">
-        {t(locale, "admin.taxonomy.noTaxonomyConfigured")}
-      </p>
-    ) : (
+    {taxonomyBlocks.length > 0 && (
       <div class="join join-vertical w-full bg-base-100">
         {taxonomyBlocks.map((root, index) => (
           <div class="collapse collapse-arrow join-item border border-base-300">
