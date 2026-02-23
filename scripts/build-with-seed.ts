@@ -10,7 +10,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 const isCI = process.env.CI === "true" || process.env.CF_PAGES === "1";
-const seedRemoteFile = join(process.cwd(), "drizzle", "seed-remote.sql");
+const seedRemoteFile = join(process.cwd(), "drizzle", "seed", "seed-remote.sql");
 
 function run(cmd: string, description: string): void {
   console.log(`[build-with-seed] ${description}...`);
@@ -23,9 +23,10 @@ try {
       "npx wrangler d1 migrations apply edgepress --remote -c wrangler.jsonc",
       "Migrating remote D1"
     );
+    run("npm run db:seed:generate-sql", "Generating seed SQL from seed-data");
     if (existsSync(seedRemoteFile)) {
       run(
-        "npx wrangler d1 execute edgepress --remote --file=./drizzle/seed-remote.sql -c wrangler.jsonc",
+        "npx wrangler d1 execute edgepress --remote --file=./drizzle/seed/seed-remote.sql -c wrangler.jsonc",
         "Seeding remote D1"
       );
     }
