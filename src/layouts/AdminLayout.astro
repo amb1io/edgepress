@@ -4,6 +4,7 @@ import { type Locale } from "../i18n/index.ts";
 import type { MenuItem } from "../lib/menu.ts";
 import AdminHeader from "../components/AdminHeader.astro";
 import AdminSidebar from "../components/AdminSidebar.astro";
+import HtmxLoader from "../components/HtmxLoader.astro";
 // HTMX carregado do pacote instalado (não CDN)
 import htmxScript from "htmx.org/dist/htmx.min.js?url";
 
@@ -34,6 +35,7 @@ const currentLocale = locale as Locale;
     <script src={htmxScript}></script>
   </head>
   <body class="min-h-screen bg-base-200">
+    <HtmxLoader />
     <div class="flex min-h-screen">
       <AdminSidebar locale={locale} menuItems={menuItems} />
 

@@ -88,8 +88,21 @@ export function isContentPageRedirect(
   return "redirect" in r && r.redirect === true;
 }
 
-function redirect(url: string): ContentPageRedirect {
-  return { redirect: true, url };
+/**
+ * Garante que meta_schema seja um array (para uso com getMetaSchema*).
+ * No D1 o driver pode retornar meta_schema como string JSON; as funções de meta_schema esperam array.
+ */
+function normalizeMetaSchema(metaSchema: unknown): Array<{ key: string; type?: string; default?: unknown }> {
+  if (Array.isArray(metaSchema)) return metaSchema as Array<{ key: string; type?: string; default?: unknown }>;
+  if (typeof metaSchema === "string") {
+    try {
+      const parsed = JSON.parse(metaSchema);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
 }
 
 function buildThumbnailUrl(thumbPath: string): string {
@@ -128,9 +141,10 @@ export async function getContentPageData(params: {
   const typeId = typeRow.id;
   const typeName = typeRow.name;
 
-  const taxonomyTypes = getMetaSchemaTaxonomyTypes(typeRow.meta_schema);
-  const hasPostThumbnail = getMetaSchemaPostThumbnail(typeRow.meta_schema);
-  const hasCustomFields = getMetaSchemaHasCustomFields(typeRow.meta_schema);
+  const metaSchema = normalizeMetaSchema(typeRow.meta_schema);
+  const taxonomyTypes = getMetaSchemaTaxonomyTypes(metaSchema);
+  const hasPostThumbnail = getMetaSchemaPostThumbnail(metaSchema);
+  const hasCustomFields = getMetaSchemaHasCustomFields(metaSchema);
 
   let customFieldsTypeId: number | null = null;
   if (hasCustomFields) {
