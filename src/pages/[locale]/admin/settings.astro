@@ -27,7 +27,7 @@ const roleId = getRoleFromUser(user);
 const pathname = Astro.url.pathname;
 const allowed = await canAccessRoute(db, roleId, pathname);
 if (!allowed) {
-  return Astro.redirect(`/${locale}/admin`);
+  return Astro.redirect(`/${defaultLocale}/login`);
 }
 
 const allMenuItems = await getMenuItems(db);
