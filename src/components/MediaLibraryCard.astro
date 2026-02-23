@@ -15,7 +15,14 @@ export interface Props {
   nameId: string;
 }
 
-const { id, title, url, selected = false, gallery = false, nameId } = Astro.props;
+const {
+  id,
+  title,
+  url,
+  selected = false,
+  gallery = false,
+  nameId,
+} = Astro.props;
 const safeTitle = title.replace(/"/g, "&quot;");
 ---
 
@@ -24,19 +31,42 @@ const safeTitle = title.replace(/"/g, "&quot;");
   data-media-card
   data-id={id}
 >
-  <figure class="aspect-square overflow-hidden">
-    {url ? (
-      <img src={url} alt={safeTitle} loading="lazy" class="w-full h-full object-cover" />
-    ) : (
-      <div class="w-full h-full flex items-center justify-center bg-base-200 text-base-content/50 text-xs">Sem preview</div>
-    )}
+  <figure class="aspect-square overflow-hidden media-library-card-figure">
+    {
+      url ? (
+        <img
+          src={url}
+          alt={safeTitle}
+          loading="lazy"
+          class="w-full h-full object-cover"
+        />
+      ) : (
+        <div class="w-full h-full flex items-center justify-center bg-base-200 text-base-content/50 text-xs">
+          Sem preview
+        </div>
+      )
+    }
   </figure>
   <div class="card-body p-2 min-h-0">
     <h3 class="card-title text-xs truncate" title={title}>{title || "—"}</h3>
   </div>
-  {gallery ? (
-    <input type="checkbox" name={`${nameId}[]`} value={String(id)} class="sr-only" checked={selected} />
-  ) : (
-    <input type="radio" name={nameId} value={String(id)} class="sr-only" checked={selected} />
-  )}
+  {
+    gallery ? (
+      <input
+        type="checkbox"
+        name={`${nameId}[]`}
+        value={String(id)}
+        class="sr-only"
+        checked={selected}
+      />
+    ) : (
+      <input
+        type="radio"
+        name={nameId}
+        value={String(id)}
+        class="sr-only"
+        checked={selected}
+      />
+    )
+  }
 </label>

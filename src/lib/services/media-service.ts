@@ -236,14 +236,29 @@ export async function getMediaByMimeType(
  * Busca attachments de imagem
  * @param db - Instância do banco de dados
  * @param limit - Limite de resultados
+ * @param search - Termo opcional para filtrar por título (LIKE %term%)
  * @returns Array de Media
  */
-export async function getImageAttachments(db: Database, limit: number = 50): Promise<Media[]> {
+export async function getImageAttachments(
+  db: Database,
+  limit: number = 50,
+  search?: string
+): Promise<Media[]> {
   const attachmentTypeId = await getAttachmentTypeId(db);
   if (!attachmentTypeId) {
     return [];
   }
-  
+
+  const conditions = [
+    eq(posts.post_type_id, attachmentTypeId),
+    like(posts.meta_values, '%"mime_type":"image/%'),
+  ];
+
+  if (search && search.trim()) {
+    const term = `%${search.trim()}%`;
+    conditions.push(like(posts.title, term));
+  }
+
   const results = await db
     .select({
       id: posts.id,
@@ -257,12 +272,9 @@ export async function getImageAttachments(db: Database, limit: number = 50): Pro
       updated_at: posts.updated_at,
     })
     .from(posts)
-    .where(and(
-      eq(posts.post_type_id, attachmentTypeId),
-      like(posts.meta_values, '%"mime_type":"image/%')
-    ))
+    .where(and(...conditions))
     .limit(limit);
-  
+
   return results as Media[];
 }
 
