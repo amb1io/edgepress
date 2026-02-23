@@ -6,6 +6,7 @@
  * - "edit": Upload único, auto-procede, não cria posts automaticamente
  */
 import type { Locale } from "../i18n/index.ts";
+import MediaManager from "./MediaManager.astro";
 
 export interface Props {
   /** ID único do container do Uppy */
@@ -26,6 +27,10 @@ export interface Props {
   containerClass?: string;
   /** Nome do evento disparado ao concluir (fechar painel após "Concluído") */
   completeEventName?: string;
+  /** Se true, mostra o link "selecione da biblioteca" e abre MediaManager em modal (padrão: true) */
+  showLibraryLink?: boolean;
+  /** Se true, MediaManager usa checkbox (múltipla seleção); se false, radio (padrão: false) */
+  mediaManagerGallery?: boolean;
 }
 
 const {
@@ -38,23 +43,61 @@ const {
   clearOnComplete = mode === "new",
   containerClass = "",
   completeEventName,
+  showLibraryLink = true,
+  mediaManagerGallery = false,
 } = Astro.props;
 
 const currentLocale = localeProp;
+const modalId = `media-manager-modal-${containerId}`;
 ---
 
-<div
-  id={containerId}
-  class={`uppy-container ${containerClass}`}
-  data-container-id={containerId}
-  data-current-locale={currentLocale}
-  data-mode={mode}
-  data-height={height ?? ""}
-  data-event-name={eventName}
-  data-hide-upload-button={hideUploadButton}
-  data-clear-on-complete={clearOnComplete}
-  data-complete-event-name={completeEventName ?? ""}
-></div>
+<div class="uppy-upload-with-library w-full" data-uppy-wrapper data-container-id={containerId}>
+  <div
+    id={containerId}
+    class={`uppy-container ${containerClass}`}
+    data-container-id={containerId}
+    data-current-locale={currentLocale}
+    data-mode={mode}
+    data-height={height ?? ""}
+    data-event-name={eventName}
+    data-hide-upload-button={hideUploadButton}
+    data-clear-on-complete={clearOnComplete}
+    data-complete-event-name={completeEventName ?? ""}
+  ></div>
+
+  {showLibraryLink && (
+    <p class="text-center mt-3">
+      <button
+        type="button"
+        class="link link-primary text-sm"
+        data-media-library-open
+        data-target-modal={modalId}
+      >
+        selecione da biblioteca
+      </button>
+    </p>
+  )}
+
+  {showLibraryLink && (
+    <div
+      id={modalId}
+      class="media-manager-modal hidden fixed inset-0 z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="media-manager-title"
+      data-media-manager-modal
+    >
+      <div
+        class="media-manager-modal-backdrop absolute inset-0 bg-black/50"
+        data-media-manager-modal-close
+        tabindex="-1"
+      ></div>
+      <div class="media-manager-modal-content relative bg-base-100 rounded-lg shadow-xl w-[80vw] h-[80vh] max-w-[80vw] max-h-[80vh] overflow-hidden flex flex-col p-4">
+        <MediaManager gallery={mediaManagerGallery} />
+      </div>
+    </div>
+  )}
+</div>
 
 <style>
   .uppy-container {
@@ -65,6 +108,14 @@ const currentLocale = localeProp;
   .uppy-container :global(.uppy-Dashboard-inner) {
     width: 100% !important;
     max-width: 100% !important;
+  }
+  .media-manager-modal {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .media-manager-modal.hidden {
+    display: none !important;
   }
 </style>
 
@@ -110,5 +161,33 @@ const currentLocale = localeProp;
     document.addEventListener("DOMContentLoaded", initAllUppyInstances);
   } else {
     setTimeout(initAllUppyInstances, 100);
+  }
+
+  function setupMediaManagerModals() {
+    document.querySelectorAll("[data-media-library-open]").forEach((btn) => {
+      const modalId = btn.getAttribute("data-target-modal");
+      if (!modalId) return;
+      const modal = document.getElementById(modalId);
+      if (!modal) return;
+
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        modal.classList.remove("hidden");
+      });
+
+      function closeModal() {
+        modal?.classList.add("hidden");
+      }
+
+      modal.querySelector("[data-media-manager-modal-close]")?.addEventListener("click", closeModal);
+      modal.addEventListener("media-manager-close", closeModal);
+      modal.addEventListener("media-manager-select", closeModal);
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", setupMediaManagerModals);
+  } else {
+    setTimeout(setupMediaManagerModals, 100);
   }
 </script>

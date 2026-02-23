@@ -609,11 +609,32 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
     }
   }
 
+  /** @param {CustomEvent<{ items: { id: number; title: string; url: string; path?: string }[] }>} ev */
+  function handleMediaManagerSelect(ev) {
+    const items = ev?.detail?.items;
+    if (!items?.length) return;
+    const first = items[0];
+    if (!first) return;
+    const alpineRoot = document.querySelector("[x-data*='attachmentForm']");
+    const Alpine = (window as unknown as { Alpine?: { $data: (el: Element) => Record<string, unknown> } }).Alpine;
+    if (!alpineRoot || !Alpine) return;
+    const ctx = Alpine.$data(alpineRoot);
+    if (!ctx || typeof ctx !== "object") return;
+    ctx["hasImage"] = true;
+    ctx["imageUrl"] = first.url;
+    ctx["attachment_path"] = first.path ?? "";
+    ctx["attachment_file"] = first.title || "";
+    ctx["postId"] = first.id;
+  }
+
   function onReady() {
     window.addEventListener("attachment-uploaded", (ev: Event) => {
       handleAttachmentUploaded(
         ev as CustomEvent<{ path: string; imageUrl: string; filename: string; originalFilename?: string; mimeType: string }>
       );
+    });
+    window.addEventListener("media-manager-select", (ev: Event) => {
+      handleMediaManagerSelect(ev as CustomEvent<{ items: { id: number; title: string; url: string; path?: string }[] }>);
     });
   }
 

@@ -122,6 +122,21 @@ export function initContentForm(props: ContentFormInitProps): void {
     }
   });
 
+  window.addEventListener("media-manager-select", (ev: Event) => {
+    const customEvent = ev as CustomEvent<{ items: { id: number; title: string; url: string; path?: string }[] }>;
+    const items = customEvent.detail?.items;
+    if (!items?.length) return;
+    const form = document.querySelector('form[action="/api/posts"]');
+    const Alpine = window.Alpine;
+    if (!form || !Alpine) return;
+    const ctx = Alpine.$data(form) as ContentFormContext | undefined;
+    if (!ctx) return;
+    const first = items[0];
+    ctx.thumbnail_path = first.path ?? "";
+    ctx.thumbnail_url = first.url ?? "";
+    ctx.thumbnail_attachment_id = first.id;
+  });
+
   window.addEventListener("thumbnail-uploaded", async (ev: Event) => {
     const customEvent = ev as CustomEvent<{
       path?: string;
