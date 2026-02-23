@@ -35,29 +35,48 @@ export function canSync(capabilities: Set<string>, capability: string): boolean 
 
 /**
  * Retorna todas as capacidades do perfil a partir da tabela role_capability.
+ * Em caso de falha (ex.: D1 sem seed, tabela vazia), retorna fallback seguro:
+ * role 0 (admin) = todas; outros = vazio (acesso negado).
  */
 export async function getCapabilities(
   db: Database,
   roleId: number
 ): Promise<Set<string>> {
-  const rows = await db
-    .select({ capability: roleCapability.capability })
-    .from(roleCapability)
-    .where(eq(roleCapability.roleId, roleId));
-  const set = new Set(rows.map((r) => r.capability));
-  if (set.has("*")) {
-    return new Set([
-      "*",
-      CAPABILITY.DASHBOARD,
-      CAPABILITY.CONTENT,
-      CAPABILITY.LIST,
-      CAPABILITY.SETTINGS,
-      CAPABILITY.MEDIA,
-      CAPABILITY.DELETE,
-      CAPABILITY.MENU_FULL,
-    ]);
+  try {
+    const rows = await db
+      .select({ capability: roleCapability.capability })
+      .from(roleCapability)
+      .where(eq(roleCapability.roleId, roleId));
+    const set = new Set(rows.map((r) => r.capability));
+    if (set.has("*")) {
+      return new Set([
+        "*",
+        CAPABILITY.DASHBOARD,
+        CAPABILITY.CONTENT,
+        CAPABILITY.LIST,
+        CAPABILITY.SETTINGS,
+        CAPABILITY.MEDIA,
+        CAPABILITY.DELETE,
+        CAPABILITY.MENU_FULL,
+      ]);
+    }
+    return set;
+  } catch {
+    // Tabela role_capability inexistente/vazia ou falha no D1 (ex.: após deploy sem seed)
+    if (roleId === 0) {
+      return new Set([
+        "*",
+        CAPABILITY.DASHBOARD,
+        CAPABILITY.CONTENT,
+        CAPABILITY.LIST,
+        CAPABILITY.SETTINGS,
+        CAPABILITY.MEDIA,
+        CAPABILITY.DELETE,
+        CAPABILITY.MENU_FULL,
+      ]);
+    }
+    return new Set();
   }
-  return set;
 }
 
 /**
