@@ -27,7 +27,8 @@
     "dev:reset": "rm -rf .wrangler && npm run db:generate && npm run build && npx wrangler dev",
     "dev:vite": "vite",
     "wrangler-type": "wrangler types -c wrangler.jsonc",
-    "build": "wrangler types -c wrangler.jsonc && tsx scripts/build-with-seed.ts && astro build",
+    "build": "wrangler types -c wrangler.jsonc && astro build",
+    "build:seed": "wrangler types -c wrangler.jsonc && tsx scripts/build-with-seed.ts && astro build",
     "build:run": "wrangler types -c wrangler.jsonc && astro build && wrangler dev",
     "build:vite": "tsc && vite build",
     "preview": "astro preview",
@@ -46,7 +47,9 @@
     "db:studio": "drizzle-kit studio",
     "seed": "tsx scripts/seed-local.ts",
     "db:seed": "tsx scripts/seed-local.ts",
-    "db:seed:remote": "wrangler d1 execute edgepress --remote --file=./drizzle/seed-remote.sql -c wrangler.jsonc"
+    "db:seed:generate-sql": "tsx scripts/generate-seed-sql.ts",
+    "db:seed:remote": "npm run db:seed:generate-sql && wrangler d1 execute edgepress --remote --file=./drizzle/seed/seed-remote.sql -c wrangler.jsonc",
+    "db:seed:remote:dev": "npm run db:seed:generate-sql && wrangler d1 execute edgepress-dev-1 --remote --file=./drizzle/seed/seed-remote.sql -c wrangler.jsonc"
   },
   "devDependencies": {
     "@astrojs/react": "^4.4.2",
