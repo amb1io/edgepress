@@ -24,7 +24,7 @@
   "scripts": {
     "dev": "wrangler types -c wrangler.jsonc && npm run build && npx wrangler pages dev --port 8787",
     "dev:astro": "wrangler types -c wrangler.jsonc && astro dev",
-    "dev:reset": "rm -rf .wrangler && npm run db:generate && npm run build && npx wrangler dev",
+    "dev:reset": "rm -rf .wrangler && npm run db:generate && npm run db:migrate:local && npm run db:seed && npm run build && npx wrangler pages dev --port 8787",
     "dev:vite": "vite",
     "wrangler-type": "wrangler types -c wrangler.jsonc",
     "build": "wrangler types -c wrangler.jsonc && astro build",

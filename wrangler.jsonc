@@ -41,8 +41,8 @@
       "bucket_name": "edgepress-media",
     },
   ],
-  "assets": {
-    "binding": "STATIC_ASSETS",
-    "directory": "./dist",
-  },
+  // "assets": {
+  //   "binding": "STATIC_ASSETS",
+  //   "directory": "./dist",
+  // },
 }
