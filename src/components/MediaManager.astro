@@ -4,8 +4,6 @@
  * Usa MediaLibraryList (cards DaisyUI). Se items forem passados, usa lista server-side; senão carrega via API no client.
  * Emite "media-manager-close" e "media-manager-select" (detail: { items: { id, title, url, path }[] }).
  */
-import MediaLibraryList from "./MediaLibraryList.astro";
-
 export interface MediaLibraryItem {
   id: number;
   title: string;
@@ -32,8 +30,19 @@ const hasServerItems = serverItems.length > 0;
   data-items={hasServerItems ? JSON.stringify(serverItems) : ""}
 >
   <header class="media-manager-header border-b border-base-300 pb-3 mb-3">
-    <div class="grid grid-cols-2 gap-4 items-center">
-      <h2 class="text-lg font-semibold text-base-content">Biblioteca de Mídia</h2>
+    <div class="grid grid-cols-3 gap-2 sm:gap-4 items-center">
+      <h2 class="text-lg font-semibold text-base-content truncate">
+        Biblioteca de Mídia
+      </h2>
+      <div class="flex justify-center min-w-0">
+        <input
+          type="search"
+          class="input input-bordered input-sm w-full max-w-xs"
+          placeholder="Buscar..."
+          data-media-manager-search
+          autocomplete="off"
+        />
+      </div>
       <div class="flex justify-end">
         <button
           type="button"
@@ -41,8 +50,19 @@ const hasServerItems = serverItems.length > 0;
           aria-label="Fechar"
           data-media-manager-close
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"></path>
           </svg>
         </button>
       </div>
@@ -50,13 +70,19 @@ const hasServerItems = serverItems.length > 0;
   </header>
 
   <div class="media-manager-body flex-1 overflow-y-auto min-h-[200px]">
-    {hasServerItems ? (
-      <MediaLibraryList items={serverItems} nameId={nameId} gallery={gallery} />
-    ) : (
-      <div class="media-manager-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3" data-media-manager-grid>
-        <p class="col-span-full text-sm text-base-content/60 text-center py-8" data-media-manager-loading>Carregando…</p>
-      </div>
-    )}
+    <div
+      class="media-manager-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"
+      data-media-manager-grid
+    >
+      {!hasServerItems ? (
+        <p
+          class="col-span-full text-sm text-base-content/60 text-center py-8"
+          data-media-manager-loading
+        >
+          Carregando…
+        </p>
+      ) : null}
+    </div>
   </div>
 
   <footer class="media-manager-footer border-t border-base-300 pt-3 mt-3">
@@ -80,16 +106,21 @@ const hasServerItems = serverItems.length > 0;
     border-color: oklch(var(--p)) !important;
     box-shadow: 0 0 0 2px oklch(var(--p) / 0.3);
   }
+  .media-library-card figure:hover {
+    background: #ccc;
+  }
 </style>
 
 <script define:vars={{ nameId, gallery, hasServerItems }}>
   (function () {
-    const root = document.querySelector("[data-media-manager][data-name-id='" + nameId + "']");
+    const root = document.querySelector(
+      "[data-media-manager][data-name-id='" + nameId + "']",
+    );
     if (!root) return;
 
     const grid = root.querySelector("[data-media-manager-grid]");
-    const listEl = root.querySelector("[data-media-library-list]");
     const loadingEl = root.querySelector("[data-media-manager-loading]");
+    const searchEl = root.querySelector("[data-media-manager-search]");
     const addBtn = root.querySelector("[data-media-manager-add]");
     const closeBtn = root.querySelector("[data-media-manager-close]");
 
@@ -126,8 +157,16 @@ const hasServerItems = serverItems.length > 0;
     }
 
     function getSelectedItems() {
-      const inputs = root.querySelectorAll('input[name="' + nameId + '"]:checked, input[name="' + nameId + '[]"]:checked');
-      const ids = Array.from(inputs).map((inp) => parseInt(inp instanceof HTMLInputElement ? inp.value : "", 10));
+      const inputs = root.querySelectorAll(
+        'input[name="' +
+          nameId +
+          '"]:checked, input[name="' +
+          nameId +
+          '[]"]:checked',
+      );
+      const ids = Array.from(inputs).map((inp) =>
+        parseInt(inp instanceof HTMLInputElement ? inp.value : "", 10),
+      );
       const map = getItemsMap();
       return map.filter((it) => ids.includes(it.id));
     }
@@ -136,11 +175,50 @@ const hasServerItems = serverItems.length > 0;
       if (addBtn) addBtn.disabled = getSelectedItems().length === 0;
     }
 
+    function renderCards(list) {
+      if (!grid) return;
+      if (loadingEl) loadingEl.remove();
+      grid.querySelectorAll("[data-media-card]").forEach((el) => el.remove());
+      grid.querySelectorAll(".text-error").forEach((el) => el.remove());
+      items = (list || []).map((it) => ({
+        id: it.id,
+        title: it.title || "",
+        url: it.url || buildUrl(it.path || it.attachment_path),
+        path: it.path || "",
+      }));
+      items.forEach((item) => {
+        const wrap = document.createElement("label");
+        wrap.className =
+          "media-library-card card bg-base-100 shadow-sm cursor-pointer overflow-hidden border-2 border-transparent transition-colors";
+        wrap.setAttribute("data-media-card", "");
+        wrap.setAttribute("data-id", String(item.id));
+        const safeUrl = (item.url || "").replace(/"/g, "&quot;");
+        const safeTitle = (item.title || "").replace(/"/g, "&quot;");
+        wrap.innerHTML =
+          '<figure class="aspect-square overflow-hidden media-library-card-figure">' +
+          (item.url
+            ? '<img src="' + safeUrl + '" alt="' + safeTitle + '" loading="lazy" class="w-full h-full object-cover" />'
+            : '<div class="w-full h-full flex items-center justify-center bg-base-200 text-base-content/50 text-xs">Sem preview</div>') +
+          "</figure>" +
+          '<div class="card-body p-2 min-h-0"><h3 class="card-title text-xs truncate" title="' +
+          safeTitle +
+          '">' +
+          (item.title || "—") +
+          "</h3></div>" +
+          (gallery
+            ? '<input type="checkbox" name="' + nameId + '[]" value="' + item.id + '" class="sr-only" />'
+            : '<input type="radio" name="' + nameId + '" value="' + item.id + '" class="sr-only" />');
+        grid.appendChild(wrap);
+      });
+      bindCards();
+    }
+
     function bindCards() {
       const cards = root.querySelectorAll("[data-media-card]");
       cards.forEach((card) => {
-        const id = card.getAttribute("data-id");
-        const input = card.querySelector('input[type="radio"], input[type="checkbox"]');
+        const input = card.querySelector(
+          'input[type="radio"], input[type="checkbox"]',
+        );
         if (!input || !("checked" in input)) return;
 
         card.addEventListener("click", (e) => {
@@ -168,12 +246,43 @@ const hasServerItems = serverItems.length > 0;
       updateAddDisabled();
     }
 
-    if (hasServerItems && listEl) {
-      bindCards();
+    function loadFromApi(searchQuery) {
+      if (!grid) return;
+      const q = searchQuery ? "?q=" + encodeURIComponent(searchQuery.trim()) : "";
+      fetch("/api/media/list" + q)
+        .then((r) => r.json())
+        .then((data) => {
+          renderCards(data.items || []);
+        })
+        .catch(() => {
+          grid.querySelectorAll("[data-media-card]").forEach((el) => el.remove());
+          const err = document.createElement("p");
+          err.className = "col-span-full text-sm text-error text-center py-8";
+          err.textContent = "Erro ao carregar imagens.";
+          grid.appendChild(err);
+          if (loadingEl) loadingEl.remove();
+        });
+    }
+
+    if (hasServerItems && items.length > 0) {
+      renderCards(items);
+    } else if (!hasServerItems && grid) {
+      loadFromApi("");
+    }
+
+    if (searchEl) {
+      let searchTimeout = null;
+      searchEl.addEventListener("input", () => {
+        const value = searchEl.value || "";
+        if (searchTimeout) clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => loadFromApi(value), 300);
+      });
     }
 
     closeBtn?.addEventListener("click", () => {
-      root.dispatchEvent(new CustomEvent("media-manager-close", { bubbles: true }));
+      root.dispatchEvent(
+        new CustomEvent("media-manager-close", { bubbles: true }),
+      );
     });
 
     addBtn?.addEventListener("click", () => {
@@ -185,58 +294,16 @@ const hasServerItems = serverItems.length > 0;
           id: it.id,
           title: it.title,
           url: it.url,
-          path: (full && "path" in full ? full.path : undefined) ?? it.path ?? "",
+          path:
+            (full && "path" in full ? full.path : undefined) ?? it.path ?? "",
         };
       });
       root.dispatchEvent(
         new CustomEvent("media-manager-select", {
           bubbles: true,
           detail: { items: withPath },
-        })
+        }),
       );
     });
-
-    if (!hasServerItems && grid) {
-      fetch("/api/media/list")
-        .then((r) => r.json())
-        .then((data) => {
-          items = (data.items || []).map((it) => ({
-            id: it.id,
-            title: it.title || "",
-            url: it.url || buildUrl(it.path || it.attachment_path),
-            path: it.path || "",
-          }));
-          if (loadingEl) loadingEl.remove();
-
-          items.forEach((item) => {
-            const wrap = document.createElement("label");
-            wrap.className = "media-library-card card bg-base-100 shadow-sm cursor-pointer overflow-hidden border-2 border-transparent transition-colors";
-            wrap.setAttribute("data-media-card", "");
-            wrap.setAttribute("data-id", String(item.id));
-            const safeUrl = (item.url || "").replace(/"/g, "&quot;");
-            const safeTitle = (item.title || "").replace(/"/g, "&quot;");
-            wrap.innerHTML = `
-              <figure class="aspect-square overflow-hidden">
-                ${item.url ? `<img src="${safeUrl}" alt="${safeTitle}" loading="lazy" class="w-full h-full object-cover" />` : "<div class=\"w-full h-full flex items-center justify-center bg-base-200 text-base-content/50 text-xs\">Sem preview</div>"}
-              </figure>
-              <div class="card-body p-2 min-h-0">
-                <h3 class="card-title text-xs truncate" title="${safeTitle}">${item.title || "—"}</h3>
-              </div>
-              ${gallery ? `<input type="checkbox" name="${nameId}[]" value="${item.id}" class="sr-only" />` : `<input type="radio" name="${nameId}" value="${item.id}" class="sr-only" />`}
-            `;
-            grid.appendChild(wrap);
-          });
-          bindCards();
-        })
-        .catch(() => {
-          if (grid) {
-            const err = document.createElement("p");
-            err.className = "col-span-full text-sm text-error text-center py-8";
-            err.textContent = "Erro ao carregar imagens.";
-            grid.appendChild(err);
-          }
-          if (loadingEl) loadingEl.remove();
-        });
-    }
   })();
 </script>
