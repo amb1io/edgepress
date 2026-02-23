@@ -11,6 +11,7 @@ import {
   sessionRelations,
   accountRelations,
 } from "../db/schema/auth.ts";
+import { hashPassword as lightHash, verifyPassword as lightVerify } from "./auth-password.ts";
 
 const authSchema = {
   user,
@@ -27,6 +28,10 @@ const authDb = drizzle(env.DB, { schema: authSchema });
 export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
+    password: {
+      hash: lightHash,
+      verify: lightVerify,
+    },
   },
   baseURL: env.BETTER_AUTH_URL,
   basePath: "/api/auth",
