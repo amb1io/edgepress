@@ -22,7 +22,7 @@
   "type": "module",
   "main": "index.ts",
   "scripts": {
-    "dev": "wrangler types -c wrangler.jsonc && npm run build && npx wrangler dev",
+    "dev": "wrangler types -c wrangler.jsonc && npm run build && npx wrangler pages dev --port 8787",
     "dev:astro": "wrangler types -c wrangler.jsonc && astro dev",
     "dev:reset": "rm -rf .wrangler && npm run db:generate && npm run build && npx wrangler dev",
     "dev:vite": "vite",
