@@ -22,12 +22,12 @@
   "type": "module",
   "main": "index.ts",
   "scripts": {
-    "dev": "wrangler types -c wrangler.jsonc && npm run db:seed && npm run build && npx wrangler dev",
+    "dev": "wrangler types -c wrangler.jsonc && npm run build && npx wrangler dev",
     "dev:astro": "wrangler types -c wrangler.jsonc && astro dev",
-    "dev:reset": "rm -rf .wrangler && npm run db:generate && npm run db:migrate:local && npm run db:seed && npm run build && npx wrangler dev",
+    "dev:reset": "rm -rf .wrangler && npm run db:generate && npm run build && npx wrangler dev",
     "dev:vite": "vite",
     "wrangler-type": "wrangler types -c wrangler.jsonc",
-    "build": "wrangler types -c wrangler.jsonc && astro build",
+    "build": "wrangler types -c wrangler.jsonc && tsx scripts/build-with-seed.ts && astro build",
     "build:run": "wrangler types -c wrangler.jsonc && astro build && wrangler dev",
     "build:vite": "tsc && vite build",
     "preview": "astro preview",
@@ -40,11 +40,13 @@
     "db:migrate": "drizzle-kit migrate",
     "db:migrate:local": "wrangler d1 migrations apply edgepress --local -c wrangler.jsonc",
     "db:migrate:remote": "wrangler d1 migrations apply edgepress --remote -c wrangler.jsonc",
-    "db:migrate:remote:dev": "wrangler d1 migrations apply edgepress-dev-1 --remote -c wrangler.jsonc",
     "db:baseline:remote": "wrangler d1 execute edgepress --remote --file=./drizzle/baseline.sql -c wrangler.jsonc",
+    "db:migrate:remote:dev": "wrangler d1 migrations apply edgepress-dev-1 --remote -c wrangler.jsonc",
+    "db:baseline:remote:dev": "wrangler d1 execute edgepress-dev-1 --remote --file=./drizzle/baseline.sql -c wrangler.jsonc",
     "db:studio": "drizzle-kit studio",
     "seed": "tsx scripts/seed-local.ts",
-    "db:seed": "tsx scripts/seed-local.ts"
+    "db:seed": "tsx scripts/seed-local.ts",
+    "db:seed:remote": "wrangler d1 execute edgepress --remote --file=./drizzle/seed-remote.sql -c wrangler.jsonc"
   },
   "devDependencies": {
     "@astrojs/react": "^4.4.2",
