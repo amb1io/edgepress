@@ -10,6 +10,23 @@ import { db } from "../../db/index.ts";
 import { settings as settingsTable } from "../../db/schema.ts";
 import { eq } from "drizzle-orm";
 import { getString } from "../../lib/utils/form-data.ts";
+
+/** Garante que a opção exista: atualiza se já existir, insere se não existir. */
+async function upsertSetting(
+  name: string,
+  value: string,
+): Promise<void> {
+  const existing = await db
+    .select({ id: settingsTable.id })
+    .from(settingsTable)
+    .where(eq(settingsTable.name, name))
+    .limit(1);
+  if (existing.length > 0) {
+    await db.update(settingsTable).set({ value }).where(eq(settingsTable.name, name));
+  } else {
+    await db.insert(settingsTable).values({ name, value, autoload: true });
+  }
+}
 import { sanitizeCallbackURL } from "../../lib/utils/url-validator.ts";
 import { badRequestHtmlResponse, htmxRedirectResponse } from "../../lib/utils/http-responses.ts";
 
@@ -85,18 +102,9 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     return redirect(`/setup?error=${encodeURIComponent(code)}`, 303);
   }
 
-  await db
-    .update(settingsTable)
-    .set({ value: siteName || "demo site" })
-    .where(eq(settingsTable.name, "site_name"));
-  await db
-    .update(settingsTable)
-    .set({ value: siteDescription || "demo_description" })
-    .where(eq(settingsTable.name, "site_description"));
-  await db
-    .update(settingsTable)
-    .set({ value: "Y" })
-    .where(eq(settingsTable.name, "setup_done"));
+  await upsertSetting("site_name", siteName || "demo site");
+  await upsertSetting("site_description", siteDescription || "demo_description");
+  await upsertSetting("setup_done", "Y");
 
   const loginUrl = `/${locale}/login?setup=success`;
   const setCookie = "setup_done=Y; Path=/; HttpOnly; SameSite=Lax";
