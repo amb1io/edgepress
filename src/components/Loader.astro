@@ -1,0 +1,53 @@
+---
+/**
+ * Loader centralizado com DaisyUI Loading (loading-xl).
+ * Exibe "Processando..." ou, em caso de erro, "Houve um erro" em vermelho e botão X para fechar.
+ * Fundo branco 30% de opacidade.
+ */
+interface Props {
+  /** Se true, exibe mensagem de erro em vermelho e botão X para fechar */
+  error?: boolean;
+}
+
+const { error = false } = Astro.props;
+---
+
+<div
+  class="fixed inset-0 flex flex-col items-center justify-center bg-white/30 z-50"
+  x-data="{ visible: true }"
+  x-show="visible"
+  x-transition
+  role="status"
+  aria-live="polite"
+  aria-label={error ? "Erro no processamento" : "Processando"}
+>
+  <span class="loading loading-spinner loading-xl text-primary" aria-hidden="true" />
+  <p
+    class={`mt-4 text-lg font-medium flex items-center justify-center gap-2 ${error ? "text-error" : "text-base-content"}`}
+  >
+    {error ? (
+      <>
+        <span>Houve um erro</span>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-circle text-error hover:bg-error/20"
+          aria-label="Fechar"
+          @click="visible = false"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </>
+    ) : (
+      "Processando..."
+    )}
+  </p>
+</div>

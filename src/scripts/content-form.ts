@@ -373,6 +373,27 @@ export function initContentForm(props: ContentFormInitProps): void {
           }
         }
 
+        // Garantir que custom_fields_data e custom_fields_to_delete sejam enviados
+        // quando o submit for via HTMX (htmx serializa o form no DOM, não o FormData em memória)
+        form.querySelectorAll('input[name="custom_fields_data"]').forEach((el) => el.remove());
+        form.querySelectorAll('input[name="custom_fields_to_delete"]').forEach((el) => el.remove());
+        const cfData = formData.get("custom_fields_data");
+        const cfDelete = formData.get("custom_fields_to_delete");
+        if (cfData !== undefined && cfData !== null && String(cfData).trim() !== "") {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = "custom_fields_data";
+          input.value = String(cfData);
+          form.appendChild(input);
+        }
+        if (cfDelete !== undefined && cfDelete !== null && String(cfDelete).trim() !== "") {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = "custom_fields_to_delete";
+          input.value = String(cfDelete);
+          form.appendChild(input);
+        }
+
         const htmx = window.htmx;
         if (htmx?.ajax) {
           htmx.ajax("post", form.getAttribute("action") || "/api/posts", {

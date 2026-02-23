@@ -1,5 +1,6 @@
 ---
 import "../assets/app.css";
+import HtmxLoader from "../components/HtmxLoader.astro";
 
 interface Props {
   title: string;
@@ -19,6 +20,7 @@ const { title, headScript } = Astro.props;
     {headScript && <script src={headScript}></script>}
   </head>
   <body>
+    {headScript && <HtmxLoader />}
     <slot />
   </body>
 </html>
