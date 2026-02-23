@@ -1,0 +1,42 @@
+---
+/**
+ * Card DaisyUI para um item da biblioteca de mídia (uma imagem).
+ * Título = nome da imagem, sem descrição. Borda de seleção aplicada via classe .selected no wrapper.
+ */
+export interface Props {
+  id: number;
+  title: string;
+  url: string;
+  /** Se true, card aparece com borda de seleção */
+  selected?: boolean;
+  /** Se true, input é checkbox; senão radio */
+  gallery?: boolean;
+  /** name do input (radio) ou base do name (checkbox usa nameId[]) */
+  nameId: string;
+}
+
+const { id, title, url, selected = false, gallery = false, nameId } = Astro.props;
+const safeTitle = title.replace(/"/g, "&quot;");
+---
+
+<label
+  class={`media-library-card card bg-base-100 shadow-sm cursor-pointer overflow-hidden border-2 transition-colors ${selected ? "border-primary" : "border-transparent"}`}
+  data-media-card
+  data-id={id}
+>
+  <figure class="aspect-square overflow-hidden">
+    {url ? (
+      <img src={url} alt={safeTitle} loading="lazy" class="w-full h-full object-cover" />
+    ) : (
+      <div class="w-full h-full flex items-center justify-center bg-base-200 text-base-content/50 text-xs">Sem preview</div>
+    )}
+  </figure>
+  <div class="card-body p-2 min-h-0">
+    <h3 class="card-title text-xs truncate" title={title}>{title || "—"}</h3>
+  </div>
+  {gallery ? (
+    <input type="checkbox" name={`${nameId}[]`} value={String(id)} class="sr-only" checked={selected} />
+  ) : (
+    <input type="radio" name={nameId} value={String(id)} class="sr-only" checked={selected} />
+  )}
+</label>
