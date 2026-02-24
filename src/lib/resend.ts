@@ -44,9 +44,23 @@ export async function sendPasswordResetEmail(options: SendPasswordResetEmailOpti
     }),
   });
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    console.error("[Resend] Falha ao enviar email de recuperação de senha:", res.status, body);
+  const bodyText = await res.text().catch(() => "");
+
+  if (res.ok) {
+    try {
+      const data = bodyText ? (JSON.parse(bodyText) as { id?: string }) : {};
+      if (typeof console !== "undefined" && console.info) {
+        console.info("[Resend] Email de recuperação enviado para", to, "| id:", data.id ?? "(sem id)");
+      }
+    } catch {
+      if (typeof console !== "undefined" && console.info) {
+        console.info("[Resend] Email de recuperação enviado para", to);
+      }
+    }
+  } else {
+    if (typeof console !== "undefined" && console.error) {
+      console.error("[Resend] Falha ao enviar email:", res.status, bodyText);
+    }
   }
 }
 
