@@ -142,7 +142,7 @@ export async function getTableList(
     return { items: [], total: 0, page: 1, limit: 10, totalPages: 0, columns: [] };
   }
 
-  // Buscar informações sobre tabelas relacionadas
+  // Fetch related table information
   const relatedInfo = await getRelatedTableInfo(db, tableName);
   
   // Buscar campos de texto da tabela principal

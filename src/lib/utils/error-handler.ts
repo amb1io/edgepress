@@ -40,7 +40,7 @@ export function logError(
     errorData.metadata = metadata;
   }
 
-  // TODO: Integrar com serviço de logging (ex: Sentry, LogRocket, etc)
+  // TODO: Integrate with logging service (e.g. Sentry, LogRocket, etc)
   console.error("[ERROR]", JSON.stringify(errorData, null, 2));
 }
 
@@ -109,7 +109,7 @@ export function handleApiError(
     return errorResponse(message, status);
   }
 
-  // Erro genérico
+  // Generic error
   const message = getErrorMessage("INTERNAL_SERVER_ERROR", locale);
   return internalServerErrorResponse(message);
 }

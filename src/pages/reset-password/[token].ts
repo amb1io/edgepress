@@ -1,6 +1,6 @@
 /**
- * Redireciona o link do email (baseURL/reset-password/TOKEN?callbackURL=...)
- * para o handler do better-auth que valida o token e redireciona para a página de redefinição.
+ * Redirects the email link (baseURL/reset-password/TOKEN?callbackURL=...)
+ * to the better-auth handler that validates the token and redirects to the reset page.
  */
 import type { APIRoute } from "astro";
 

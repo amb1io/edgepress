@@ -108,7 +108,7 @@ export function getNumberArray(formData: FormData, key: string, onlyPositive: bo
 export function getOptionalNumber(formData: FormData, key: string): number | null | undefined {
   const raw = formData.get(key);
   
-  // Campo não foi enviado
+  // Field was not sent
   if (raw === null) {
     return undefined;
   }
@@ -122,7 +122,7 @@ export function getOptionalNumber(formData: FormData, key: string): number | nul
       return null;
     }
     
-    // Tentar parsear como número
+    // Try to parse as number
     const parsed = parseInt(trimmed, 10);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
   }

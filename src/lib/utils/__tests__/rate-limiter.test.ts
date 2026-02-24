@@ -14,7 +14,7 @@ import {
 
 describe("rate-limiter", () => {
   beforeEach(() => {
-    // Limpar store antes de cada teste
+    // Clear store before each test
     clearRateLimitStore();
   });
 
@@ -22,7 +22,7 @@ describe("rate-limiter", () => {
     it("permite primeira requisição", () => {
       const result = checkRateLimit("192.168.1.1", {
         maxRequests: 5,
-        windowMs: 60000, // 1 minuto
+        windowMs: 60000, // 1 minute
       });
 
       expect(result.limited).toBe(false);
@@ -36,12 +36,12 @@ describe("rate-limiter", () => {
       };
       const identifier = "192.168.1.1";
 
-      // Fazer 3 requisições (limite)
+      // Make 3 requests (limit)
       for (let i = 0; i < 3; i++) {
         checkRateLimit(identifier, config);
       }
 
-      // 4ª requisição deve ser bloqueada
+      // 4th request should be blocked
       const result = checkRateLimit(identifier, config);
       expect(result.limited).toBe(true);
       expect(result.remaining).toBe(0);
@@ -54,14 +54,14 @@ describe("rate-limiter", () => {
       };
       const identifier = "192.168.1.1";
 
-      // Fazer 2 requisições
+      // Make 2 requests
       checkRateLimit(identifier, config);
       checkRateLimit(identifier, config);
 
       // Aguardar janela expirar
       return new Promise<void>((resolve) => {
         setTimeout(() => {
-          // Nova requisição deve ser permitida
+          // New request should be allowed
           const result = checkRateLimit(identifier, config);
           expect(result.limited).toBe(false);
           expect(result.remaining).toBe(1); // Nova janela, 2 - 1
@@ -76,7 +76,7 @@ describe("rate-limiter", () => {
         windowMs: 60000,
       };
 
-      // IP 1 faz 2 requisições
+      // IP 1 makes 2 requests
       checkRateLimit("192.168.1.1", config);
       checkRateLimit("192.168.1.1", config);
 
@@ -136,7 +136,7 @@ describe("rate-limiter", () => {
         headers: { "X-Forwarded-For": "203.0.113.1, 198.51.100.1" },
       });
 
-      // Deve usar o primeiro IP da lista
+      // Should use the first IP in the list
       expect(getClientIP(request)).toBe("203.0.113.1");
     });
 
@@ -220,13 +220,13 @@ describe("rate-limiter", () => {
 
     it("ignora valores inválidos e usa padrões", () => {
       const env = {
-        RATE_LIMIT_LOGIN_MAX: "abc", // inválido
-        RATE_LIMIT_LOGIN_WINDOW_MIN: "xyz", // inválido
+        RATE_LIMIT_LOGIN_MAX: "abc", // invalid
+        RATE_LIMIT_LOGIN_WINDOW_MIN: "xyz", // invalid
       };
 
       const limits = getRateLimits(env);
 
-      // Deve usar padrões
+      // Should use defaults
       expect(limits.LOGIN.maxRequests).toBe(5);
       expect(limits.LOGIN.windowMs).toBe(15 * 60 * 1000);
     });
@@ -234,13 +234,13 @@ describe("rate-limiter", () => {
     it("aceita valores parciais e complementa com padrões", () => {
       const env = {
         RATE_LIMIT_LOGIN_MAX: "20", // customizado
-        // RATE_LIMIT_LOGIN_WINDOW_MIN não definido
+        // RATE_LIMIT_LOGIN_WINDOW_MIN not defined
       };
 
       const limits = getRateLimits(env);
 
       expect(limits.LOGIN.maxRequests).toBe(20); // customizado
-      expect(limits.LOGIN.windowMs).toBe(15 * 60 * 1000); // padrão
+      expect(limits.LOGIN.windowMs).toBe(15 * 60 * 1000); // default
     });
 
     it("aceita zero como valor válido", () => {

@@ -41,7 +41,7 @@ export async function updateTaxonomy(
  * @param taxonomyId - ID da taxonomia
  */
 export async function deleteTaxonomy(db: Database, taxonomyId: number): Promise<void> {
-  // Primeiro remover as relações com posts
+  // First remove relations with posts
   await db.delete(postsTaxonomies).where(eq(postsTaxonomies.term_id, taxonomyId));
   
   // Depois deletar a taxonomia

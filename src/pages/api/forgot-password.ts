@@ -56,7 +56,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   try {
     const authResponse = await auth.handler(authRequest);
     const _data = await authResponse.json().catch(() => ({}));
-    // Sempre redirecionar com sucesso para não revelar se o email existe
+    // Always redirect successfully to avoid revealing whether the email exists
     return redirect(`${forgotPath}?sent=1`, 303);
   } catch (err) {
     console.error("Forgot password error:", err);

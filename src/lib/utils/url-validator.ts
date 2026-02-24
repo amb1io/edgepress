@@ -22,7 +22,7 @@ export function isValidCallbackURL(url: string, baseURL: string): boolean {
   }
 
   try {
-    // Se for um path relativo (começa com /), é válido
+    // If it's a relative path (starts with /), it's valid
     if (url.startsWith("/")) {
       // Prevenir double-slash redirects (//evil.com)
       if (url.startsWith("//")) {
@@ -38,7 +38,7 @@ export function isValidCallbackURL(url: string, baseURL: string): boolean {
     // Deve ter a mesma origem (protocol + host + port)
     return callback.origin === base.origin;
   } catch {
-    // URL inválida retorna false
+    // Invalid URL returns false
     return false;
   }
 }

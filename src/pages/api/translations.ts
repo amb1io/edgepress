@@ -1,6 +1,6 @@
 /**
  * POST /api/translations
- * Cria ou atualiza uma tradução na tabela translations e translations_languages
+ * Creates or updates a translation in the translations and translations_languages tables
  */
 import type { APIRoute } from "astro";
 import { db } from "../../db/index.ts";
@@ -33,7 +33,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   const isHtmx = request.headers.get("HX-Request") === "true";
 
-  // Validar campos obrigatórios
+  // Validate required fields
   if (!namespace || !key || !translationValue || localeId === null) {
     if (isHtmx) return badRequestHtmlResponse("Preencha todos os campos obrigatórios.");
     const redirectUrl = buildAbsoluteUrl(
@@ -43,7 +43,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return redirectResponse(redirectUrl);
   }
 
-  // Verificar se já existe uma tradução com mesmo namespace e key (exceto na edição do mesmo registro)
+  // Check if a translation with same namespace and key already exists (except when editing the same record)
   const existing = await db
     .select({ id: translationsTable.id })
     .from(translationsTable)
@@ -62,8 +62,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
     .limit(1);
 
   if (existing.length > 0) {
-    if (isHtmx) return badRequestHtmlResponse("Já existe uma tradução com este namespace e key.");
-    return badRequestResponse("Já existe uma tradução com este namespace e key");
+    if (isHtmx) return badRequestHtmlResponse("A translation with this namespace and key already exists.");
+    return badRequestResponse("A translation with this namespace and key already exists");
   }
 
   const now = Date.now();
@@ -72,15 +72,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
     let translationId: number;
 
     if (action === "edit" && idParam) {
-      // EDIÇÃO
+      // EDIT
       const idParamNum = parseInt(idParam, 10);
       if (isNaN(idParamNum)) {
         if (isHtmx) return badRequestHtmlResponse("ID inválido.");
         return badRequestResponse("ID inválido");
       }
 
-      // Verificar se o ID é de translations_languages ou translations
-      // Primeiro, tentar buscar em translations_languages
+      // Check whether the ID is from translations_languages or translations
+      // First, try to look it up in translations_languages
       const [translationLangRow] = await db
         .select({
           id_translations: translationsLanguagesTable.id_translations,
@@ -90,10 +90,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
         .limit(1);
 
       if (translationLangRow) {
-        // Se encontrou em translations_languages, usar o id_translations
+        // If found in translations_languages, use id_translations
         translationId = translationLangRow.id_translations;
       } else {
-        // Se não encontrou, assumir que é o ID de translations
+        // If not found, assume it is the translations ID
         translationId = idParamNum;
       }
 
@@ -106,7 +106,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         })
         .where(eq(translationsTable.id, translationId));
     } else {
-      // CRIAÇÃO
+      // CREATE
       const [inserted] = await db
         .insert(translationsTable)
         .values({
@@ -120,8 +120,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       translationId = inserted.id;
     }
 
-    // Inserir ou atualizar na tabela translations_languages
-    // Verificar se já existe um registro para esta tradução e locale
+    // Insert or update in the translations_languages table
+    // Check whether a record for this translation and locale already exists
     const existingTranslationLang = await db
       .select({ id: translationsLanguagesTable.id })
       .from(translationsLanguagesTable)
@@ -134,7 +134,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       .limit(1);
 
     if (existingTranslationLang.length > 0) {
-      // Atualizar registro existente
+      // Update existing record
       await db
         .update(translationsLanguagesTable)
         .set({
@@ -142,7 +142,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         })
         .where(eq(translationsLanguagesTable.id, existingTranslationLang[0].id));
     } else {
-      // Inserir novo registro
+      // Insert new record
       await db.insert(translationsLanguagesTable).values({
         id_translations: translationId,
         id_locale_code: localeId,
@@ -161,7 +161,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return redirectResponse(listUrl);
   } catch (error) {
     console.error("Error saving translation:", error);
-    if (isHtmx) return badRequestHtmlResponse("Erro ao salvar tradução.");
-    return badRequestResponse("Erro ao salvar tradução");
+    if (isHtmx) return badRequestHtmlResponse("Error saving translation.");
+    return badRequestResponse("Error saving translation");
   }
 };

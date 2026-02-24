@@ -17,7 +17,7 @@ describe("Attachment Form Update Flow", () => {
 
   describe("handleSubmit - Form Data Validation", () => {
     it("should include all attachment meta fields in FormData when submitting", async () => {
-      // Simula o estado do Alpine após upload de nova imagem
+      // Simulates Alpine state after new image upload
       const mockFormData = {
         post_type: "attachment",
         action: "edit",
@@ -37,7 +37,7 @@ describe("Attachment Form Update Flow", () => {
         formData.set(key, value);
       });
 
-      // Valida que todos os campos necessários estão presentes
+      // Validates that all required fields are present
       expect(formData.get("post_type")).toBe("attachment");
       expect(formData.get("action")).toBe("edit");
       expect(formData.get("id")).toBe("123");
@@ -48,7 +48,7 @@ describe("Attachment Form Update Flow", () => {
     });
 
     it("should set action='edit' and include correct id when initialPostId is present", () => {
-      // Simula o estado do Alpine em modo de edição
+      // Simulates Alpine state in edit mode
       const alpineState = {
         postId: null,
         initialPostId: 123,
@@ -68,7 +68,7 @@ describe("Attachment Form Update Flow", () => {
     });
 
     it("should set action='edit' and include correct id when postId is present", () => {
-      // Simula o estado do Alpine após criar novo post
+      // Simulates Alpine state after creating new post
       const alpineState = {
         postId: 456,
         initialPostId: null,
@@ -88,7 +88,7 @@ describe("Attachment Form Update Flow", () => {
     });
 
     it("should set action='new' when no id is present", () => {
-      // Simula o estado do Alpine em modo de criação
+      // Simulates Alpine state in create mode
       const alpineState = {
         postId: null,
         initialPostId: null,
@@ -122,7 +122,7 @@ describe("Attachment Form Update Flow", () => {
         attachment_alt: "Nova imagem",
       };
 
-      // Simula o merge que acontece no backend
+      // Simulates the merge that happens on the backend
       const merged = { ...existingMeta, ...newMeta };
       expect(merged.mime_type).toBe("image/jpeg");
       expect(merged.attachment_file).toBe("new-image.jpg");
@@ -148,7 +148,7 @@ describe("Attachment Form Update Flow", () => {
         upload: vi.fn(() => Promise.resolve()),
       };
 
-      // Simula o fluxo de aguardar upload
+      // Simulates the flow of waiting for upload
       const waitForUpload = async () => {
         const files = mockUppy.getFiles();
         const uploadingFiles = files.filter(
@@ -173,7 +173,7 @@ describe("Attachment Form Update Flow", () => {
         }
       };
 
-      // Simula upload completando após 200ms
+      // Simulates upload completing after 200ms
       setTimeout(() => {
         mockUppy.getFiles.mockReturnValue([
           {
@@ -199,12 +199,12 @@ describe("Attachment Form Update Flow", () => {
         mimeType: "image/jpeg",
       };
 
-      // Simula o evento attachment-uploaded
+      // Simulates the attachment-uploaded event
       const event = new CustomEvent("attachment-uploaded", {
         detail: uploadResponse,
       });
 
-      // Simula o handler que atualiza os campos
+      // Simulates the handler that updates the fields
       const mockCtx = {
         attachment_path: "",
         attachment_file: "",
@@ -212,7 +212,7 @@ describe("Attachment Form Update Flow", () => {
         attachment_alt: "",
       };
 
-      // Simula handleAttachmentUploaded
+      // Simulates handleAttachmentUploaded
       mockCtx.attachment_path = uploadResponse.path;
       mockCtx.attachment_file = uploadResponse.filename;
       mockCtx.mime_type = uploadResponse.mimeType;
@@ -245,7 +245,7 @@ describe("Attachment Form Update Flow", () => {
         );
 
         if (uploadingFiles.length > 0) {
-          // Não deve submeter se ainda está fazendo upload
+          // Should not submit if still uploading
           return;
         }
 
@@ -288,7 +288,7 @@ describe("Attachment Form Update Flow", () => {
 
   describe("Form Field Synchronization", () => {
     it("should use Alpine state values directly in FormData instead of relying on hidden fields", () => {
-      // Simula o estado do Alpine após upload de nova imagem
+      // Simulates Alpine state after new image upload
       const alpineState = {
         title: "Nova Imagem",
         slug: "nova-imagem",
@@ -301,7 +301,7 @@ describe("Attachment Form Update Flow", () => {
         initialPostId: 123,
       };
 
-      // Simula campos hidden que podem estar desatualizados (problema comum)
+      // Simulates hidden fields that may be stale (common issue)
       const staleHiddenFields = {
         title: "Imagem Antiga",
         slug: "imagem-antiga",
@@ -311,7 +311,7 @@ describe("Attachment Form Update Flow", () => {
         "meta_attachment_alt": "Descrição antiga",
       };
 
-      // CORREÇÃO: Usar valores do Alpine state diretamente ao invés de campos hidden
+      // FIX: Use Alpine state values directly instead of hidden fields
       const formData = new FormData();
       formData.set("title", alpineState.title);
       formData.set("slug", alpineState.slug);
@@ -320,7 +320,7 @@ describe("Attachment Form Update Flow", () => {
       formData.set("meta_attachment_path", alpineState.attachment_path);
       formData.set("meta_attachment_alt", alpineState.attachment_alt);
 
-      // Valida que os valores corretos (do Alpine) são usados, não os desatualizados
+      // Validates that correct (Alpine) values are used, not stale ones
       expect(formData.get("title")).toBe("Nova Imagem");
       expect(formData.get("slug")).toBe("nova-imagem");
       expect(formData.get("meta_attachment_path")).toBe("/uploads/2024/01/new-image.jpg");
@@ -328,7 +328,7 @@ describe("Attachment Form Update Flow", () => {
       expect(formData.get("meta_mime_type")).toBe("image/jpeg");
       expect(formData.get("meta_attachment_alt")).toBe("Nova descrição");
 
-      // Valida que NÃO está usando valores desatualizados
+      // Validates that it is NOT using stale values
       expect(formData.get("meta_attachment_path")).not.toBe(staleHiddenFields["meta_attachment_path"]);
       expect(formData.get("meta_attachment_file")).not.toBe(staleHiddenFields["meta_attachment_file"]);
     });
@@ -343,7 +343,7 @@ describe("Attachment Form Update Flow", () => {
         attachment_alt: "Descrição",
       };
 
-      // Simula os campos hidden do form
+      // Simulates the form's hidden fields
       const hiddenFields = {
         title: alpineState.title,
         slug: alpineState.slug,
@@ -374,7 +374,7 @@ describe("Attachment Form Update Flow", () => {
         attachment_file: "new.jpg",
       };
 
-      // Simula merge preservando campos não atualizados
+      // Simulates merge preserving unupdated fields
       const merged = { ...existingMeta, ...newMeta };
       expect(merged.mime_type).toBe("image/png"); // Preservado
       expect(merged.attachment_alt).toBe("Antiga"); // Preservado
@@ -399,7 +399,7 @@ describe("Attachment Form Update Flow", () => {
       formData.set("meta_attachment_path", "/uploads/2024/01/imagem.jpg");
       formData.set("meta_attachment_alt", "Nova descrição");
 
-      // Valida estrutura esperada pelo endpoint
+      // Validates structure expected by the endpoint
       const entries = Array.from(formData.entries());
       const metaEntries = entries.filter(([key]) => key.startsWith("meta_"));
 
@@ -417,15 +417,15 @@ describe("Attachment Form Update Flow", () => {
       formData.set("title", "Test");
       formData.set("slug", "test");
 
-      // Meta fields podem estar vazios, mas não devem quebrar
+      // Meta fields may be empty but should not break
       const metaMimeType = formData.get("meta_mime_type");
       const metaFile = formData.get("meta_attachment_file");
       const metaPath = formData.get("meta_attachment_path");
 
-      // Valida que não quebra mesmo sem meta fields
+      // Validates it does not break even without meta fields
       expect(formData.get("title")).toBe("Test");
       expect(formData.get("slug")).toBe("test");
-      // Meta fields podem ser null se não foram setados
+      // Meta fields may be null if not set
       expect(metaMimeType === null || typeof metaMimeType === "string").toBe(true);
     });
   });
@@ -467,7 +467,7 @@ describe("Attachment Form Update Flow", () => {
           body: new FormData(),
         });
       } catch {
-        // Fallback para submit normal
+        // Fallback to normal submit
         mockForm.submit();
       }
 
@@ -475,17 +475,17 @@ describe("Attachment Form Update Flow", () => {
     });
 
     it("should use getAttribute('action') instead of form.action to avoid conflict with input[name='action']", () => {
-      // Simula um form com input[name="action"] que sobrescreve form.action
+      // Simulates a form with input[name="action"] that overrides form.action
       const mockForm = {
         getAttribute: vi.fn((attr) => {
           if (attr === "action") return "/api/posts";
           return null;
         }),
         method: "POST",
-        action: "[object HTMLInputElement]", // Simula o problema
+        action: "[object HTMLInputElement]", // Simulates the issue
       };
 
-      // CORREÇÃO: Usar getAttribute ao invés de form.action
+      // FIX: Use getAttribute instead of form.action
       const formAction = mockForm.getAttribute("action") || "/api/posts";
 
       expect(formAction).toBe("/api/posts");

@@ -5,19 +5,19 @@
  */
 export type Locale = "en" | "es" | "pt-br";
 
-// Importar fallback dos arquivos JSON originais
+// Import fallback from original JSON files
 import enFallback from "./languages/en.json";
 import esFallback from "./languages/es.json";
 import ptBrFallback from "./languages/pt_br.json";
 
-// Cache em memória para evitar múltiplas requisições
+// In-memory cache to avoid multiple requests
 const translationsCache: Record<Locale, Record<string, string> | null> = {
   en: null,
   es: null,
   "pt-br": null,
 };
 
-// Fallback translations (usando arquivos JSON originais caso a API falhe)
+// Fallback translations (using original JSON files if API fails)
 const fallbackTranslations: Record<Locale, Record<string, string>> = {
   en: enFallback as Record<string, string>,
   es: esFallback as Record<string, string>,
@@ -28,7 +28,7 @@ export const defaultLocale: Locale = "pt-br";
 
 export const locales: Locale[] = ["en", "es", "pt-br"];
 
-// Mapeamento de locales para locale_code da tabela
+// Locale to table locale_code mapping
 const LOCALE_MAP: Record<string, string> = {
   en: "en_US",
   "en-US": "en_US",
@@ -47,10 +47,10 @@ function normalizeLocaleForDB(locale: string): string {
 }
 
 /**
- * Carrega traduções de um locale da API com cache (para uso no cliente)
+ * Loads translations for a locale from the API with cache (for client use)
  */
 export async function loadTranslationsFromAPI(locale: Locale, baseUrl: string = ""): Promise<Record<string, string>> {
-  // Se já está em cache, retornar
+  // If already cached, return
   if (translationsCache[locale]) {
     return translationsCache[locale]!;
   }
@@ -67,7 +67,7 @@ export async function loadTranslationsFromAPI(locale: Locale, baseUrl: string = 
     const response = await fetch(apiUrl);
     if (response.ok) {
       const data = await response.json() as Record<string, string>;
-      // API retorna DB + fallback; garantir merge local para chaves só nos JSON
+      // API returns DB + fallback; ensure local merge for keys only in JSON
       const merged = { ...fallbackTranslations[locale], ...data };
       translationsCache[locale] = merged;
       return merged;
@@ -76,12 +76,12 @@ export async function loadTranslationsFromAPI(locale: Locale, baseUrl: string = 
     console.warn(`Failed to load translations for locale ${locale}:`, error);
   }
 
-  // Retornar fallback se a API falhar
+  // Return fallback if API fails
   return fallbackTranslations[locale];
 }
 
 /**
- * Carrega traduções de um locale diretamente do banco de dados (para uso no servidor)
+ * Loads translations for a locale directly from the database (for server use)
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function loadTranslationsFromDB(
@@ -92,7 +92,7 @@ export async function loadTranslationsFromDB(
   translationsLanguagesTable: any,
   eq: any
 ): Promise<Record<string, string>> {
-  // Se já está em cache, retornar
+  // If already cached, return
   if (translationsCache[locale]) {
     return translationsCache[locale]!;
   }
@@ -100,7 +100,7 @@ export async function loadTranslationsFromDB(
   try {
     const dbLocaleCode = normalizeLocaleForDB(locale);
     
-    // Buscar o ID do locale
+    // Fetch locale ID
     const [localeRow] = await db.select({ id: localesTable.id })
       .from(localesTable)
       .where(eq(localesTable.locale_code, dbLocaleCode))
@@ -110,7 +110,7 @@ export async function loadTranslationsFromDB(
       return fallbackTranslations[locale];
     }
 
-    // Buscar todas as traduções para este locale
+    // Fetch all translations for this locale
     const translationsData = await db.select({
       namespace: translationsTable.namespace,
       key: translationsTable.key,
@@ -124,14 +124,14 @@ export async function loadTranslationsFromDB(
       value: string;
     }>;
 
-    // Transformar em formato de objeto chave-valor
+    // Transform to key-value object format
     const translationsMap: Record<string, string> = {};
     for (const row of translationsData) {
       const fullKey = row.namespace ? `${row.namespace}.${row.key}` : row.key;
       translationsMap[fullKey] = row.value;
     }
 
-    // DB sobrescreve fallback; chaves só nos JSON continuam disponíveis
+    // DB overwrites fallback; keys only in JSON remain available
     const merged = { ...fallbackTranslations[locale], ...translationsMap };
     translationsCache[locale] = merged;
     return merged;
@@ -156,12 +156,12 @@ export async function loadTranslations(
     eq?: any;
   }
 ): Promise<Record<string, string>> {
-  // Se já está em cache, retornar
+  // If already cached, return
   if (translationsCache[locale]) {
     return translationsCache[locale]!;
   }
 
-  // Se temos acesso ao DB (servidor), usar DB diretamente
+  // If we have DB access (server), use DB directly
   if (options?.db && options?.localesTable && options?.translationsTable && options?.translationsLanguagesTable && options?.eq) {
     return loadTranslationsFromDB(
       locale,
@@ -173,14 +173,14 @@ export async function loadTranslations(
     );
   }
 
-  // Caso contrário, usar API
+  // Otherwise use API
   return loadTranslationsFromAPI(locale, options?.baseUrl);
 }
 
 /**
- * Invalida o cache em memória das traduções.
- * Chamar após criar/editar post types ou traduções para que a próxima carga use dados do DB/API.
- * @param locale - Se informado, invalida só esse locale; senão invalida todos.
+ * Invalidates the in-memory translations cache.
+ * Call after creating/editing post types or translations so the next load uses DB/API data.
+ * @param locale - If provided, invalidates only that locale; otherwise invalidates all.
  */
 export function invalidateTranslationsCache(locale?: Locale): void {
   if (locale !== undefined) {
@@ -193,10 +193,10 @@ export function invalidateTranslationsCache(locale?: Locale): void {
 }
 
 /**
- * Obtém traduções de um locale (síncrono quando possível, assíncrono quando necessário)
+ * Gets translations for a locale (synchronous when possible, async when needed)
  */
 export function getTranslations(locale: Locale): Record<string, string> {
-  // Se tem cache, usar cache; caso contrário, usar fallback dos arquivos JSON
+  // If cached, use cache; otherwise use fallback from JSON files
   const cached = translationsCache[locale];
   if (cached && Object.keys(cached).length > 0) {
     return cached;
@@ -205,7 +205,7 @@ export function getTranslations(locale: Locale): Record<string, string> {
 }
 
 /**
- * Exporta traduções para compatibilidade (usando cache ou fallback)
+ * Exports translations for compatibility (using cache or fallback)
  */
 export const translations: Record<Locale, Record<string, string>> = {
   get en() {

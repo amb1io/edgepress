@@ -43,7 +43,7 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
     return notFoundResponse("Table not found or not allowed");
   }
 
-  // --- Posts: por id (numérico) ou por slug
+  // --- Posts: by id (numeric) or by slug
   if (safeTable === "posts") {
     const bySlug = !isNumericId;
     if (bySlug && !isValidSlug(idOrSlug)) {
@@ -69,7 +69,7 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
           return jsonResponse(cached);
         }
       } catch {
-        // segue para o banco
+        // continue to DB
       }
     }
 
@@ -120,7 +120,7 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
     }
   }
 
-  // --- Outras tabelas: apenas id numérico
+  // --- Other tables: numeric id only
   if (!isNumericId || idNum === null || idNum < 1) {
     return badRequestResponse("For this table only numeric id is supported");
   }

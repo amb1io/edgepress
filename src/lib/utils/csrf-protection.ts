@@ -27,7 +27,7 @@ export function isValidOrigin(
   request: Request,
   allowedOrigins: string[]
 ): boolean {
-  // Requisições GET são geralmente seguras (idempotentes)
+  // GET requests are generally safe (idempotent)
   // CSRF afeta principalmente POST/PUT/DELETE/PATCH
   const method = request.method.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
@@ -42,7 +42,7 @@ export function isValidOrigin(
     return allowedOrigins.includes(origin);
   }
 
-  // Fallback para Referer (menos confiável, pode ser omitido)
+  // Fallback to Referer (less reliable, may be omitted)
   if (referer) {
     try {
       const refererURL = new URL(referer);
@@ -52,7 +52,7 @@ export function isValidOrigin(
     }
   }
 
-  // Se não tem Origin nem Referer, bloquear por segurança
+  // If no Origin or Referer, block for security
   return false;
 }
 
@@ -112,7 +112,7 @@ export function hasSecureContentType(
  *   ]);
  *   if (csrfResponse) return csrfResponse;
  *   
- *   // Processar requisição normalmente...
+ *   // Process request normally...
  * };
  */
 export function validateCSRF(

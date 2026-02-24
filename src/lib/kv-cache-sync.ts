@@ -75,7 +75,7 @@ export async function syncPostCache(
       kv.put(slugStatusKey, payloadStr),
     ]);
   } catch {
-    // não falha a resposta da API por causa do cache
+    // do not fail the API response because of cache
   }
 
   await invalidateContentListByTable(locals, "posts");

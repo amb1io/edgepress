@@ -79,7 +79,7 @@ export function assertCanSetUserRole(
   if (actorRole !== 0) {
     return "Apenas administradores podem alterar funções de usuário";
   }
-  // Não pode atribuir privilégio maior que o seu (número menor = mais privilégio)
+  // Cannot assign privilege greater than your own (lower number = higher privilege)
   if (newRole < actorRole) {
     return "Não é permitido atribuir função com mais privilégios que a sua";
   }
@@ -100,8 +100,8 @@ export function resolveAuthorIdForRole(
   const trimmed = requestedAuthorId.trim();
   // Admin e editor podem definir qualquer autor
   if (currentUserRole <= 1) return trimmed;
-  // Autor só pode ser ele mesmo
+  // Author can only be themselves
   if (currentUserRole === 2) return trimmed === currentUserId ? trimmed : currentUserId;
-  // Leitor não deveria criar posts; se chegar aqui, usa próprio id
+  // Reader should not create posts; if we get here, use own id
   return currentUserId;
 }

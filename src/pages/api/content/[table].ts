@@ -98,13 +98,13 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
     }
   }
 
-  // 2) Caso não seja tabela conhecida, tratar como slug de post
+  // 2) If not a known table, treat as post slug
   const slug = segment;
   if (!isValidSlug(slug)) {
     return badRequestResponse("Slug inválido");
   }
 
-  // Filtro de status: por padrão apenas 'published'
+  // Status filter: by default only 'published'
   const rawStatus = url.searchParams.get("status");
   const allowedStatus = new Set(["published", "draft", "archived"]);
   let statusList: string[];
@@ -123,7 +123,7 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
   const statusKey = statusList.join(",");
   const postCacheKey = `post:${slug}:status=${statusKey}`;
 
-  // Autenticado: bypass KV e vai direto ao DB. Não autenticado: tenta KV primeiro.
+  // Authenticated: bypass KV and go straight to DB. Unauthenticated: try KV first.
   if (kv) {
     try {
       const cached = (await kv.get(postCacheKey, "json")) as Record<string, unknown> | null;
@@ -131,7 +131,7 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
         return jsonResponse(cached);
       }
     } catch {
-      // Se o KV falhar, segue para o banco
+      // If KV fails, continue to DB
     }
   }
 
@@ -186,7 +186,7 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
       try {
         await kv.put(postCacheKey, JSON.stringify(payload));
       } catch {
-        // Ignora erro de gravação no KV
+        // Ignore KV write error
       }
     }
 

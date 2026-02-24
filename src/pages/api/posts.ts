@@ -65,23 +65,23 @@ export const prerender = false;
 
 /**
  * POST /api/posts
- * Cria ou atualiza um post
+ * Creates or updates a post
  *
  * @description
- * - Criação: action="new" sem id
- * - Edição: action="edit" com id
- * - Suporta post_type: post, page, attachment, etc.
- * - Gerencia taxonomias, meta_values e attachments
+ * - Create: action="new" without id
+ * - Edit: action="edit" with id
+ * - Supports post_type: post, page, attachment, etc.
+ * - Manages taxonomies, meta_values and attachments
  *
- * @param {Request} request - Request com FormData contendo os dados do post
- * @returns {Promise<Response>} - Redirect para lista ou JSON com {id}
+ * @param {Request} request - Request with FormData containing post data
+ * @returns {Promise<Response>} - Redirect to list or JSON with {id}
  *
- * @example FormData esperado:
- * - post_type: string (obrigatório)
- * - action: "new" | "edit" (obrigatório)
- * - id: number (obrigatório se action="edit")
- * - title: string (obrigatório)
- * - slug: string (obrigatório)
+ * @example Expected FormData:
+ * - post_type: string (required)
+ * - action: "new" | "edit" (required)
+ * - id: number (required if action="edit")
+ * - title: string (required)
+ * - slug: string (required)
  * - status: "draft" | "published" | "archived"
  * - body: string
  * - excerpt: string
@@ -89,7 +89,7 @@ export const prerender = false;
  * - taxonomy_terms[]: number[]
  * - thumbnail_attachment_id: number
  * - blocknote_attachment_ids[]: number[]
- * - meta_*: campos customizados (ex: meta_custom_field)
+ * - meta_*: custom fields (e.g. meta_custom_field)
  */
 export async function POST({
   request,
@@ -106,7 +106,7 @@ export async function POST({
     const formData = await request.formData();
     const isHtmx = request.headers.get("HX-Request") === "true";
 
-    // Extrair dados básicos do formulário
+    // Extract basic form data
     const post_type = getString(formData, "post_type");
     const action = getString(formData, "action");
     const postIdParam = getString(formData, "id") || null;
@@ -117,7 +117,7 @@ export async function POST({
     const body = getString(formData, "body", "");
     const status = normalizePostStatus(getString(formData, "status"));
 
-    // Extrair author_id e aplicar regra de privilégio (autor só pode ser ele mesmo)
+    // Extract author_id and apply privilege rule (author can only be themselves)
     const authorIdRaw = getString(formData, "author_id");
     const requestedAuthorId = authorIdRaw === "" ? null : authorIdRaw;
     const author_id = resolveAuthorIdForRole(
@@ -126,32 +126,32 @@ export async function POST({
       currentUser.role ?? 3,
     );
 
-    // Extrair IDs de taxonomias
+    // Extract taxonomy IDs
     const termIds = getNumberArray(formData, "taxonomy_terms[]", true);
 
-    // Extrair ID do thumbnail
+    // Extract thumbnail ID
     const thumbnailAttachmentId = getOptionalNumber(
       formData,
       "thumbnail_attachment_id",
     );
 
-    // Extrair IDs de attachments do blocknote
+    // Extract blocknote attachment IDs
     const blocknoteAttachmentIds = getNumberArray(
       formData,
       "blocknote_attachment_ids[]",
       true,
     );
 
-    // Extrair parent_id (usado quando criar attachments filhos)
+    // Extract parent_id (used when creating child attachments)
     const parentId = getOptionalNumber(formData, "parent_id");
 
-    // Extrair meta_values customizados
+    // Extract custom meta_values
     const metaValues = getFieldsWithPrefix(formData, "meta_", true);
 
-    // Extrair id_locale_code do formulário (se selecionado no dropdown)
+    // Extract id_locale_code from the form (if selected in the dropdown)
     let localeId: number | null = getNumber(formData, "id_locale_code", null);
     if (localeId === null) {
-      // Fallback: usar locale da URL se não houver id_locale_code no formulário
+      // Fallback: use URL locale if there is no id_locale_code in the form
       const LOCALE_MAP: Record<string, string> = {
         en: "en_US",
         "en-US": "en_US",
@@ -175,12 +175,12 @@ export async function POST({
           .limit(1);
         localeId = localeRow?.id ?? null;
       } catch {
-        // Se não encontrar o locale, continua sem id_locale_code
+        // If the locale is not found, continue without id_locale_code
         localeId = null;
       }
     }
 
-    // Validar campos obrigatórios
+    // Validate required fields
     if (!post_type || !title || !slug) {
       const msg = getErrorMessage("MISSING_REQUIRED_FIELDS", locale);
       if (isHtmx) return badRequestHtmlResponse(msg);
@@ -196,7 +196,7 @@ export async function POST({
       return redirectResponse(redirectUrl);
     }
 
-    // Validar formulário
+    // Validate form
     const validation = validatePostForm(formData);
     if (!validation.valid) {
       const msg = getErrorMessage("MISSING_REQUIRED_FIELDS", locale);
@@ -204,7 +204,7 @@ export async function POST({
       return badRequestResponse(msg, validation.errors);
     }
 
-    // Buscar ID do post_type
+    // Fetch post_type ID
     const postTypeId = await getPostTypeId(db, post_type);
     if (!postTypeId) {
       const listUrl = buildAbsoluteUrl(request, buildListUrl(locale, "post"));
@@ -215,12 +215,12 @@ export async function POST({
     const now = Date.now();
     let postId: number;
 
-    // Processar criação ou edição
+    // Process create or edit
     if (action === "edit" && postIdParam && parseNumericId(postIdParam)) {
-      // EDIÇÃO
+      // EDIT
       postId = parseInt(postIdParam, 10);
 
-      // Preparar payload de atualização
+      // Prepare update payload
       const updatePayload = {
         title,
         slug,
@@ -232,19 +232,19 @@ export async function POST({
         updated_at: now,
       };
 
-      // Atualizar post
+      // Update post
       await updatePost(db, postId, postTypeId, updatePayload);
 
-      // Atualizar meta_values preservando valores existentes
+      // Update meta_values while preserving existing values
       const metaToUpdate: Record<string, string> = { ...metaValues };
 
-      // Atualizar ou remover post_thumbnail_id baseado em thumbnailAttachmentId
+      // Update or remove post_thumbnail_id based on thumbnailAttachmentId
       if (thumbnailAttachmentId !== undefined) {
         if (thumbnailAttachmentId !== null && thumbnailAttachmentId > 0) {
           metaToUpdate["post_thumbnail_id"] = String(thumbnailAttachmentId);
         } else {
-          // Se foi enviado mas é null, queremos remover o thumbnail
-          // updatePostMetaValues não tem suporte para deletar, então vamos buscar e mesclar manualmente
+          // If it was sent but is null, we want to remove the thumbnail
+          // updatePostMetaValues does not support deletion, so we fetch and merge manually
           const [existing] = await db
             .select({
               meta_values: (await import("../../db/schema.ts")).posts
@@ -276,13 +276,13 @@ export async function POST({
             }
           }
 
-          // Mesclar novos valores
+          // Merge new values
           merged = { ...merged, ...metaToUpdate };
 
-          // Remover post_thumbnail_id
+          // Remove post_thumbnail_id
           delete merged["post_thumbnail_id"];
 
-          // Atualizar diretamente
+          // Update directly
           await updatePost(db, postId, postTypeId, {
             meta_values:
               Object.keys(merged).length > 0 ? JSON.stringify(merged) : null,
@@ -290,13 +290,13 @@ export async function POST({
           });
         }
       } else {
-        // Se thumbnail_attachment_id não foi enviado, apenas atualizar outros meta_values
+        // If thumbnail_attachment_id was not sent, only update other meta_values
         if (Object.keys(metaToUpdate).length > 0) {
           await updatePostMetaValues(db, postId, postTypeId, metaToUpdate);
         }
       }
 
-      // Se thumbnailAttachmentId foi definido e não é null, atualizar meta_values com merge
+      // If thumbnailAttachmentId is defined and not null, update meta_values with merge
       if (
         thumbnailAttachmentId !== undefined &&
         thumbnailAttachmentId !== null
@@ -304,10 +304,10 @@ export async function POST({
         await updatePostMetaValues(db, postId, postTypeId, metaToUpdate);
       }
     } else {
-      // CRIAÇÃO
+      // CREATE
       const finalMetaValues: Record<string, string> = { ...metaValues };
 
-      // Adicionar post_thumbnail_id se existir
+      // Add post_thumbnail_id if present
       if (
         thumbnailAttachmentId !== undefined &&
         thumbnailAttachmentId !== null &&
@@ -334,12 +334,12 @@ export async function POST({
       postId = await createPost(db, createPayload);
     }
 
-    // Vincular taxonomias
+    // Link taxonomies
     if (postId && termIds.length > 0) {
       await linkPostTaxonomies(db, postId, termIds);
     }
 
-    // Processar e vincular attachments
+    // Process and link attachments
     if (postId) {
       await processPostAttachments(
         db,
@@ -348,21 +348,21 @@ export async function POST({
         blocknoteAttachmentIds,
       );
 
-      // Atualizar parent_id e id_locale_code dos attachments relacionados ao post
-      // Isso garante que attachments criados durante a criação/edição tenham os campos corretos
+      // Update parent_id and id_locale_code of attachments related to the post
+      // This ensures attachments created during create/edit have the correct fields
       const attachmentTypeId = await getPostTypeId(db, "attachment");
       if (attachmentTypeId) {
         const { posts: postsTable } = await import("../../db/schema.ts");
         const { eq, and, inArray } = await import("drizzle-orm");
 
-        // Coletar todos os IDs de attachments relacionados ao post
+        // Collect all attachment IDs related to the post
         const attachmentIds: number[] = [];
         if (thumbnailAttachmentId && thumbnailAttachmentId > 0) {
           attachmentIds.push(thumbnailAttachmentId);
         }
         attachmentIds.push(...blocknoteAttachmentIds);
 
-        // Atualizar parent_id e id_locale_code dos attachments relacionados
+        // Update parent_id and id_locale_code of related attachments
         if (attachmentIds.length > 0) {
           await db
             .update(postsTable)
@@ -380,7 +380,7 @@ export async function POST({
       }
     }
 
-    // Processar custom fields: deletar os marcados e criar/atualizar os restantes
+    // Process custom fields: delete the ones marked and create/update the rest
     const customFieldsToDeleteRaw = getString(formData, "custom_fields_to_delete");
     const customFieldsDataRaw = getString(formData, "custom_fields_data");
 
@@ -390,7 +390,7 @@ export async function POST({
         const { posts: postsTable } = await import("../../db/schema.ts");
         const { eq, and, inArray } = await import("drizzle-orm");
 
-        // Deletar custom fields explicitamente marcados para deleção
+        // Delete custom fields explicitly marked for deletion
         if (customFieldsToDeleteRaw !== "") {
           try {
             const idsToDelete = JSON.parse(customFieldsToDeleteRaw) as number[];
@@ -406,11 +406,11 @@ export async function POST({
                 );
             }
           } catch {
-            // Ignorar erro de parse
+            // Ignore parse error
           }
         }
 
-        // Criar/atualizar custom fields restantes
+        // Create/update remaining custom fields
         if (customFieldsDataRaw !== "") {
           try {
             const customFieldsItems = JSON.parse(customFieldsDataRaw) as Array<{
@@ -419,12 +419,12 @@ export async function POST({
               rows: Array<{ id?: number; name?: string; value: string; type?: string }>;
               template?: boolean;
             }>;
-            if (
+              if (
               Array.isArray(customFieldsItems) &&
               customFieldsItems.length > 0
-            ) {
-              // Deletar todos os custom fields filhos existentes para recriar a partir do formulário
-              // (isso garante que campos removidos do formulário sejam deletados)
+              ) {
+              // Delete all existing child custom fields to recreate from the form
+              // (this ensures fields removed from the form are deleted)
               await db
                 .delete(postsTable)
                 .where(
@@ -434,7 +434,7 @@ export async function POST({
                   ),
                 );
 
-              // Criar os custom fields do formulário (slug único com incremental para evitar UNIQUE constraint)
+              // Create custom fields from the form (unique slug with incremental to avoid UNIQUE constraint)
               for (let i = 0; i < customFieldsItems.length; i++) {
                 const item = customFieldsItems[i];
                 const baseSlug = slugify(item.title) || "custom-field";
@@ -479,16 +479,16 @@ export async function POST({
               }
             }
           } catch {
-            // Ignorar erro de parse ou criação de custom fields
+            // Ignore parse or custom field creation error
           }
         }
       }
     }
 
-    // Atualizar cache KV com o post atual (create ou update)
+    // Update KV cache with the current post (create or update)
     await syncPostCache(locals, db, postId);
 
-    // Retornar resposta
+    // Return response
     const listUrl = buildAbsoluteUrl(request, buildListUrl(locale, post_type));
     const acceptsJson = request.headers
       .get("Accept")

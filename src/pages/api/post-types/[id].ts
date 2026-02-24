@@ -1,6 +1,6 @@
 /**
- * API de um post type por ID.
- * GET: retorna um. PUT: atualiza. DELETE: remove. Requer admin (role 0).
+ * API for a post type by ID.
+ * GET: returns one. PUT: updates. DELETE: removes. Requires admin (role 0).
  */
 import type { APIRoute } from "astro";
 import { db } from "../../../db/index.ts";
@@ -149,7 +149,7 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
     }
 
     if (!slug || !name) {
-      return badRequestResponse("Slug e nome são obrigatórios");
+      return badRequestResponse("Slug and name are required");
     }
 
     const now = Date.now();
@@ -219,7 +219,7 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
 
   if (!existing) return notFoundResponse("Not Found");
 
-  // Marcar como trash e depois remover os posts (post_type_id é NOT NULL no banco)
+  // Mark as trash and then remove the posts (post_type_id is NOT NULL in the database)
   await db
     .update(posts)
     .set({ status: "trash" as typeof posts.$inferSelect.status })

@@ -44,7 +44,7 @@ export async function uploadFileToR2(file: File): Promise<UploadResult> {
       throw new Error("Invalid response from upload endpoint");
     }
 
-    // Converter path do R2 para URL acessível via endpoint /api/media/
+    // Convert R2 path to URL accessible via /api/media/ endpoint
     const imageUrl = data.path.startsWith("http")
       ? data.path
       : data.path.startsWith("/uploads/")

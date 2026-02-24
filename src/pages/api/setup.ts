@@ -1,8 +1,8 @@
 /**
- * API de conclusão do setup inicial.
- * POST: aplica migrações se necessário (cria tabelas se não existirem), cria o primeiro usuário (better-auth),
- * atualiza site_name, site_description e seta setup_done=Y.
- * O seed do banco deve ser executado apenas via npm (ex.: npm run db:seed).
+ * Initial setup completion API.
+ * POST: applies migrations if needed (creates tables if they do not exist), creates first user (better-auth),
+ * updates site_name, site_description and sets setup_done=Y.
+ * DB seed should be run only via npm (e.g. npm run db:seed).
  */
 import type { APIRoute } from "astro";
 import { auth } from "../../lib/auth.ts";
@@ -11,7 +11,7 @@ import { settings as settingsTable } from "../../db/schema.ts";
 import { eq } from "drizzle-orm";
 import { getString } from "../../lib/utils/form-data.ts";
 
-/** Garante que a opção exista: atualiza se já existir, insere se não existir. */
+/** Ensures the option exists: update if it exists, insert if not. */
 async function upsertSetting(
   name: string,
   value: string,

@@ -8,7 +8,7 @@ import { posts, postsMedia, postsTaxonomies, postTypes } from "../../../../db/sc
 // ORM
 import { eq, and } from "drizzle-orm";
 
-// Auth: apenas editor ou admin podem duplicar posts
+// Auth: only editor or admin can duplicate posts
 import { requireMinRole } from "../../../../lib/api-auth.ts";
 
 // Services
@@ -18,21 +18,21 @@ export const prerender = false;
 
 /**
  * POST /api/posts/[id]/duplicate
- * Duplica um post e todas as suas relações
+ * Duplicates a post and all its relations
  * 
  * @description
- * - Busca o post original com todos os seus dados
- * - Busca e copia relações em posts_taxonomies (taxonomias)
- * - Busca e copia relações em posts_media (attachments)
- * - Busca e duplica custom fields (posts filhos do tipo "custom_fields")
- *   - Cria novos registros de custom fields
- *   - Atualiza parent_id para apontar para o novo post duplicado
- *   - Preserva todos os dados incluindo meta_values e rows
- * - Cria novo post com título e slug incrementados
- * - Retorna JSON com o ID do novo post
+ * - Fetches the original post with all its data
+ * - Fetches and copies relations in posts_taxonomies (taxonomies)
+ * - Fetches and copies relations in posts_media (attachments)
+ * - Fetches and duplicates custom fields (child posts of type "custom_fields")
+ *   - Creates new custom field records
+ *   - Updates parent_id to point to the new duplicated post
+ *   - Preserves all data including meta_values and rows
+ * - Creates new post with incremented title and slug
+ * - Returns JSON with the new post ID
  * 
- * @param {object} params - Parâmetros da rota
- * @param {string} params.id - ID do post a ser duplicado
+ * @param {object} params - Route parameters
+ * @param {string} params.id - ID of the post to be duplicated
  * @returns {Promise<Response>} JSON: {success: boolean, id?: number, error?: string}
  */
 export const POST: APIRoute = async ({ params, request, locals }) => {
@@ -49,7 +49,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   const postId = parseInt(id, 10);
 
   try {
-    // Buscar o post original
+    // Fetch the original post
     const [originalPost] = await db
       .select()
       .from(posts)
@@ -63,19 +63,19 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       });
     }
 
-    // Buscar relações de taxonomias
+    // Fetch taxonomy relations
     const taxonomyRelations = await db
       .select({ term_id: postsTaxonomies.term_id })
       .from(postsTaxonomies)
       .where(eq(postsTaxonomies.post_id, postId));
 
-    // Buscar relações de media
+    // Fetch media relations
     const mediaRelations = await db
       .select({ media_id: postsMedia.media_id })
       .from(postsMedia)
       .where(eq(postsMedia.post_id, postId));
 
-    // Buscar custom fields (posts filhos do tipo "custom_fields")
+    // Fetch custom fields (child posts of type "custom_fields")
     const customFieldsTypeId = await getPostTypeId(db, "custom_fields");
     const customFieldsPosts = customFieldsTypeId
       ? await db
@@ -89,11 +89,11 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
           )
       : [];
 
-    // Gerar título e slug únicos com número incrementado
+    // Generate unique title and slug with an incremented number
     const baseTitle = originalPost.title;
     const baseSlug = originalPost.slug;
 
-    // Encontrar o próximo número disponível
+    // Find the next available number
     let newTitle = baseTitle;
     let newSlug = baseSlug;
     let counter = 1;
@@ -103,7 +103,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       newTitle = `${baseTitle} ${counter}`;
       newSlug = `${baseSlug}-${counter}`;
 
-      // Verificar se slug já existe (slug é único no banco)
+      // Check if the slug already exists (slug is unique in the database)
       const [existingSlug] = await db
         .select({ id: posts.id })
         .from(posts)
@@ -117,7 +117,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       }
     }
 
-    // Criar novo post com dados do original, mas com novo título e slug
+    // Create a new post based on the original, but with new title and slug
     const now = Date.now();
     const [newPost] = await db
       .insert(posts)
@@ -147,7 +147,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
     const newPostId = newPost.id;
 
-    // Copiar relações de taxonomias
+    // Copy taxonomy relations
     if (taxonomyRelations.length > 0) {
       await db.insert(postsTaxonomies).values(
         taxonomyRelations.map((rel) => ({
@@ -157,7 +157,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       );
     }
 
-    // Copiar relações de media
+    // Copy media relations
     if (mediaRelations.length > 0) {
       await db.insert(postsMedia).values(
         mediaRelations.map((rel) => ({
@@ -167,18 +167,18 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       );
     }
 
-    // Duplicar custom fields (posts filhos do tipo "custom_fields")
-    // Cada custom field é um post separado com parent_id apontando para o post pai
+    // Duplicate custom fields (child posts of type "custom_fields")
+    // Each custom field is a separate post with parent_id pointing to the parent post
     if (customFieldsPosts.length > 0 && customFieldsTypeId) {
       const customFieldsToInsert = [];
       
       for (const cfPost of customFieldsPosts) {
-        // Gerar slug único para cada custom field duplicado
+        // Generate a unique slug for each duplicated custom field
         let cfSlug = `${cfPost.slug}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         let cfSlugExists = true;
         let cfCounter = 1;
         
-        // Garantir que o slug seja único no banco
+        // Ensure the slug is unique in the database
         while (cfSlugExists) {
           const [existingCfSlug] = await db
             .select({ id: posts.id })
@@ -193,21 +193,21 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
           }
         }
         
-        // Criar novo registro de custom field com parent_id atualizado para o novo post
+        // Create a new custom field record with parent_id updated to the new post
         customFieldsToInsert.push({
-          post_type_id: cfPost.post_type_id, // Mantém o tipo "custom_fields"
-          parent_id: newPostId, // IMPORTANTE: Atualiza parent_id para apontar para o post duplicado
+          post_type_id: cfPost.post_type_id, // Keep the "custom_fields" type
+          parent_id: newPostId, // IMPORTANT: Update parent_id to point to the duplicated post
           author_id: cfPost.author_id,
           id_locale_code: cfPost.id_locale_code,
-          title: cfPost.title, // Mantém o mesmo título do custom field
-          slug: cfSlug, // Slug único gerado
+          title: cfPost.title, // Keep the same custom field title
+          slug: cfSlug, // Generated unique slug
           excerpt: cfPost.excerpt,
           body: cfPost.body,
           status: cfPost.status,
-          meta_values: cfPost.meta_values, // Copia todos os meta_values incluindo o array de rows
+          meta_values: cfPost.meta_values, // Copy all meta_values including the rows array
           published_at: cfPost.published_at,
-          created_at: now, // Novo timestamp de criação
-          updated_at: now, // Novo timestamp de atualização
+          created_at: now, // New creation timestamp
+          updated_at: now, // New update timestamp
         });
       }
       

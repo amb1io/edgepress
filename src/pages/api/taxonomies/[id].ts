@@ -98,7 +98,7 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
   return handleTaxonomyUpdate(parseInt(id, 10), request, locals);
 };
 
-/** POST no mesmo path é aceito como fallback quando o form é enviado como POST (ex.: HTMX não intercepta). */
+/** POST on the same path is accepted as fallback when the form is submitted as POST (e.g. HTMX does not intercept). */
 export const POST: APIRoute = async ({ params, request, locals }) => {
   const authResult = await requireMinRole(request, 1, locals);
   if (authResult instanceof Response) return authResult;

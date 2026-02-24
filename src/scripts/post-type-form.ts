@@ -1,6 +1,6 @@
 /**
- * Inicialização do formulário de post types: slug gerado a partir do nome
- * (mesma lógica do content.astro). Usado em templates/post-types.astro.
+ * Post type form initialization: slug generated from name
+ * (same logic as content.astro). Used in templates/post-types.astro.
  */
 import { slugify } from "../lib/slugify.ts";
 

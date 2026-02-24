@@ -1,5 +1,5 @@
 /**
- * Envio de email via Resend API (fetch, compatível com Cloudflare Workers).
+ * Email sending via Resend API (fetch, compatible with Cloudflare Workers).
  * @see https://resend.com/docs/api-reference/emails/send-email
  */
 
@@ -14,8 +14,8 @@ export type SendPasswordResetEmailOptions = {
 };
 
 /**
- * Envia email de recuperação de senha via Resend.
- * Não faz throw; erros são apenas logados para não afetar timing da resposta.
+ * Sends password recovery email via Resend.
+ * Does not throw; errors are only logged so they do not affect response timing.
  */
 export async function sendPasswordResetEmail(options: SendPasswordResetEmailOptions): Promise<void> {
   const { apiKey, from, to, url } = options;

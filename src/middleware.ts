@@ -14,19 +14,19 @@ const protectedPaths = ["/admin"];
 const authPaths = ["/login"];
 const setupPath = `/${defaultLocale}/setup`;
 
-// Endpoints sensíveis que requerem validação extra de CSRF
+// Sensitive endpoints that require extra CSRF validation
 const sensitiveAPIPaths = ["/api/posts", "/api/upload", "/api/media"];
 
 /**
- * Verifica se o setup inicial já foi concluído.
- * Primeiro verifica o cookie "setup_done" (equivalente ao session storage),
- * se não encontrar, consulta o banco de dados.
- * Retorna false se: o cookie não for "Y" e o banco não estiver configurado,
- * a tabela settings não existir, ou setup_done não for "Y".
- * Nesses casos o usuário deve ser redirecionado para /setup.
+ * Checks whether the initial setup has been completed.
+ * First checks the "setup_done" cookie (equivalent to session storage);
+ * if not found, queries the database.
+ * Returns false if: the cookie is not "Y" and the DB is not configured,
+ * the settings table does not exist, or setup_done is not "Y".
+ * In those cases the user should be redirected to /setup.
  */
 async function isSetupDone(request: Request): Promise<boolean> {
-  // Primeiro verifica o cookie (equivalente ao session storage)
+  // First check the cookie (equivalent to session storage)
   const cookies = request.headers.get("cookie") ?? "";
   const setupDoneCookie = cookies
     .split(";")
@@ -38,7 +38,7 @@ async function isSetupDone(request: Request): Promise<boolean> {
     }
   }
 
-  // Se não encontrar no cookie, consulta o banco de dados
+  // If not found in the cookie, query the database
   try {
     const rows = await db
       .select({ value: settingsTable.value })
@@ -63,9 +63,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
     (p) => pathname === p || pathname.startsWith(p + "/"),
   );
 
-  // Permitir APIs de auth e setup mesmo quando setup não está completo
-  // Essas APIs são necessárias para completar o setup inicial
-  // Chamar next() antes de verificar setup para garantir que a rota seja encontrada
+  // Allow auth and setup APIs even when setup is not complete
+  // These APIs are required to complete the initial setup
+  // Call next() before checking setup to ensure the route is resolved
   if (isAuthApi || isSetupApi) {
     const response = await next();
     return response;
@@ -82,12 +82,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  // Validação CSRF para endpoints sensíveis (POST/PUT/DELETE/PATCH)
+  // CSRF validation for sensitive endpoints (POST/PUT/DELETE/PATCH)
   const isSensitiveAPI = sensitiveAPIPaths.some((p) => pathname.startsWith(p));
   const isWriteMethod = ["POST", "PUT", "DELETE", "PATCH"].includes(method);
 
   if (isSensitiveAPI && isWriteMethod) {
-    // Obter origens confiáveis do ambiente
+    // Get trusted origins from the environment
     const env = (
       context.locals as { runtime?: { env?: Record<string, unknown> } }
     ).runtime?.env as
@@ -98,12 +98,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
       ? getTrustedOrigins(env)
       : ["http://localhost:8788"];
 
-    // Validar origem
+    // Validate origin
     if (!isValidOrigin(context.request, trustedOrigins)) {
       return new Response(
         JSON.stringify({
           error: "forbidden",
-          message: "Origem não confiável",
+          message: "Untrusted origin",
         }),
         {
           status: 403,
@@ -162,7 +162,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return context.redirect(`/${defaultLocale}/admin`);
   }
 
-  // Pré-carregar traduções (DB + fallback JSON) para rotas [locale] para que t() use o banco
+  // Preload translations (DB + JSON fallback) for [locale] routes so t() uses the database
   const localeMatch = pathname.match(/^\/(en|es|pt-br)(\/|$)/);
   if (!isApi && localeMatch) {
     await ensureTranslationsLoaded(localeMatch[1]);

@@ -10,7 +10,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-// Mock do DOM se não estiver disponível
+// Mock DOM if not available
 if (typeof document === "undefined") {
   (global as any).document = {
     createElement: () => ({ id: "", className: "", __uppy: null }),
@@ -284,7 +284,7 @@ describe("UppyUpload Component", () => {
 
     it("should store instance in window for edit mode", () => {
       const containerId = "uppy-thumbnail";
-      // Remove o prefixo "uppy-" se existir para evitar duplicação
+      // Remove "uppy-" prefix if present to avoid duplication
       const cleanId = containerId.replace(/^uppy-/, "");
       const camelCaseId = cleanId.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
       const instanceKey = `uppy${camelCaseId.charAt(0).toUpperCase() + camelCaseId.slice(1)}Instance`;

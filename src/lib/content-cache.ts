@@ -71,7 +71,7 @@ export async function getTableContentWithCache(
     try {
       await kv.put(key, JSON.stringify(result));
     } catch {
-      // Não falha a resposta se o KV não aceitar o put
+      // Do not fail the response if KV rejects the put
     }
   }
 

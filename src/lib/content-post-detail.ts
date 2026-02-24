@@ -17,7 +17,7 @@ export function normalizeAttachmentPath(rawPath: string): string {
       path = new URL(path).pathname;
     }
   } catch {
-    // ignora erro de URL inválida
+    // ignore invalid URL error
   }
   if (path.startsWith("/api/media")) path = path.slice("/api/media".length);
   if (path.startsWith("/api/")) path = path.slice("/api".length);

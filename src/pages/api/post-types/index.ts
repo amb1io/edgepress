@@ -1,6 +1,6 @@
 /**
- * API de post types (tipos de post).
- * GET: lista todos. POST: cria um novo. Requer admin (role 0).
+ * Post types API.
+ * GET: lists all. POST: creates a new one. Requires admin (role 0).
  */
 import type { APIRoute } from "astro";
 import { db } from "../../../db/index.ts";

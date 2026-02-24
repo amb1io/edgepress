@@ -10,12 +10,12 @@ vi.mock("../../../lib/auth.ts", () => ({
 }));
 
 vi.mock("../../../lib/api-auth.ts", () => ({
-  getSession: vi.fn().mockResolvedValue(null), // não autenticado por padrão
+  getSession: vi.fn().mockResolvedValue(null), // unauthenticated by default
 }));
 
 const { auth } = await import("../../../lib/auth.ts");
 
-/** locals com rate limit alto para não bloquear testes em sequência */
+/** locals with high rate limit so sequential tests are not blocked */
 const testLocals = {
   runtime: {
     env: { RATE_LIMIT_REGISTER_MAX: "100", RATE_LIMIT_REGISTER_WINDOW_MIN: "60" } as Record<string, string>,
@@ -164,7 +164,7 @@ describe("register API", () => {
     expect(mockHandler).toHaveBeenCalledTimes(1);
     const authRequest = mockHandler.mock.calls[0]![0];
     const body = await authRequest.json();
-    expect(body.role).toBe(3); // forçado a leitor quando não é admin
+    expect(body.role).toBe(3); // forced to reader when not admin
   });
 
   it("passes role in sign-up payload when admin is authenticated", async () => {

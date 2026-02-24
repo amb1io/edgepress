@@ -93,7 +93,7 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
   const target = document.getElementById(containerId);
   if (!target) return null;
 
-  // Verificar se já foi inicializado
+  // Check if already initialized
   if ((target as unknown as { __uppy?: Uppy }).__uppy) return null;
 
   const form =
@@ -181,7 +181,7 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
       uppy.info(codeFilesErrorMsg, "error", 3000);
       return;
     }
-    // Armazenar o nome original do arquivo antes de qualquer renomeação
+    // Store original file name before any renaming
     if (file.name && !file.meta?.["originalName"]) {
       uppy.setFileMeta(file.id, { originalName: file.name });
     }
@@ -194,7 +194,7 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
       | undefined;
     if (!body || !("key" in body)) return;
     const path = body.path ?? "";
-    // Converter path do R2 para URL acessível via endpoint /api/media/
+    // Convert R2 path to URL accessible via /api/media/ endpoint
     const imageUrl = path.startsWith("http")
       ? path
       : path.startsWith("/uploads/")
@@ -202,7 +202,7 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
         : path.startsWith("/")
           ? `/api/media${path}`
           : `/api/media/uploads/${path}`;
-    // Usar o nome original do arquivo (antes de qualquer renomeação no Uppy)
+    // Use original file name (before any Uppy renaming)
     const originalFilename =
       (file.meta?.["originalName"] as string) ||
       file.name ||

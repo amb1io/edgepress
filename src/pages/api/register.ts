@@ -1,7 +1,7 @@
 /**
- * API de cadastro de usuário via better-auth (email + password).
+ * User registration API via better-auth (email + password).
  * @see https://www.better-auth.com/docs/authentication/email-password
- * Previne escalação de privilégios: apenas admin autenticado pode definir role diferente de leitor (3).
+ * Prevents privilege escalation: only authenticated admin can set role other than reader (3).
  */
 import { auth } from "../../lib/auth.ts";
 import { USER_ROLE_IDS } from "../../db/schema.ts";
@@ -14,13 +14,13 @@ import { getSession } from "../../lib/api-auth.ts";
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request, redirect, locals }) => {
-  // Obter rate limits do ambiente (locals pode ser undefined em testes ou SSR)
+  // Get rate limits from the environment (locals may be undefined in tests or SSR)
   const env = (
     locals as { runtime?: { env?: Record<string, string> } } | undefined
   )?.runtime?.env;
   const rateLimits = getRateLimits(env);
 
-  // Aplicar rate limiting: configurável via env (padrão: 3 registros / hora)
+  // Apply rate limiting: configurable via env (default: 3 registrations / hour)
   const rateLimitResponse = applyRateLimit(request, rateLimits.REGISTER);
   if (rateLimitResponse) {
     return redirect("/?error=rate_limit_exceeded", 303);
@@ -83,15 +83,15 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
         ? 3
         : roleNum;
   } else {
-    // Prevenir escalação de privilégios: apenas admin pode definir role diferente de leitor
-    roleValue = 3; // leitor
+    // Prevent privilege escalation: only admin can set a role different from reader
+    roleValue = 3; // reader
   }
 
   const url = new URL(request.url);
   const origin = url.origin;
   const authPath = "/api/auth/sign-up/email";
 
-  // Sanitizar e validar callbackURL para prevenir Open Redirect
+  // Sanitize and validate callbackURL to prevent Open Redirect
   const defaultCallback = `/${locale || "pt-br"}/admin/list?type=user&limit=10&page=1`;
   const safeCallbackURL = sanitizeCallbackURL(
     callbackURL,
@@ -111,7 +111,7 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
       email,
       password,
       ...(image && { image }),
-      role: roleValue, // Sempre enviar role, mesmo que seja o padrão
+      role: roleValue, // Always send role, even when it is the default
       callbackURL: safeCallbackURL,
     }),
   });
@@ -141,8 +141,8 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
     data?.url ?? `/${locale || "pt-br"}/admin/list?type=user&limit=10&page=1`;
 
   const responseHeaders = new Headers({ Location: location });
-  // Só repassa Set-Cookie quando NÃO for admin criando usuário: assim a sessão atual
-  // (do admin) é preservada e o novo usuário fica apenas cadastrado.
+  // Only forward Set-Cookie when it is NOT an admin creating a user: this preserves the
+  // current session (admin) and the new user is just registered without logging in.
   if (!isAdmin) {
     const cookies = authResponse.headers.getSetCookie?.() ?? [];
     if (cookies.length > 0) {

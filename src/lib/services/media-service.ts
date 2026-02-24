@@ -284,7 +284,7 @@ export async function getImageAttachments(
  * @param mediaId - ID do attachment
  */
 export async function deleteMedia(db: Database, mediaId: number): Promise<void> {
-  // Remover relações com posts
+  // Remove relations with posts
   await db.delete(postsMedia).where(eq(postsMedia.media_id, mediaId));
   
   // Deletar o attachment

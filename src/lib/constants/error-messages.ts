@@ -1,16 +1,16 @@
 // Error messages centralizadas
 export const ERROR_MESSAGES = {
-  // Validação
+  // Validation
   MISSING_REQUIRED_FIELDS: 'Campos obrigatórios não foram preenchidos',
   INVALID_POST_TYPE: 'Tipo de post inválido',
   INVALID_POST_ID: 'ID do post inválido',
   INVALID_LOCALE: 'Locale inválido',
   
-  // Autenticação/Autorização
+  // Authentication/Authorization
   UNAUTHORIZED: 'Não autorizado',
   FORBIDDEN: 'Acesso negado',
   
-  // Operações de banco de dados
+  // Database operations
   POST_NOT_FOUND: 'Post não encontrado',
   TAXONOMY_NOT_FOUND: 'Taxonomia não encontrada',
   USER_NOT_FOUND: 'Usuário não encontrado',
@@ -21,7 +21,7 @@ export const ERROR_MESSAGES = {
   INVALID_FILE_TYPE: 'Tipo de arquivo inválido',
   UPLOAD_FAILED: 'Falha no upload do arquivo',
   
-  // Genérico
+  // Generic
   INTERNAL_SERVER_ERROR: 'Erro interno do servidor',
   BAD_REQUEST: 'Requisição inválida',
 } as const;

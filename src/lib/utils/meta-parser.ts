@@ -1,12 +1,12 @@
 /**
- * Utilitários para parsing e manipulação de meta_values
- * Consolida a lógica duplicada em attachment.astro, content.astro e posts.ts
+ * Utilities for parsing and manipulating meta_values.
+ * Consolidates duplicated logic from attachment.astro, content.astro and posts.ts
  */
 
 /**
- * Parseia uma string JSON de meta_values para um objeto Record
- * @param metaValues - String JSON com os meta valores ou null
- * @returns Record<string, string> com os valores parseados, ou objeto vazio se inválido
+ * Parses a JSON string of meta_values into a Record object
+ * @param metaValues - JSON string with meta values or null
+ * @returns Record<string, string> with parsed values, or empty object if invalid
  */
 export function parseMetaValues(metaValues: string | null): Record<string, string> {
   if (!metaValues) {
@@ -19,18 +19,18 @@ export function parseMetaValues(metaValues: string | null): Record<string, strin
       return parsed as Record<string, string>;
     }
   } catch {
-    // Falha silenciosa, retorna objeto vazio
+    // Fail silently and return an empty object
   }
   
   return {};
 }
 
 /**
- * Mescla meta_values existentes com novos valores
- * Valores novos sobrescrevem valores existentes
- * @param existingMetaValues - String JSON com valores existentes
- * @param newValues - Record com novos valores a serem mesclados
- * @returns String JSON com valores mesclados, ou null se não houver valores
+ * Merges existing meta_values with new values.
+ * New values overwrite existing values.
+ * @param existingMetaValues - JSON string with existing values
+ * @param newValues - Record with new values to be merged
+ * @returns JSON string with merged values, or null if empty
  */
 export function mergeMetaValues(
   existingMetaValues: string | null,
@@ -39,7 +39,7 @@ export function mergeMetaValues(
   const existing = parseMetaValues(existingMetaValues);
   const merged = { ...existing, ...newValues };
   
-  // Se não houver valores após merge, retornar null
+  // If there are no values after the merge, return null
   if (Object.keys(merged).length === 0) {
     return null;
   }
@@ -48,11 +48,11 @@ export function mergeMetaValues(
 }
 
 /**
- * Obtém um valor específico dos meta_values
- * @param metaValues - String JSON com os meta valores
- * @param key - Chave do valor a ser extraído
- * @param defaultValue - Valor padrão se a chave não existir
- * @returns Valor da chave ou valor padrão
+ * Gets a specific value from meta_values
+ * @param metaValues - JSON string with meta values
+ * @param key - Key of the value to extract
+ * @param defaultValue - Default value if the key does not exist
+ * @returns Key value or default value
  */
 export function getMetaValue(
   metaValues: string | null,
@@ -64,10 +64,10 @@ export function getMetaValue(
 }
 
 /**
- * Remove uma chave específica dos meta_values
- * @param metaValues - String JSON com os meta valores
- * @param key - Chave a ser removida
- * @returns String JSON atualizada ou null se vazio
+ * Removes a specific key from meta_values
+ * @param metaValues - JSON string with meta values
+ * @param key - Key to be removed
+ * @returns Updated JSON string or null if empty
  */
 export function removeMetaValue(metaValues: string | null, key: string): string | null {
   const parsed = parseMetaValues(metaValues);
@@ -81,11 +81,11 @@ export function removeMetaValue(metaValues: string | null, key: string): string 
 }
 
 /**
- * Define um valor específico nos meta_values
- * @param metaValues - String JSON com os meta valores
- * @param key - Chave a ser definida
- * @param value - Valor a ser atribuído
- * @returns String JSON atualizada
+ * Sets a specific value in meta_values
+ * @param metaValues - JSON string with meta values
+ * @param key - Key to be set
+ * @param value - Value to be assigned
+ * @returns Updated JSON string
  */
 export function setMetaValue(
   metaValues: string | null,
@@ -98,10 +98,10 @@ export function setMetaValue(
 }
 
 /**
- * Verifica se uma chave existe nos meta_values
- * @param metaValues - String JSON com os meta valores
- * @param key - Chave a ser verificada
- * @returns true se a chave existe, false caso contrário
+ * Checks if a key exists in meta_values
+ * @param metaValues - JSON string with meta values
+ * @param key - Key to be checked
+ * @returns true if the key exists, false otherwise
  */
 export function hasMetaValue(metaValues: string | null, key: string): boolean {
   const parsed = parseMetaValues(metaValues);
@@ -109,9 +109,9 @@ export function hasMetaValue(metaValues: string | null, key: string): boolean {
 }
 
 /**
- * Converte um Record para string JSON de meta_values
- * @param values - Record com valores a serem convertidos
- * @returns String JSON ou null se vazio
+ * Converts a Record to JSON string of meta_values
+ * @param values - Record with values to be converted
+ * @returns JSON string or null if empty
  */
 export function stringifyMetaValues(values: Record<string, string>): string | null {
   if (Object.keys(values).length === 0) {
@@ -123,12 +123,12 @@ export function stringifyMetaValues(values: Record<string, string>): string | nu
 type MetaSchemaItem = { key: string; default?: unknown };
 
 /**
- * Obtém uma opção do meta_schema de um post type (array de { key, default? }).
- * Usado para taxonomy, post_thumbnail, post_types, etc.
- * @param metaSchema - meta_schema do post type (array ou null/undefined)
- * @param key - Chave do item (ex: "taxonomy", "post_thumbnail", "post_types")
- * @param defaultValue - Valor padrão se a chave não existir ou tipo incompatível
- * @returns Valor da opção ou defaultValue
+ * Gets an option from a post type's meta_schema (array of { key, default? }).
+ * Used for taxonomy, post_thumbnail, post_types, etc.
+ * @param metaSchema - Post type meta_schema (array or null/undefined)
+ * @param key - Item key (e.g. "taxonomy", "post_thumbnail", "post_types")
+ * @param defaultValue - Default value if key does not exist or type is incompatible
+ * @returns Option value or defaultValue
  */
 export function getMetaSchemaOption<T>(metaSchema: unknown, key: string, defaultValue: T): T {
   const schema = (Array.isArray(metaSchema) ? metaSchema : []) as MetaSchemaItem[];
@@ -139,7 +139,7 @@ export function getMetaSchemaOption<T>(metaSchema: unknown, key: string, default
 }
 
 /**
- * Retorna os tipos de taxonomia do meta_schema (array de strings). Default: ["category"].
+ * Returns taxonomy types from meta_schema (array of strings). Default: ["category"].
  */
 export function getMetaSchemaTaxonomyTypes(metaSchema: unknown): string[] {
   const def = getMetaSchemaOption<unknown>(metaSchema, "taxonomy", ["category"]);
@@ -147,7 +147,7 @@ export function getMetaSchemaTaxonomyTypes(metaSchema: unknown): string[] {
 }
 
 /**
- * Retorna se o post type tem post_thumbnail habilitado. Default: false.
+ * Returns whether the post type has post_thumbnail enabled. Default: false.
  */
 export function getMetaSchemaPostThumbnail(metaSchema: unknown): boolean {
   const def = getMetaSchemaOption<unknown>(metaSchema, "post_thumbnail", false);
@@ -155,7 +155,7 @@ export function getMetaSchemaPostThumbnail(metaSchema: unknown): boolean {
 }
 
 /**
- * Retorna se o post type tem custom_fields (post_types inclui "custom_fields"). Default: false.
+ * Returns whether the post type has custom_fields (post_types includes "custom_fields"). Default: false.
  */
 export function getMetaSchemaHasCustomFields(metaSchema: unknown): boolean {
   const def = getMetaSchemaOption<unknown>(metaSchema, "post_types", []);

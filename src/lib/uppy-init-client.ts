@@ -1,12 +1,12 @@
 /**
- * Cliente para inicialização do Uppy - será processado pelo bundler
+ * Client for Uppy initialization - will be processed by the bundler
  */
 
 import { initUppyInstance, type UppyInitOptions } from "./uppy-init.ts";
 
 export function setupUppy(options: UppyInitOptions) {
   function onReady() {
-    // Usar MutationObserver para detectar quando o elemento é adicionado ao DOM
+    // Use MutationObserver to detect when the element is added to the DOM
     const checkAndInit = () => {
       const target = document.getElementById(options.containerId);
       if (target && !(target as unknown as { __uppy?: unknown }).__uppy) {
@@ -16,10 +16,10 @@ export function setupUppy(options: UppyInitOptions) {
       return false;
     };
 
-    // Tentar imediatamente
+    // Try immediately
     if (checkAndInit()) return;
 
-    // Se não encontrou, usar MutationObserver para detectar quando for adicionado
+    // If not found, use MutationObserver to detect when it is added
     const observer = new MutationObserver(() => {
       if (checkAndInit()) {
         observer.disconnect();
@@ -31,7 +31,7 @@ export function setupUppy(options: UppyInitOptions) {
       subtree: true,
     });
 
-    // Timeout de segurança
+    // Safety timeout
     setTimeout(() => {
       observer.disconnect();
       checkAndInit();
@@ -41,7 +41,7 @@ export function setupUppy(options: UppyInitOptions) {
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", onReady);
   } else {
-    // Se o DOM já está pronto, aguardar um pouco para componentes Astro renderizarem
+    // If DOM is already ready, wait a bit for Astro components to render
     setTimeout(onReady, 100);
   }
 }

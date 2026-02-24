@@ -101,10 +101,10 @@ export async function linkPostTaxonomies(
   postId: number,
   termIds: number[]
 ): Promise<void> {
-  // Remover vínculos existentes
+  // Remove existing links
   await db.delete(postsTaxonomies).where(eq(postsTaxonomies.post_id, postId));
   
-  // Criar novos vínculos se houver termos
+  // Create new links if there are terms
   if (termIds.length > 0) {
     await db.insert(postsTaxonomies).values(
       termIds.map((term_id) => ({ post_id: postId, term_id }))
@@ -124,10 +124,10 @@ export async function linkPostMedia(
   postId: number,
   mediaIds: number[]
 ): Promise<void> {
-  // Remover relações existentes
+  // Remove existing relations
   await db.delete(postsMedia).where(eq(postsMedia.post_id, postId));
   
-  // Criar novas relações se houver mídias
+  // Create new relations if there are media
   if (mediaIds.length > 0) {
     await db.insert(postsMedia).values(
       mediaIds.map((media_id) => ({ post_id: postId, media_id }))
@@ -161,7 +161,7 @@ export async function validateAttachments(
     return [];
   }
   
-  // Validar quais IDs são attachments válidos
+  // Validate which IDs are valid attachments
   const validAttachments = await db
     .select({ id: posts.id })
     .from(posts)
@@ -201,7 +201,7 @@ export async function processPostAttachments(
   // Validar attachments
   const validIds = await validateAttachments(db, idsToValidate);
   
-  // Adicionar apenas IDs válidos
+  // Add only valid IDs
   if (thumbnailId && validIds.includes(thumbnailId)) {
     attachmentIdsToLink.push(thumbnailId);
   }

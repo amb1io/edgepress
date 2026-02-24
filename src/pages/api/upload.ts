@@ -62,7 +62,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // Obter rate limits do ambiente
   const rateLimits = getRateLimits(env);
 
-  // Aplicar rate limiting: configurável via env (padrão: 20 uploads / hora)
+  // Apply rate limiting: configurable via env (default: 20 uploads/hour)
   const rateLimitResponse = applyRateLimit(request, rateLimits.UPLOAD);
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -129,10 +129,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
   }
   
-  // Se o MIME type não foi detectado mas a extensão é de imagem permitida, aceitar
+  // If MIME type was not detected but extension is allowed image, accept
   let finalMimeType = mimeType;
   if (mimeType === "application/octet-stream" && isAllowedImageExtension(ext)) {
-    // Mapear extensões de imagem para seus MIME types corretos quando não detectados
+    // Map image extensions to their correct MIME types when not detected
     const imageMimeMap: Record<string, string> = {
       ".jpg": "image/jpeg",
       ".jpeg": "image/jpeg",

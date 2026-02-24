@@ -25,8 +25,8 @@ export async function clearSeedData(db: any): Promise<number> {
 }
 
 /**
- * Garante que os post types padrão existam no banco (insere ou atualiza).
- * Usado pelo seed e pode ser usado pela UI "Carregar padrões".
+ * Ensures default post types exist in the database (insert or update).
+ * Used by seed and can be used by the "Load defaults" UI.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function ensurePostTypesFromDefaults(db: any): Promise<Record<string, number>> {
@@ -68,7 +68,7 @@ export async function runSeed(db: any): Promise<void> {
 
   const typeIds = await ensurePostTypesFromDefaults(db);
 
-  // Taxonomias: Categoria (raiz), Uncategorized (filha), Tag. Fonte: seed-data.ts
+  // Taxonomies: Category (root), Uncategorized (child), Tag. Source: seed-data.ts
   const nowTax = Date.now();
   const existingTax = await db
     .select({ id: taxonomies.id, slug: taxonomies.slug })
@@ -94,7 +94,7 @@ export async function runSeed(db: any): Promise<void> {
     if (inserted) taxBySlug.set(row.slug, (inserted as { id: number }).id);
   }
 
-  // Locales: Popular tabela com idiomas e países
+  // Locales: Populate table with languages and countries
   const existingLocales = await db
     .select({ id: locales.id, locale_code: locales.locale_code })
     .from(locales);
@@ -117,7 +117,7 @@ export async function runSeed(db: any): Promise<void> {
     }
   }
 
-  // Re-fetch locales para uso nas traduções (en_US, es_ES, pt_BR estão em FULL_LOCALES)
+  // Re-fetch locales for use in translations (en_US, es_ES, pt_BR are in FULL_LOCALES)
   const updatedLocales = await db
     .select({ id: locales.id, locale_code: locales.locale_code })
     .from(locales);
@@ -128,7 +128,7 @@ export async function runSeed(db: any): Promise<void> {
     ]),
   );
 
-  // Função auxiliar para extrair namespace e key de uma string
+  // Helper function to extract namespace and key from a string
   function extractNamespaceAndKey(keyString: string): { namespace: string; key: string } {
     const parts = keyString.split(".");
     if (parts.length >= 3) {
@@ -149,7 +149,7 @@ export async function runSeed(db: any): Promise<void> {
     }
   }
 
-  // Processar e inserir traduções dos arquivos JSON
+  // Process and insert translations from JSON files
   const nowTranslations = Date.now();
   const translationMap = new Map<string, number>(); // Map<"namespace:key", translation_id>
 
@@ -160,7 +160,7 @@ export async function runSeed(db: any): Promise<void> {
       const { namespace, key } = extractNamespaceAndKey(keyString);
       const translationKey = `${namespace}:${key}`;
 
-      // Buscar ou criar registro na tabela translations
+      // Find or create record in the translations table
       let translationId = translationMap.get(translationKey);
       if (!translationId) {
         const [existing] = await db
@@ -186,7 +186,7 @@ export async function runSeed(db: any): Promise<void> {
         translationMap.set(translationKey, translationId);
       }
 
-      // Inserir ou atualizar na tabela translations_languages
+      // Insert or update in the translations_languages table
       const [existingLang] = await db
         .select({ id: translationsLanguages.id })
         .from(translationsLanguages)
@@ -220,7 +220,7 @@ export async function runSeed(db: any): Promise<void> {
       const { namespace, key } = extractNamespaceAndKey(keyString);
       const translationKey = `${namespace}:${key}`;
 
-      // Buscar translation_id (já deve existir do processamento do en.json)
+      // Fetch translation_id (should already exist from en.json processing)
       let translationId = translationMap.get(translationKey);
       if (!translationId) {
         const [existing] = await db
@@ -247,7 +247,7 @@ export async function runSeed(db: any): Promise<void> {
         }
       }
 
-      // Inserir ou atualizar na tabela translations_languages
+      // Insert or update in the translations_languages table
       const [existingLang] = await db
         .select({ id: translationsLanguages.id })
         .from(translationsLanguages)
@@ -274,14 +274,14 @@ export async function runSeed(db: any): Promise<void> {
     }
   }
 
-  // Processar pt_br.json -> pt_BR
+  // Process pt_br.json -> pt_BR
   const ptBrLocaleId = updatedLocalesByCode.get("pt_BR");
   if (ptBrLocaleId) {
     for (const [keyString, value] of Object.entries(ptBrTranslations)) {
       const { namespace, key } = extractNamespaceAndKey(keyString);
       const translationKey = `${namespace}:${key}`;
 
-      // Buscar translation_id (já deve existir do processamento anterior)
+      // Fetch translation_id (should already exist from previous processing)
       let translationId = translationMap.get(translationKey);
       if (!translationId) {
         const [existing] = await db
@@ -308,7 +308,7 @@ export async function runSeed(db: any): Promise<void> {
         }
       }
 
-      // Inserir ou atualizar na tabela translations_languages
+      // Insert or update in the translations_languages table
       const [existingLang] = await db
         .select({ id: translationsLanguages.id })
         .from(translationsLanguages)
@@ -356,7 +356,7 @@ export async function runSeed(db: any): Promise<void> {
     }
   }
 
-  // Permissões por perfil (0=admin, 1=editor, 2=autor, 3=leitor)
+  // Permissions per role (0=admin, 1=editor, 2=author, 3=reader)
   const existingCapabilities = await db
     .select({ roleId: roleCapability.roleId, capability: roleCapability.capability })
     .from(roleCapability);
@@ -371,7 +371,7 @@ export async function runSeed(db: any): Promise<void> {
     }
   }
 
-  // Documentar origem do permissionamento em settings (sistematização)
+  // Document the source of permissions in settings (systematization)
   if (!existingNames.has("admin_permission_source")) {
     await db.insert(settings).values({
       name: "admin_permission_source",

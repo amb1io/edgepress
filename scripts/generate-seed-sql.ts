@@ -1,9 +1,9 @@
 /**
- * Gera drizzle/seed/seed-remote.sql a partir de src/db/seed-data.ts, default-post-types e i18n JSONs.
- * Garante que o seed remoto (wrangler d1 execute --file=...) use os mesmos dados que runSeed.
+ * Generates drizzle/seed/seed-remote.sql from src/db/seed-data.ts, default-post-types and i18n JSONs.
+ * Ensures remote seed (wrangler d1 execute --file=...) uses the same data as runSeed.
  *
- * Uso: tsx scripts/generate-seed-sql.ts
- * Chamado antes de db:seed:remote ou no build (build-with-seed).
+ * Usage: tsx scripts/generate-seed-sql.ts
+ * Called before db:seed:remote or in build (build-with-seed).
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -15,7 +15,7 @@ import {
   META_ONLY_POST_TYPE_SLUGS,
   TAXONOMY_SEED_ROWS,
 } from "../src/db/seed-data.ts";
-// JSON imports (chaves de tradução)
+// JSON imports (translation keys)
 import enTranslations from "../src/i18n/languages/en.json";
 import esTranslations from "../src/i18n/languages/es.json";
 import ptBrTranslations from "../src/i18n/languages/pt_br.json";

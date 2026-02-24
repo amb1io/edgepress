@@ -61,7 +61,7 @@ export const GET: APIRoute = async ({ params, locals }) => {
 
   const fallback = getFallbackForParam(localeParam);
 
-  // Autenticado: bypass KV e vai direto ao DB. Não autenticado: tenta KV primeiro.
+  // Authenticated: bypass KV and go straight to DB. Unauthenticated: try KV first.
   if (kv) {
     try {
       const cached = await kv.get(cacheKey, "json") as Record<string, string> | null;
@@ -75,12 +75,12 @@ export const GET: APIRoute = async ({ params, locals }) => {
         });
       }
     } catch {
-      // Ignora erro de KV e segue para o banco
+      // Ignore KV error and continue to DB
     }
   }
 
   try {
-    // Buscar o ID do locale
+    // Fetch locale ID
     const [localeRow] = await db
       .select({ id: localesTable.id })
       .from(localesTable)
@@ -97,7 +97,7 @@ export const GET: APIRoute = async ({ params, locals }) => {
       });
     }
 
-    // Buscar todas as traduções para este locale
+    // Fetch all translations for this locale
     const translationsData = await db
       .select({
         namespace: translationsTable.namespace,
@@ -115,14 +115,14 @@ export const GET: APIRoute = async ({ params, locals }) => {
       translationsMap[fullKey] = row.value;
     }
 
-    // DB sobrescreve fallback; chaves só nos JSON permanecem
+    // DB overwrites fallback; keys only in JSON remain
     const merged = { ...fallback, ...translationsMap };
 
     if (kv) {
       try {
         await kv.put(cacheKey, JSON.stringify(merged));
       } catch {
-        // Não falha a resposta se o KV não aceitar o put
+        // Do not fail the response if KV rejects the put
       }
     }
 

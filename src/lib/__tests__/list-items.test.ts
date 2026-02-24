@@ -298,13 +298,13 @@ describe("getTableList with Foreign Keys", () => {
     expect(result.columns).toContain("id_locale_code");
     expect(result.columns).toContain("value");
     
-    // Verificar se campos relacionados estão presentes
+    // Verify related fields are present
     expect(result.columns.some((col) => col.startsWith("translations_"))).toBe(true);
     expect(result.columns.some((col) => col.startsWith("locales_"))).toBe(true);
     
     const firstItem = result.items[0];
     expect(firstItem).toHaveProperty("value");
-    // Verificar se campos relacionados estão nos itens
+    // Verify related fields are in the items
     const hasTranslationField = Object.keys(firstItem).some((key) => key.startsWith("translations_"));
     const hasLocaleField = Object.keys(firstItem).some((key) => key.startsWith("locales_"));
     expect(hasTranslationField || hasLocaleField).toBe(true);
@@ -336,7 +336,7 @@ describe("getTableList with Foreign Keys", () => {
     });
     
     expect(result.items.length).toBeGreaterThan(0);
-    // Verificar se a ordenação funcionou (primeiro item deve ter language menor alfabeticamente)
+    // Verify sorting worked (first item should have language lower alphabetically)
     if (result.items.length > 1) {
       const firstLang = Object.entries(result.items[0]).find(([key]) => key.startsWith("locales_language"))?.[1];
       const secondLang = Object.entries(result.items[1]).find(([key]) => key.startsWith("locales_language"))?.[1];

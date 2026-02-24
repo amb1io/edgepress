@@ -1,7 +1,7 @@
 /**
- * API de configurações (settings).
- * GET: retorna opções por nome (query: names=site_name,site_description) ou todas autoload. Público para leitura.
- * PATCH: atualiza site_name, site_description, setup_done (body JSON). Requer admin.
+ * Settings API.
+ * GET: returns options by name (query: names=site_name,site_description) or all autoload. Public read.
+ * PATCH: updates site_name, site_description, setup_done (JSON body). Requires admin.
  */
 import type { APIRoute } from "astro";
 import { db } from "../../db/index.ts";

@@ -62,7 +62,7 @@ export async function getCapabilities(
     }
     return set;
   } catch {
-    // Tabela role_capability inexistente/vazia ou falha no D1 (ex.: após deploy sem seed)
+    // role_capability table missing/empty or D1 failure (e.g. after deploy without seed)
     if (roleId === 0) {
       return new Set([
         "*",

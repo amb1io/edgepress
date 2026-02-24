@@ -15,15 +15,15 @@ export function t(
   const normalizedLocale = normalizeLocale(locale);
   const dict = translations[normalizedLocale as Locale] ?? translations[defaultLocale];
   
-  // Tentar encontrar a tradução
+  // Try to find the translation
   let value = dict[key];
   
-  // Se não encontrou, tentar no locale padrão
+  // If not found, try default locale
   if (!value || value === key) {
     value = translations[defaultLocale][key];
   }
   
-  // Se ainda não encontrou, usar a chave como fallback
+  // If still not found, use key as fallback
   if (!value || value === key) {
     value = key;
   }

@@ -148,7 +148,7 @@ describe("POST /api/posts - Custom Fields", () => {
     });
 
     it("should generate unique slugs with incremental suffix to avoid UNIQUE constraint (posts.slug)", () => {
-      // Simula a lógica em /api/posts.ts: slug = baseSlug-postId-(index+1)
+      // Simulates logic in /api/posts.ts: slug = baseSlug-postId-(index+1)
       function slugify(title: string): string {
         return title
           .trim()
@@ -176,7 +176,7 @@ describe("POST /api/posts - Custom Fields", () => {
 
       expect(slugs).toEqual(["c-151-1", "c-151-2", "c-151-3", "outro-grupo-151-4"]);
 
-      // Todos os slugs devem ser únicos (evita UNIQUE constraint failed: posts.slug)
+      // All slugs must be unique (avoids UNIQUE constraint failed: posts.slug)
       const uniqueSlugs = new Set(slugs);
       expect(uniqueSlugs.size).toBe(slugs.length);
     });
@@ -214,7 +214,7 @@ describe("POST /api/posts - Custom Fields", () => {
 
   describe("Edit Mode - Custom Fields Update", () => {
     it("should replace existing custom fields when editing post", () => {
-      // Simula a lógica: deletar todos os filhos existentes e recriar
+      // Simulates logic: delete all existing children and recreate
       const existingCustomFields = [
         { id: 1, title: "Campo antigo", rows: [{ id: 10, name: "Nome", value: "Valor" }] },
         { id: 2, title: "Outro campo antigo", rows: [{ id: 20, name: "Nome2", value: "Valor2" }] },
@@ -225,7 +225,7 @@ describe("POST /api/posts - Custom Fields", () => {
         { id: 4, title: "Outro campo novo", rows: [{ id: 40, name: "Outro nome", value: "Outro valor" }] },
       ];
 
-      // Em edição, deletamos os antigos e criamos os novos
+      // On edit, we delete the old ones and create the new ones
       const deleted = existingCustomFields;
       const created = newCustomFields;
 
@@ -247,7 +247,7 @@ describe("POST /api/posts - Custom Fields", () => {
         },
       ];
 
-      // Simula atualização: mantém a estrutura mas pode alterar valores
+      // Simulates update: keeps structure but may change values
       const updated = customFieldsData.map((item) => ({
         ...item,
         rows: item.rows.map((row) => ({
@@ -304,7 +304,7 @@ describe("POST /api/posts - Custom Fields", () => {
         },
       ];
 
-      // Simula a lógica de garantir pelo menos uma row
+      // Simulates logic to ensure at least one row
       const normalized = initialData.map((item) => ({
         ...item,
         rows: item.rows.length > 0 ? item.rows : [{ id: Date.now(), name: "", value: "" }],

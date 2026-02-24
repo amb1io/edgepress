@@ -34,7 +34,7 @@ export const auth = betterAuth({
       verify: lightVerify,
     },
     sendResetPassword: async ({ user, url }) => {
-      // Em local, variáveis vêm de .dev.vars (wrangler). Fallback para process.env se existir.
+      // In local development, variables come from .dev.vars (wrangler). Fallback to process.env if available.
       const envAny = env as { RESEND_API_KEY?: string; RESEND_FROM?: string };
       const resendApiKey = envAny.RESEND_API_KEY ?? (typeof process !== "undefined" ? process.env?.RESEND_API_KEY : undefined);
       const resendFrom = envAny.RESEND_FROM ?? (typeof process !== "undefined" ? process.env?.RESEND_FROM : undefined);

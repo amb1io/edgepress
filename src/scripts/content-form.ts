@@ -311,7 +311,7 @@ export function initContentForm(props: ContentFormInitProps): void {
 
         const wrapperEl = document.getElementById("custom-fields-wrapper");
         if (wrapperEl && window.Alpine) {
-          const wrapperData = window.Alpine.$data(wrapperEl) as {
+        const wrapperData = window.Alpine.$data(wrapperEl) as {
             customFields?: Array<{
               id: number;
               rows?: Array<{ id: number; value: string }>;
@@ -385,11 +385,11 @@ export function initContentForm(props: ContentFormInitProps): void {
                 JSON.stringify(existingFieldIds)
               );
             }
-          }
         }
+      }
 
-        // Garantir que custom_fields_data e custom_fields_to_delete sejam enviados
-        // quando o submit for via HTMX (htmx serializa o form no DOM, não o FormData em memória)
+      // Ensure custom_fields_data and custom_fields_to_delete are sent
+      // when the submit is via HTMX (htmx serializes the form in the DOM, not the in-memory FormData)
         form.querySelectorAll('input[name="custom_fields_data"]').forEach((el) => el.remove());
         form.querySelectorAll('input[name="custom_fields_to_delete"]').forEach((el) => el.remove());
         const cfData = formData.get("custom_fields_data");

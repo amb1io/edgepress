@@ -6,7 +6,7 @@ describe("Post duplicate flow - relations & custom fields", () => {
       const baseTitle = "Post Original";
       const baseSlug = "post-original";
 
-      // Simula a lógica de incremento usada no endpoint /api/posts/[id]/duplicate
+      // Simulates the increment logic used in /api/posts/[id]/duplicate
       function getNextTitleAndSlug(existingSlugs: string[]) {
         let counter = 1;
         let newTitle = baseTitle;
@@ -46,7 +46,7 @@ describe("Post duplicate flow - relations & custom fields", () => {
         { media_id: 200 },
       ];
 
-      // Simula o mapeamento feito no endpoint
+      // Simulates the mapping done in the endpoint
       const duplicatedTaxRelations = taxonomyRelations.map((rel) => ({
         post_id: newPostId,
         term_id: rel.term_id,
@@ -99,8 +99,8 @@ describe("Post duplicate flow - relations & custom fields", () => {
         },
       ];
 
-      // Simula a parte relevante da lógica do endpoint /api/posts/[id]/duplicate
-      const generatedSlug = "campo-1-xyz"; // slug único qualquer
+      // Simulates the relevant part of /api/posts/[id]/duplicate logic
+      const generatedSlug = "campo-1-xyz"; // any unique slug
 
       const duplicatedCustomFields = customFieldsPosts.map((cfPost) => ({
         post_type_id: cfPost.post_type_id,
@@ -125,7 +125,7 @@ describe("Post duplicate flow - relations & custom fields", () => {
       expect(duplicated.title).toBe("Campo 1");
       expect(duplicated.slug).toBe(generatedSlug);
 
-      // Garante que os meta_values (incluindo rows) foram preservados
+      // Ensures meta_values (including rows) were preserved
       expect(duplicated.meta_values).toBe(customFieldsPosts[0].meta_values);
       const parsedOriginal = JSON.parse(customFieldsPosts[0].meta_values);
       const parsedDuplicated = JSON.parse(duplicated.meta_values);
@@ -160,7 +160,7 @@ describe("Edit duplicated post - custom fields preservation", () => {
       },
     ];
 
-    // Simula o trecho de /api/posts.ts que monta meta_values para cada custom field
+    // Simulates the /api/posts.ts section that builds meta_values for each custom field
     const payloads = customFieldsItems.map((item) => {
       const slugBase = item.title.toLowerCase().replace(/\s+/g, "-");
       const slug = slugBase || "custom-field";
@@ -193,7 +193,7 @@ describe("Edit duplicated post - custom fields preservation", () => {
     const first = JSON.parse(payloads[0].meta_values);
     const second = JSON.parse(payloads[1].meta_values);
 
-    // Garante que todas as linhas foram preservadas para o post duplicado ao salvar
+    // Ensures all rows were preserved for the duplicated post when saving
     expect(first.fields).toEqual([
       { name: "label", value: "Nome" },
       { name: "type", value: "text" },
@@ -210,8 +210,8 @@ describe("Edit duplicated post - custom fields preservation", () => {
 
 describe("Duplicate + Edit flow - end-to-end custom fields preservation", () => {
   it("should preserve all custom field rows through duplicate -> load -> edit -> save cycle", () => {
-    // ===== ETAPA 1: DUPLICAÇÃO =====
-    // Simula o que acontece em /api/posts/[id]/duplicate.ts
+    // ===== STEP 1: DUPLICATION =====
+    // Simulates what happens in /api/posts/[id]/duplicate.ts
     const originalPostId = 10;
     const newPostId = 20;
     const now = 1700000000000;
@@ -252,21 +252,21 @@ describe("Duplicate + Edit flow - end-to-end custom fields preservation", () => 
       },
     ];
 
-    // Duplicar custom fields (como em duplicate.ts)
+    // Duplicate custom fields (as in duplicate.ts)
     const duplicatedCustomFields = originalCustomFields.map((cfPost) => ({
       ...cfPost,
-      parent_id: newPostId, // Atualiza parent_id para o novo post
-      slug: `${cfPost.slug}-${Date.now()}`, // Gera slug único
+      parent_id: newPostId, // Update parent_id to the new post
+      slug: `${cfPost.slug}-${Date.now()}`, // Generate unique slug
       meta_values: cfPost.meta_values, // Preserva meta_values intacto
     }));
 
-    // Verificar que duplicação preservou tudo
+    // Verify duplication preserved everything
     expect(duplicatedCustomFields).toHaveLength(2);
     expect(duplicatedCustomFields[0].parent_id).toBe(newPostId);
     expect(duplicatedCustomFields[1].parent_id).toBe(newPostId);
 
-    // ===== ETAPA 2: CARREGAR PARA EDIÇÃO =====
-    // Simula o que acontece em content.astro quando carrega custom fields para edição
+    // ===== STEP 2: LOAD FOR EDIT =====
+    // Simulates what happens in content.astro when loading custom fields for edit
     const loadedCustomFields = duplicatedCustomFields.map((cfPost) => {
       let rows: Array<{ id: number; name: string; value: string }> = [];
       let template = false;
@@ -290,7 +290,7 @@ describe("Duplicate + Edit flow - end-to-end custom fields preservation", () => 
           }
           if (meta.template === true) template = true;
         } catch {
-          // Se não conseguir parsear, usar array vazio
+          // If parsing fails, use empty array
         }
       }
 
@@ -302,18 +302,18 @@ describe("Duplicate + Edit flow - end-to-end custom fields preservation", () => 
       };
     });
 
-    // Verificar que todas as rows foram carregadas corretamente
+    // Verify all rows were loaded correctly
     expect(loadedCustomFields[0].rows).toHaveLength(4); // 4 campos no primeiro grupo
     expect(loadedCustomFields[1].rows).toHaveLength(4); // 4 campos no segundo grupo
     expect(loadedCustomFields[0].rows[0].name).toBe("label");
     expect(loadedCustomFields[0].rows[0].value).toBe("Nome Completo");
 
-    // ===== ETAPA 3: SIMULAR EDIÇÃO =====
-    // Simula o usuário editando alguns valores (como no frontend)
+    // ===== STEP 3: SIMULATE EDIT =====
+    // Simulates user editing some values (as in frontend)
     const editedCustomFields = loadedCustomFields.map((item) => ({
       ...item,
       rows: item.rows.map((row) => {
-        // Simula edição: altera alguns valores
+        // Simulate edit: change some values
         if (row.name === "label" && row.value === "Nome Completo") {
           return { ...row, value: "Nome Completo (Editado)" };
         }
@@ -321,16 +321,16 @@ describe("Duplicate + Edit flow - end-to-end custom fields preservation", () => 
       }),
     }));
 
-    // Verificar que a edição foi aplicada
+    // Verify edit was applied
     expect(editedCustomFields[0].rows[0].value).toBe("Nome Completo (Editado)");
 
-    // ===== ETAPA 4: SALVAR APÓS EDIÇÃO =====
-    // Simula o que acontece em /api/posts.ts quando salva custom fields
+    // ===== STEP 4: SAVE AFTER EDIT =====
+    // Simulates what happens in /api/posts.ts when saving custom fields
     const customFieldsToSave = editedCustomFields
-      .filter((item) => !item._deleted) // Remove campos marcados para deleção
+      .filter((item) => !item._deleted) // Remove fields marked for deletion
       .map((item) => ({
         ...item,
-        rows: item.rows.filter((row) => !row._deleted), // Remove rows marcadas para deleção
+        rows: item.rows.filter((row) => !row._deleted), // Remove rows marked for deletion
         template: item.template === true,
       }))
       .filter((item) => item.rows.length > 0); // Remove custom fields sem rows
@@ -355,13 +355,13 @@ describe("Duplicate + Edit flow - end-to-end custom fields preservation", () => 
       };
     });
 
-    // ===== ETAPA 5: VERIFICAR PRESERVAÇÃO COMPLETA =====
+    // ===== STEP 5: VERIFY FULL PRESERVATION =====
     expect(savedCustomFields).toHaveLength(2); // Ambos os grupos devem estar presentes
 
     const firstSaved = JSON.parse(savedCustomFields[0].meta_values);
     const secondSaved = JSON.parse(savedCustomFields[1].meta_values);
 
-    // Verificar que TODAS as rows foram preservadas (incluindo a edição)
+    // Verify ALL rows were preserved (including the edit)
     expect(firstSaved.fields).toHaveLength(4); // Todas as 4 rows originais
     expect(firstSaved.fields[0]).toEqual({
       name: "label",
@@ -387,7 +387,7 @@ describe("Duplicate + Edit flow - end-to-end custom fields preservation", () => 
   });
 
   it("should handle empty rows array gracefully during edit cycle", () => {
-    // Simula um custom field que foi carregado mas ficou sem rows (edge case)
+    // Simulates a custom field that was loaded but ended up with no rows (edge case)
     const customFieldWithEmptyRows = {
       id: 1,
       title: "Campo Vazio",
@@ -405,17 +405,17 @@ describe("Duplicate + Edit flow - end-to-end custom fields preservation", () => 
       }))
       .filter((item) => item.rows.length > 0); // Remove custom fields sem rows
 
-    expect(customFieldsToSave).toHaveLength(0); // Campo sem rows é removido
+    expect(customFieldsToSave).toHaveLength(0); // Field with no rows is removed
   });
 
   it("should preserve custom fields even when some rows are marked as deleted", () => {
-    // Simula um custom field onde algumas rows foram marcadas para deleção
+    // Simulates a custom field where some rows were marked for deletion
     const customFieldWithDeletedRows = {
       id: 1,
       title: "Grupo com Rows Deletadas",
       rows: [
         { id: 1, name: "label", value: "Campo 1", _deleted: false },
-        { id: 2, name: "type", value: "text", _deleted: true }, // Marcado para deleção
+        { id: 2, name: "type", value: "text", _deleted: true }, // Marked for deletion
         { id: 3, name: "label", value: "Campo 2", _deleted: false },
       ],
       template: false,

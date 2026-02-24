@@ -81,7 +81,7 @@ export async function getSettingsWithCache(
     try {
       await kv.put(cacheKey, JSON.stringify(record));
     } catch {
-      // Não falha a resposta se o KV não aceitar o put
+      // Do not fail the response if KV rejects the put
     }
   }
 

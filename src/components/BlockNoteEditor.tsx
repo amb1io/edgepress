@@ -65,13 +65,13 @@ export function BlockNoteEditor({
     return { ...base, multi_column: multiColumn };
   }, [localeProp]);
 
-  // Função de upload para BlockNote (usa a mesma função utilitária do Uppy)
-  // Após upload bem-sucedido, cria um post do tipo attachment
+  // Upload function for BlockNote (uses same utility as Uppy)
+  // After successful upload, creates an attachment-type post
   const uploadFile = useCallback(async (file: File): Promise<string> => {
     try {
       const result = await uploadFileToR2(file);
       
-      // Criar post do tipo attachment após upload bem-sucedido
+      // Create attachment-type post after successful upload
       try {
         const form = document.getElementById(inputId)?.closest("form");
         if (!form) return result.url;
@@ -81,11 +81,11 @@ export function BlockNoteEditor({
         const postId = form.querySelector<HTMLInputElement>('input[name="id"]')?.value;
         const postTypeSlug = form.querySelector<HTMLInputElement>('input[name="post_type"]')?.value?.trim() || "post";
         
-        // Gerar título e slug únicos para o attachment
+        // Generate unique title and slug for the attachment
         const originalFilename = file.name || "untitled";
         const postTitle = originalFilename;
         
-        // Função slugify simples (mesma lógica do Uppy)
+        // Simple slugify (same logic as Uppy)
         const slugify = (text: string): string => {
           if (typeof text !== "string" || !text.trim()) return "";
           return text
@@ -130,7 +130,7 @@ export function BlockNoteEditor({
           const data = await res.json();
           const attachmentId = typeof data?.id === "number" ? data.id : null;
           
-          // Disparar evento para criar relação posts_media quando o formulário for submetido
+          // Dispatch event to create posts_media relation when form is submitted
           if (attachmentId) {
             window.dispatchEvent(new CustomEvent("blocknote-image-uploaded", {
               detail: {
@@ -142,7 +142,7 @@ export function BlockNoteEditor({
           }
         }
       } catch (attachmentError) {
-        // Se falhar ao criar attachment, apenas loga o erro mas não impede o uso da imagem
+        // If attachment creation fails, just log error but do not block image use
         console.error("Failed to create attachment post:", attachmentError);
       }
       
@@ -189,7 +189,7 @@ export function BlockNoteEditor({
     return (div.textContent ?? div.innerText ?? "").trim().replace(/\s+/g, " ");
   }
 
-  // Sincroniza conteúdo do editor para o input hidden e dispara excerpt (250 chars)
+  // Sync editor content to hidden input and trigger excerpt (250 chars)
   const syncToInput = () => {
     const input = document.getElementById(inputId) as HTMLInputElement | null;
     if (!input || !editor) return;
@@ -212,7 +212,7 @@ export function BlockNoteEditor({
     return unsub;
   }, [editor, inputId]);
 
-  // Garante que o body está sincronizado no submit do form
+  // Ensure body is synced on form submit
   useEffect(() => {
     const form = document.getElementById(inputId)?.closest("form");
     if (!form) return;

@@ -75,7 +75,7 @@ export function extractLocaleFromUrl(url: string): Locale | null {
       return validateLocale(pathSegments[0]);
     }
   } catch {
-    // URL inválida
+    // Invalid URL
   }
   
   return null;

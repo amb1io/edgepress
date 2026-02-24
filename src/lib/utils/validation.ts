@@ -54,8 +54,8 @@ export function isValidSlug(slug: string | null | undefined): boolean {
     return false;
   }
   
-  // Slug deve conter apenas letras minúsculas, números e hífens
-  // Não pode começar ou terminar com hífen
+  // Slug must contain only lowercase letters, numbers and hyphens
+  // Cannot start or end with hyphen
   const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
   return slugRegex.test(slug);
 }
@@ -70,7 +70,7 @@ export function isValidEmail(email: string | null | undefined): boolean {
     return false;
   }
   
-  // Regex básica para email
+  // Basic regex for email
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
 }

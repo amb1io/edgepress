@@ -78,7 +78,7 @@ export async function getListItems(
 
   const conditions = [
     eq(postTypes.slug, typeSlug),
-    // Excluir posts "pai" do menu (show_in_menu = true); listar só os filhos/conteúdo
+    // Exclude menu "parent" posts (show_in_menu = true); list only children/content
     sql`(json_extract(${posts.meta_values}, '$.show_in_menu') IS NULL OR json_extract(${posts.meta_values}, '$.show_in_menu') != 1)`,
     // Excluir posts na lixeira
     ne(posts.status, "trash"),

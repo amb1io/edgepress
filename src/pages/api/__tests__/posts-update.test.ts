@@ -49,7 +49,7 @@ describe("POST /api/posts - Attachment Update", () => {
 
       const merged = { ...existingMeta, ...newMeta };
 
-      // Campos não atualizados devem ser preservados
+      // Unupdated fields must be preserved
       expect(merged.mime_type).toBe("image/png");
       expect(merged.attachment_file).toBe("old.png");
       expect(merged.attachment_path).toBe("/uploads/old.png");
@@ -123,7 +123,7 @@ describe("POST /api/posts - Attachment Update", () => {
       formData.set("meta_attachment_path", "/uploads/2024/01/nova-imagem.jpg");
       formData.set("meta_attachment_alt", "Descrição da imagem");
 
-      // Valida campos obrigatórios
+      // Validate required fields
       expect(formData.get("post_type")).toBe("attachment");
       expect(formData.get("action")).toBe("edit");
       expect(formData.get("id")).toBe("123");
@@ -144,7 +144,7 @@ describe("POST /api/posts - Attachment Update", () => {
       formData.set("id", "123");
       formData.set("title", "Imagem");
       formData.set("slug", "imagem");
-      // Meta fields não fornecidos
+      // Meta fields not provided
 
       const metaMimeType = formData.get("meta_mime_type");
       const metaFile = formData.get("meta_attachment_file");
@@ -153,7 +153,7 @@ describe("POST /api/posts - Attachment Update", () => {
       expect(metaMimeType).toBeNull();
       expect(metaFile).toBeNull();
       expect(metaPath).toBeNull();
-      // Não deve quebrar se meta fields estão ausentes
+      // Should not break if meta fields are missing
     });
   });
 
@@ -170,7 +170,7 @@ describe("POST /api/posts - Attachment Update", () => {
         const parsed = JSON.parse(existingMetaJson);
         merged = { ...parsed, ...newMeta };
       } catch {
-        // Se JSON inválido, usa apenas os novos valores
+        // If invalid JSON, use only the new values
         merged = newMeta;
       }
 
