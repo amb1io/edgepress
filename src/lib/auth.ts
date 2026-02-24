@@ -34,18 +34,29 @@ export const auth = betterAuth({
       verify: lightVerify,
     },
     sendResetPassword: async ({ user, url }) => {
-      const resendApiKey = (env as { RESEND_API_KEY?: string }).RESEND_API_KEY;
-      const resendFrom = (env as { RESEND_FROM?: string }).RESEND_FROM;
-      if (resendApiKey && resendFrom) {
-        void sendPasswordResetEmail({
-          apiKey: resendApiKey,
-          from: resendFrom,
+      // Em local, variáveis vêm de .dev.vars (wrangler). Fallback para process.env se existir.
+      const envAny = env as { RESEND_API_KEY?: string; RESEND_FROM?: string };
+      const resendApiKey = envAny.RESEND_API_KEY ?? (typeof process !== "undefined" ? process.env?.RESEND_API_KEY : undefined);
+      const resendFrom = envAny.RESEND_FROM ?? (typeof process !== "undefined" ? process.env?.RESEND_FROM : undefined);
+
+      if (resendApiKey?.trim() && resendFrom?.trim()) {
+        if (typeof console !== "undefined" && console.info) {
+          console.info("[Password reset] Enviando email via Resend para", user.email);
+        }
+        await sendPasswordResetEmail({
+          apiKey: resendApiKey.trim(),
+          from: resendFrom.trim(),
           to: user.email,
           url,
         });
       } else {
         if (typeof console !== "undefined" && console.info) {
-          console.info("[Password reset] (local) Link para", user.email, ":", url);
+          console.info(
+            "[Password reset] (local) RESEND_API_KEY ou RESEND_FROM ausente. Link para",
+            user.email,
+            ":",
+            url
+          );
         }
       }
     },
