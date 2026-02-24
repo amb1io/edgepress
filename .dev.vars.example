@@ -4,4 +4,8 @@ BETTER_AUTH_SECRET=your-secret-at-least-32-chars
 BETTER_AUTH_URL=http://localhost:8788
 BETTER_AUTH_TRUSTED_ORIGINS=http://localhost,http://localhost:8788
 
-"# R2: Create the 'edgepress-media' bucket on the Cloudflare dashboard for media uploads (/api/upload)"
+# Resend (opcional): se não definir, o link de recuperação de senha é logado no console
+# RESEND_API_KEY=re_xxxx
+# RESEND_FROM=Edgepress <noreply@seudominio.com>
+
+# R2: Create the 'edgepress-media' bucket on the Cloudflare dashboard for media uploads (/api/upload)
