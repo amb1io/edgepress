@@ -32,6 +32,14 @@ export const auth = betterAuth({
       hash: lightHash,
       verify: lightVerify,
     },
+    sendResetPassword: async ({ user, url }) => {
+      // Em produção, integre um provedor de email (Resend, SendGrid, etc.)
+      // e envie o link para user.email. Evite await para mitigar timing attacks.
+      if (typeof console !== "undefined" && console.info) {
+        console.info("[Password reset] Link para", user.email, ":", url);
+      }
+      // void sendEmail({ to: user.email, subject: "Redefinir senha", text: `Acesse: ${url}` });
+    },
   },
   baseURL: env.BETTER_AUTH_URL,
   basePath: "/api/auth",

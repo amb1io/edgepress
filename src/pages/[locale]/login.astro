@@ -8,6 +8,7 @@ const errorMessages: Record<string, string> = {
   missing_fields: "Preencha email e senha.",
   invalid_request: "Requisição inválida.",
 };
+const resetSuccess = Astro.url.searchParams.get("reset") === "success";
 
 const error = Astro.url.searchParams.get("error");
 const errorMessage = error
@@ -37,6 +38,16 @@ const setupSuccess = Astro.url.searchParams.get("setup") === "success";
             <Notificacao
               type="success"
               message="Configuração concluída. Faça login com o email e senha que você criou."
+              dismissible
+              className="mb-4"
+            />
+          )
+        }
+        {
+          resetSuccess && (
+            <Notificacao
+              type="success"
+              message="Senha redefinida. Faça login com sua nova senha."
               dismissible
               className="mb-4"
             />
