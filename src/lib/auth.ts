@@ -12,6 +12,7 @@ import {
   accountRelations,
 } from "../db/schema/auth.ts";
 import { hashPassword as lightHash, verifyPassword as lightVerify } from "./auth-password.ts";
+import { sendPasswordResetEmail } from "./resend.ts";
 
 const authSchema = {
   user,
@@ -33,12 +34,20 @@ export const auth = betterAuth({
       verify: lightVerify,
     },
     sendResetPassword: async ({ user, url }) => {
-      // Em produção, integre um provedor de email (Resend, SendGrid, etc.)
-      // e envie o link para user.email. Evite await para mitigar timing attacks.
-      if (typeof console !== "undefined" && console.info) {
-        console.info("[Password reset] Link para", user.email, ":", url);
+      const resendApiKey = (env as { RESEND_API_KEY?: string }).RESEND_API_KEY;
+      const resendFrom = (env as { RESEND_FROM?: string }).RESEND_FROM;
+      if (resendApiKey && resendFrom) {
+        void sendPasswordResetEmail({
+          apiKey: resendApiKey,
+          from: resendFrom,
+          to: user.email,
+          url,
+        });
+      } else {
+        if (typeof console !== "undefined" && console.info) {
+          console.info("[Password reset] (local) Link para", user.email, ":", url);
+        }
       }
-      // void sendEmail({ to: user.email, subject: "Redefinir senha", text: `Acesse: ${url}` });
     },
   },
   baseURL: env.BETTER_AUTH_URL,
