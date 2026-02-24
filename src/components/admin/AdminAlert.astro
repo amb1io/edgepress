@@ -1,0 +1,20 @@
+---
+/**
+ * Alerta reutilizável para mensagens de erro ou info no admin.
+ */
+export interface Props {
+  message: string;
+  /** "error" (alert-error) ou "info" (alert-info). Padrão: error */
+  type?: "error" | "info";
+  /** Classe CSS adicional (ex.: mb-4) */
+  class?: string;
+}
+
+const { message, type = "error", class: className = "" } = Astro.props;
+const alertClass = type === "error" ? "alert-error" : "alert-info";
+const classList = ["alert", alertClass, className].filter(Boolean).join(" ");
+---
+
+<div class={classList} role="alert">
+  <span>{message}</span>
+</div>

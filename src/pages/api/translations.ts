@@ -10,8 +10,11 @@ import {
 } from "../../db/schema.ts";
 import { eq, and, not } from "drizzle-orm";
 import { requireMinRole } from "../../lib/api-auth.ts";
-import { badRequestResponse, jsonResponse, redirectResponse } from "../../lib/utils/http-responses.ts";
+import { getString, getNumber } from "../../lib/utils/form-data.ts";
+import { badRequestResponse, badRequestHtmlResponse, jsonResponse, redirectResponse, htmxRedirectResponse } from "../../lib/utils/http-responses.ts";
 import { buildAbsoluteUrl, buildContentUrl, buildListUrl } from "../../lib/utils/url.ts";
+import { invalidateI18nCache } from "../../lib/kv-cache-sync.ts";
+import { invalidateTranslationsCache } from "../../i18n/translations.ts";
 
 export const prerender = false;
 
@@ -20,26 +23,24 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (authResult instanceof Response) return authResult;
 
   const formData = await request.formData();
-  const action = formData.get("action")?.toString() || "";
-  const idParam = formData.get("id")?.toString() || null;
-  const locale = formData.get("locale")?.toString() || "pt-br";
-  const namespace = formData.get("namespace")?.toString()?.trim() || "";
-  const key = formData.get("key")?.toString()?.trim() || "";
-  const translationValue = formData.get("translation")?.toString()?.trim() || "";
-  const localeIdParam = formData.get("locale_id")?.toString() || null;
+  const action = getString(formData, "action");
+  const idParam = getString(formData, "id") || null;
+  const locale = getString(formData, "locale", "pt-br");
+  const namespace = getString(formData, "namespace");
+  const key = getString(formData, "key");
+  const translationValue = getString(formData, "translation");
+  const localeId = getNumber(formData, "locale_id", null);
+
+  const isHtmx = request.headers.get("HX-Request") === "true";
 
   // Validar campos obrigatórios
-  if (!namespace || !key || !translationValue || !localeIdParam) {
+  if (!namespace || !key || !translationValue || localeId === null) {
+    if (isHtmx) return badRequestHtmlResponse("Preencha todos os campos obrigatórios.");
     const redirectUrl = buildAbsoluteUrl(
       request,
       buildContentUrl(locale, "translations_languages", action, idParam || undefined)
     );
     return redirectResponse(redirectUrl);
-  }
-
-  const localeId = parseInt(localeIdParam, 10);
-  if (isNaN(localeId)) {
-    return badRequestResponse("ID do idioma inválido");
   }
 
   // Verificar se já existe uma tradução com mesmo namespace e key (exceto na edição do mesmo registro)
@@ -61,6 +62,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     .limit(1);
 
   if (existing.length > 0) {
+    if (isHtmx) return badRequestHtmlResponse("Já existe uma tradução com este namespace e key.");
     return badRequestResponse("Já existe uma tradução com este namespace e key");
   }
 
@@ -73,6 +75,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       // EDIÇÃO
       const idParamNum = parseInt(idParam, 10);
       if (isNaN(idParamNum)) {
+        if (isHtmx) return badRequestHtmlResponse("ID inválido.");
         return badRequestResponse("ID inválido");
       }
 
@@ -147,15 +150,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
       });
     }
 
+    await invalidateI18nCache(locals);
+    invalidateTranslationsCache();
+
     const acceptsJson = request.headers.get("Accept")?.includes("application/json");
-    if (acceptsJson) {
-      return jsonResponse({ id: translationId });
-    }
+    if (acceptsJson) return jsonResponse({ id: translationId });
 
     const listUrl = buildAbsoluteUrl(request, buildListUrl(locale, "translations_languages"));
+    if (isHtmx) return htmxRedirectResponse(listUrl);
     return redirectResponse(listUrl);
   } catch (error) {
     console.error("Error saving translation:", error);
+    if (isHtmx) return badRequestHtmlResponse("Erro ao salvar tradução.");
     return badRequestResponse("Erro ao salvar tradução");
   }
 };

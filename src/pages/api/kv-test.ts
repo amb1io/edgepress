@@ -4,6 +4,7 @@
  * Se retornar "ok", o KV está funcionando.
  */
 import type { APIRoute } from "astro";
+import { getKvFromLocals } from "../../lib/utils/runtime-locals.ts";
 
 export const prerender = false;
 
@@ -11,8 +12,7 @@ const TEST_KEY = "kv-test";
 const TEST_VALUE = "ok";
 
 export const GET: APIRoute = async ({ locals }) => {
-  type KVLike = { get(key: string, type?: "text"): Promise<string | null>; put(key: string, value: string): Promise<void> };
-  const kv = (locals as { runtime?: { env?: { edgepress_cache?: KVLike | null } } }).runtime?.env?.edgepress_cache ?? null;
+  const kv = getKvFromLocals(locals);
 
   if (!kv) {
     return new Response(

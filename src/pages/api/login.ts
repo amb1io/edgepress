@@ -1,8 +1,9 @@
 import { auth } from "../../lib/auth.ts";
 import type { APIRoute } from "astro";
 import { defaultLocale } from "../../i18n/index.ts";
-// import { applyRateLimit, getRateLimits } from "../../lib/utils/rate-limiter.ts";
+import { getString } from "../../lib/utils/form-data.ts";
 import { sanitizeCallbackURL } from "../../lib/utils/url-validator.ts";
+import { badRequestHtmlResponse, htmxRedirectResponse } from "../../lib/utils/http-responses.ts";
 
 const LOCALES = ["pt-br", "en", "es"];
 
@@ -28,20 +29,26 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   let callbackURL: string | undefined;
   let locale: string;
 
-  if (contentType.includes("application/x-www-form-urlencoded")) {
+  const isHtmx = request.headers.get("HX-Request") === "true";
+
+  if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
     const formData = await request.formData();
-    email = (formData.get("email") as string)?.trim() ?? "";
+    email = getString(formData, "email");
     password = (formData.get("password") as string) ?? "";
-    callbackURL = (formData.get("callbackURL") as string)?.trim() || undefined;
-    locale = getLocaleFromRequest(request, (formData.get("locale") as string) || undefined);
+    const callbackURLRaw = getString(formData, "callbackURL");
+    callbackURL = callbackURLRaw === "" ? undefined : callbackURLRaw;
+    const localeRaw = getString(formData, "locale");
+    locale = getLocaleFromRequest(request, localeRaw === "" ? undefined : localeRaw);
   } else {
     locale = getLocaleFromRequest(request);
+    if (isHtmx) return badRequestHtmlResponse("Requisição inválida.");
     return redirect(`/${locale}/login?error=invalid_request`, 303);
   }
 
   const loginPath = `/${locale}/login`;
 
   if (!email || !password) {
+    if (isHtmx) return badRequestHtmlResponse("Preencha email e senha.");
     return redirect(`${loginPath}?error=missing_fields`, 303);
   }
 
@@ -70,41 +77,42 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     const authResponse = await auth.handler(authRequest);
 
     if (!authResponse.ok) {
-      // Log do erro para debug
       const errorText = await authResponse.text().catch(() => "Unknown error");
-      const errorStatus = authResponse.status;
-      console.error("Login failed:", {
-        email,
-        status: errorStatus,
-        error: errorText,
-        url: authRequest.url,
-      });
+      console.error("Login failed:", { email, error: errorText, url: authRequest.url });
+      if (isHtmx) return badRequestHtmlResponse("Email ou senha incorretos. Tente novamente.");
       return redirect(`${loginPath}?error=invalid_credentials`, 303);
     }
 
-    const data = (await authResponse.json().catch(() => ({}))) as {
-      url?: string;
-    };
+    const data = (await authResponse.json().catch(() => ({}))) as { url?: string };
     const location = data.url ?? safeCallbackURL;
+
+    if (isHtmx) {
+      const res = htmxRedirectResponse(location);
+      const cookies = authResponse.headers.getSetCookie?.() ?? [];
+      if (cookies.length > 0) {
+        for (const cookie of cookies) res.headers.append("Set-Cookie", cookie);
+      } else {
+        const setCookie = authResponse.headers.get("set-cookie");
+        if (setCookie) res.headers.append("Set-Cookie", setCookie);
+      }
+      return res;
+    }
 
     const responseHeaders = new Headers({ Location: location });
     const cookies = authResponse.headers.getSetCookie?.() ?? [];
     if (cookies.length > 0) {
-      for (const cookie of cookies) {
-        responseHeaders.append("Set-Cookie", cookie);
-      }
+      for (const cookie of cookies) responseHeaders.append("Set-Cookie", cookie);
     } else {
       const setCookie = authResponse.headers.get("set-cookie");
       if (setCookie) responseHeaders.append("Set-Cookie", setCookie);
     }
-
-    return new Response(null, {
-      status: 303,
-      headers: responseHeaders,
-    });
+    return new Response(null, { status: 303, headers: responseHeaders });
   } catch (err) {
     console.error("Login error:", err);
     const locale = getLocaleFromRequest(request);
+    if (request.headers.get("HX-Request") === "true") {
+      return badRequestHtmlResponse("Email ou senha incorretos. Tente novamente.");
+    }
     return redirect(`/${locale}/login?error=invalid_credentials`, 303);
   }
 };

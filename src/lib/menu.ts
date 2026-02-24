@@ -88,6 +88,18 @@ export function resolveMenuOption(
         link: `${basePath}?page=general`,
         icon: "line-md:cog",
       };
+    case "cache":
+      return {
+        text: t(locale, `menu.option.${option}`) || option,
+        link: `${basePath}?domain=cache`,
+        icon: "line-md:document",
+      };
+    case "post_types":
+      return {
+        text: t(locale, "menu.option.post_types") || "Post Types",
+        link: `${basePath}?page=post_types`,
+        icon: "line-md:document-list",
+      };
     default:
       return {
         text: t(locale, `menu.option.${option}`) || option,

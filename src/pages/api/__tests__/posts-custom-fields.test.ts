@@ -146,6 +146,70 @@ describe("POST /api/posts - Custom Fields", () => {
         expect(slug).toBe(expected);
       });
     });
+
+    it("should generate unique slugs with incremental suffix to avoid UNIQUE constraint (posts.slug)", () => {
+      // Simula a lógica em /api/posts.ts: slug = baseSlug-postId-(index+1)
+      function slugify(title: string): string {
+        return title
+          .trim()
+          .normalize("NFD")
+          .replace(/\p{Diacritic}/gu, "")
+          .toLowerCase()
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9-]/g, "")
+          .replace(/-+/g, "-")
+          .replace(/^-|-$/g, "") || "custom-field";
+      }
+
+      const postId = 151;
+      const customFieldsItems = [
+        { title: "c", rows: [{ name: "a", value: "1" }] },
+        { title: "c", rows: [{ name: "b", value: "2" }] },
+        { title: "c", rows: [{ name: "c", value: "3" }] },
+        { title: "Outro Grupo", rows: [{ name: "d", value: "4" }] },
+      ];
+
+      const slugs = customFieldsItems.map((item, i) => {
+        const baseSlug = slugify(item.title) || "custom-field";
+        return `${baseSlug}-${postId}-${i + 1}`;
+      });
+
+      expect(slugs).toEqual(["c-151-1", "c-151-2", "c-151-3", "outro-grupo-151-4"]);
+
+      // Todos os slugs devem ser únicos (evita UNIQUE constraint failed: posts.slug)
+      const uniqueSlugs = new Set(slugs);
+      expect(uniqueSlugs.size).toBe(slugs.length);
+    });
+
+    it("should keep custom field slugs unique when title slugifies to empty", () => {
+      function slugify(title: string): string {
+        const s = title
+          .trim()
+          .normalize("NFD")
+          .replace(/\p{Diacritic}/gu, "")
+          .toLowerCase()
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9-]/g, "")
+          .replace(/-+/g, "-")
+          .replace(/^-|-$/g, "");
+        return s || "custom-field";
+      }
+
+      const postId = 99;
+      const customFieldsItems = [
+        { title: "!!!", rows: [{ name: "x", value: "1" }] },
+        { title: "!!!", rows: [{ name: "y", value: "2" }] },
+      ];
+
+      const slugs = customFieldsItems.map((item, i) => {
+        const baseSlug = slugify(item.title) || "custom-field";
+        return `${baseSlug}-${postId}-${i + 1}`;
+      });
+
+      expect(slugs[0]).toBe("custom-field-99-1");
+      expect(slugs[1]).toBe("custom-field-99-2");
+      expect(new Set(slugs).size).toBe(2);
+    });
   });
 
   describe("Edit Mode - Custom Fields Update", () => {

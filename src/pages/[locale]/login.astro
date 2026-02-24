@@ -1,12 +1,14 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import Notificacao from "../../components/Notificacao.astro";
+import htmxScript from "htmx.org/dist/htmx.min.js?url";
 
 const errorMessages: Record<string, string> = {
   invalid_credentials: "Email ou senha incorretos. Tente novamente.",
   missing_fields: "Preencha email e senha.",
   invalid_request: "Requisição inválida.",
 };
+const resetSuccess = Astro.url.searchParams.get("reset") === "success";
 
 const error = Astro.url.searchParams.get("error");
 const errorMessage = error
@@ -25,7 +27,7 @@ const setupSuccess = Astro.url.searchParams.get("setup") === "success";
   }
 </script>
 
-<Layout title="Login - Edgepress">
+<Layout title="Login - Edgepress" headScript={htmxScript}>
   <main class="min-h-screen flex items-center justify-center bg-base-200 p-4">
     <div class="card w-full max-w-md bg-base-100 shadow-xl">
       <div class="card-body">
@@ -42,6 +44,16 @@ const setupSuccess = Astro.url.searchParams.get("setup") === "success";
           )
         }
         {
+          resetSuccess && (
+            <Notificacao
+              type="success"
+              message="Senha redefinida. Faça login com sua nova senha."
+              dismissible
+              className="mb-4"
+            />
+          )
+        }
+        {
           errorMessage && (
             <Notificacao
               type="error"
@@ -52,7 +64,15 @@ const setupSuccess = Astro.url.searchParams.get("setup") === "success";
           )
         }
 
-        <form action="/api/login" method="post" class="space-y-4">
+        <div id="login-form-error" class="min-h-[1.5rem]" aria-live="polite"></div>
+        <form
+          action="/api/login"
+          method="post"
+          hx-post="/api/login"
+          hx-target="#login-form-error"
+          hx-swap="innerHTML"
+          class="space-y-4"
+        >
           <input type="hidden" name="locale" value={Astro.params["locale"] ?? "pt-br"} />
           <input type="hidden" name="callbackURL" value={`/${Astro.params["locale"] ?? "pt-br"}/admin`} />
           <div class="form-control w-full">

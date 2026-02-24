@@ -4,11 +4,10 @@
  */
 import { sql } from "drizzle-orm";
 import type { Database } from "./types/database.ts";
-
-const VALID_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+import { VALID_TABLE_IDENTIFIER } from "./db-utils.ts";
 
 function safeIdentifier(name: string): string | null {
-  return VALID_IDENTIFIER.test(name) ? name : null;
+  return VALID_TABLE_IDENTIFIER.test(name) ? name : null;
 }
 
 export type GetTableListParams = {
@@ -152,20 +151,23 @@ export async function getTableList(
   // Construir lista de colunas para SELECT (incluindo campos de texto relacionados)
   const selectColumns: string[] = [];
   const displayColumns: string[] = [];
-  
+  type RelatedWithAlias = (typeof relatedInfo)[number] & { alias: string };
+  const relatedWithAliases: RelatedWithAlias[] = relatedInfo.map((r) => ({
+    ...r,
+    alias: r.table === safeTable ? `${safeTable}_ref` : r.table,
+  }));
+
   // Adicionar todas as colunas da tabela principal
   const quotedTable = `"${escapeIdentifier(safeTable)}"`;
   selectColumns.push(`${quotedTable}.*`);
   displayColumns.push(...columns);
-  
-  // Adicionar campos de texto das tabelas relacionadas com prefixo
-  for (const related of relatedInfo) {
-    const quotedRelatedTable = `"${escapeIdentifier(related.table)}"`;
-    const alias = related.table;
+
+  for (const related of relatedWithAliases) {
+    const quotedAlias = `"${escapeIdentifier(related.alias)}"`;
     for (const textCol of related.textColumns) {
       const quotedCol = `"${escapeIdentifier(textCol)}"`;
-      const prefixedCol = `${alias}_${textCol}`;
-      selectColumns.push(`${quotedRelatedTable}.${quotedCol} AS "${prefixedCol}"`);
+      const prefixedCol = `${related.alias}_${textCol}`;
+      selectColumns.push(`${quotedAlias}.${quotedCol} AS "${escapeIdentifier(prefixedCol)}"`);
       displayColumns.push(prefixedCol);
     }
   }
@@ -177,13 +179,16 @@ export async function getTableList(
   const orderCol = params.order && displayColumns.includes(params.order) ? params.order : displayColumns[0] || columns[0];
   const filter = params.filter ?? {};
 
-  // Construir JOINs
+  // Construir JOINs (com alias para self-join para evitar ambiguidade)
   const joins: string[] = [];
-  for (const related of relatedInfo) {
+  for (const related of relatedWithAliases) {
+    const isSelfJoin = related.table === safeTable;
     const quotedRelatedTable = `"${escapeIdentifier(related.table)}"`;
+    const joinTarget = isSelfJoin ? `${quotedRelatedTable} AS "${escapeIdentifier(related.alias)}"` : quotedRelatedTable;
     const quotedFkCol = `"${escapeIdentifier(related.fkColumn)}"`;
     const quotedRefCol = `"${escapeIdentifier(related.refColumn)}"`;
-    joins.push(`LEFT JOIN ${quotedRelatedTable} ON ${quotedTable}.${quotedFkCol} = ${quotedRelatedTable}.${quotedRefCol}`);
+    const rightSide = isSelfJoin ? `"${escapeIdentifier(related.alias)}".${quotedRefCol}` : `${quotedRelatedTable}.${quotedRefCol}`;
+    joins.push(`LEFT JOIN ${joinTarget} ON ${quotedTable}.${quotedFkCol} = ${rightSide}`);
   }
   const joinSql = joins.length > 0 ? ` ${joins.join(" ")}` : "";
 
@@ -191,22 +196,28 @@ export async function getTableList(
   const filterCols = Object.keys(filter).filter((k) => displayColumns.includes(k) && filter[k]);
   
   const whereParts: string[] = [];
+  // Na listagem de posts, excluir status "trash"
+  if (safeTable === "posts") {
+    whereParts.push(`${quotedTable}."status" != 'trash'`);
+  }
   for (const col of filterCols) {
-    const escaped = escapeSqliteString(filter[col]);
-    // Verificar se é campo da tabela principal
+    const rawValue = filter[col];
+    const escaped = escapeSqliteString(rawValue);
     if (columns.includes(col)) {
-      whereParts.push(`${quotedTable}."${escapeIdentifier(col)}" LIKE '%${escaped}%'`);
+      if (col === "post_type_id" && /^\d+$/.test(rawValue)) {
+        whereParts.push(`${quotedTable}."${escapeIdentifier(col)}" = ${parseInt(rawValue, 10)}`);
+      } else {
+        whereParts.push(`${quotedTable}."${escapeIdentifier(col)}" LIKE '%${escaped}%'`);
+      }
     } else {
-      // Campo relacionado (formato: tabela_coluna)
-      const parts = col.split("_");
-      if (parts.length >= 2) {
-        const tablePart = parts[0];
-        const colPart = parts.slice(1).join("_");
-        const related = relatedInfo.find((r) => r.table === tablePart && r.textColumns.includes(colPart));
-        if (related) {
-          const quotedRelatedTable = `"${escapeIdentifier(related.table)}"`;
-          whereParts.push(`${quotedRelatedTable}."${escapeIdentifier(colPart)}" LIKE '%${escaped}%'`);
-        }
+      // Campo relacionado (formato: alias_coluna, ex: posts_ref_title ou locales_title)
+      const related = relatedWithAliases.find((r) => {
+        const prefix = `${r.alias}_`;
+        return col.startsWith(prefix) && r.textColumns.includes(col.slice(prefix.length));
+      });
+      if (related) {
+        const colPart = col.slice(related.alias.length + 1);
+        whereParts.push(`"${escapeIdentifier(related.alias)}"."${escapeIdentifier(colPart)}" LIKE '%${escaped}%'`);
       }
     }
   }
@@ -217,18 +228,13 @@ export async function getTableList(
   if (columns.includes(orderCol)) {
     quotedOrderCol = `${quotedTable}."${escapeIdentifier(orderCol)}"`;
   } else {
-    // Verificar se é campo relacionado
-    const parts = orderCol.split("_");
-    if (parts.length >= 2) {
-      const tablePart = parts[0];
-      const colPart = parts.slice(1).join("_");
-      const related = relatedInfo.find((r) => r.table === tablePart && r.textColumns.includes(colPart));
-      if (related) {
-        const quotedRelatedTable = `"${escapeIdentifier(related.table)}"`;
-        quotedOrderCol = `${quotedRelatedTable}."${escapeIdentifier(colPart)}"`;
-      } else {
-        quotedOrderCol = `"${escapeIdentifier(orderCol)}"`;
-      }
+    const related = relatedWithAliases.find((r) => {
+      const prefix = `${r.alias}_`;
+      return orderCol.startsWith(prefix) && r.textColumns.includes(orderCol.slice(prefix.length));
+    });
+    if (related) {
+      const colPart = orderCol.slice(related.alias.length + 1);
+      quotedOrderCol = `"${escapeIdentifier(related.alias)}"."${escapeIdentifier(colPart)}"`;
     } else {
       quotedOrderCol = `"${escapeIdentifier(orderCol)}"`;
     }

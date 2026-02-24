@@ -234,9 +234,13 @@ const initialTranslationValue = editTranslation?.translation_value ?? "";
   </script>
 
   <div class="p-6 max-w-2xl">
+    <div id="translation-form-error" class="min-h-[1.5rem]" aria-live="polite"></div>
     <form
       method="post"
       action="/api/translations"
+      hx-post="/api/translations"
+      hx-target="#translation-form-error"
+      hx-swap="innerHTML"
       x-data="translationForm"
       class="flex flex-col gap-4 translation-form"
     >
@@ -417,40 +421,3 @@ const initialTranslationValue = editTranslation?.translation_value ?? "";
     </form>
   </div>
 </AdminLayout>
-
-<script>
-  document.querySelectorAll("form.translation-form").forEach((form) => {
-    form.addEventListener("submit", async (ev) => {
-      ev.preventDefault();
-      const formData = new FormData(form as HTMLFormElement);
-
-      try {
-        const response = await fetch("/api/translations", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!response.ok) {
-          let errorMessage =
-            "Ocorreu um erro ao salvar. Por favor, tente novamente.";
-          try {
-            const errorData = (await response.json()) as { error?: string };
-            if (errorData.error) {
-              errorMessage = errorData.error;
-            }
-          } catch {
-            // Ignorar erro de parse
-          }
-          alert(errorMessage);
-          return;
-        }
-
-        // Redirecionar após sucesso
-        const locale = formData.get("locale");
-        window.location.href = `/${locale}/admin/list?type=translations_languages&limit=10&page=1`;
-      } catch (error) {
-        alert("Erro de conexão. Verifique sua internet e tente novamente.");
-      }
-    });
-  });
-</script>

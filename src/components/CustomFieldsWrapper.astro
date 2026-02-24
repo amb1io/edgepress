@@ -5,6 +5,7 @@
  * (checkbox) com título, opção de deletar e corpo com linhas Nome/Valor + "adicionar mais dados".
  */
 import { Icon } from "astro-icon/components";
+import CustomFieldTypeSelect from "./CustomFieldTypeSelect.astro";
 
 interface Props {
   initialData?: Array<{
@@ -55,9 +56,9 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
             <div class="flex flex-col gap-3">
               <template x-for="(row, ri) in item.rows" :key="row.id">
                 <div
-                  class="grid gap-2 items-center"
-                  style="grid-template-columns: auto 1fr auto 1fr auto;"
                   x-show="!row._deleted"
+                  class="grid gap-2 items-center"
+                  style="grid-template-columns: auto 1fr auto 1fr auto 1fr auto;"
                 >
                   <label class="label py-0 whitespace-nowrap">
                     <span class="label-text text-sm">Nome do campo:</span>
@@ -69,14 +70,80 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
                     x-model="row.name"
                   />
                   <label class="label py-0 whitespace-nowrap">
+                    <span class="label-text text-sm">Tipo de dados:</span>
+                  </label>
+                  <div class="min-w-0">
+                    <CustomFieldTypeSelect
+                      x-show="!row.type || row.type === ''"
+                      x-model="row.type"
+                    />
+                    <div
+                      x-show="row.type === 'text' || row.type === 'editor' || row.type === 'file'"
+                      class="flex items-center gap-1 flex-wrap"
+                    >
+                      <span class="text-sm" x-text="row.type === 'text' ? 'Texto' : row.type === 'editor' ? 'Editor de texto' : 'Arquivo'"></span>
+                      <a
+                        href="#"
+                        class="link link-primary link-hover text-xs"
+                        @click.prevent="row.type = ''"
+                      >
+                        alterar
+                      </a>
+                    </div>
+                  </div>
+                  <label
+                    class="label py-0 whitespace-nowrap"
+                    x-show="row.type === 'text' || row.type === 'editor' || row.type === 'file'"
+                  >
                     <span class="label-text text-sm">Valor do Campo:</span>
                   </label>
-                  <input
-                    type="text"
-                    class="input input-bordered input-sm w-full"
-                    placeholder="Valor do campo"
-                    x-model="row.value"
-                  />
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span
+                      class="text-sm text-base-content/50"
+                      x-show="!row.type || row.type === ''"
+                    >
+                      Selecione o tipo ao lado
+                    </span>
+                  <div
+                    x-show="row.type === 'text' || row.type === 'editor' || row.type === 'file'"
+                    class="flex items-center gap-2 min-w-0 flex-wrap"
+                  >
+                    <input
+                      x-show="row.type === 'text'"
+                      type="text"
+                      class="input input-bordered input-sm w-full"
+                      placeholder="Valor do campo"
+                      x-model="row.value"
+                    />
+                    <textarea
+                      x-show="row.type === 'editor'"
+                      class="textarea textarea-bordered textarea-sm w-full min-h-[120px]"
+                      placeholder="Valor do campo"
+                      x-model="row.value"
+                    ></textarea>
+                    <div
+                      x-show="row.type === 'file'"
+                      class="flex flex-col gap-2"
+                    >
+                      <img
+                        x-show="row.value"
+                        :src="getMediaUrl(row.value)"
+                        alt="Preview"
+                        class="rounded border border-base-300 bg-base-200"
+                        style="width: 200px; height: 200px; object-fit: cover;"
+                        @error="$event.target.style.display = 'none'"
+                      />
+                      <input
+                        type="file"
+                        class="file-input file-input-bordered file-input-sm w-full max-w-xs"
+                        :data-item-id="item.id"
+                        :data-row-id="row.id"
+                        accept="image/*,image/avif,audio/*,application/pdf"
+                        @change="row.value = $event.target.files[0] ? $event.target.files[0].name : ''"
+                      />
+                    </div>
+                  </div>
+                  </div>
                   <button
                     type="button"
                     class="btn btn-ghost btn-xs btn-circle text-error flex items-center justify-center"
@@ -190,7 +257,7 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
           </div>
         </div>
 
-        <!-- Aba: Crie um Novo -->
+        <!-- Aba: Crie um Novo (apenas nome + tipo de dados checkboxes) -->
         <div
           class="border border-base-300 bg-base-100 rounded-b-lg p-4"
           x-show="modalTab === 'create'"
@@ -204,6 +271,37 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
               x-model="newFieldName"
               @keydown.enter.prevent="submitNewField()"
             />
+          </div>
+          <div class="form-control mb-4">
+            <label class="label py-1">
+              <span class="label-text font-medium">tipo de dados</span>
+            </label>
+            <div class="flex flex-wrap gap-4">
+              <label class="label cursor-pointer gap-2 py-0">
+                <input
+                  type="checkbox"
+                  class="checkbox checkbox-sm"
+                  x-model="newFieldTypeTexto"
+                />
+                <span class="label-text text-sm">Texto</span>
+              </label>
+              <label class="label cursor-pointer gap-2 py-0">
+                <input
+                  type="checkbox"
+                  class="checkbox checkbox-sm"
+                  x-model="newFieldTypeEditor"
+                />
+                <span class="label-text text-sm">Editor de texto</span>
+              </label>
+              <label class="label cursor-pointer gap-2 py-0">
+                <input
+                  type="checkbox"
+                  class="checkbox checkbox-sm"
+                  x-model="newFieldTypeArquivo"
+                />
+                <span class="label-text text-sm">Arquivo</span>
+              </label>
+            </div>
           </div>
           <div class="modal-action">
             <button
@@ -251,8 +349,9 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
                   id: row.id || Date.now(),
                   name: row.name || "",
                   value: row.value || "",
+                  type: row.type === "file" ? "file" : row.type === "editor" ? "editor" : "text",
                 }))
-              : [{ id: Date.now(), name: "", value: "" }],
+              : [{ id: Date.now(), name: "", value: "", type: "text" }],
           template: item.template === true,
         }))
       : [];
@@ -274,26 +373,57 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
         modalOpen: false,
         modalTab: "create",
         newFieldName: "",
+        newFieldTypeTexto: false,
+        newFieldTypeEditor: false,
+        newFieldTypeArquivo: false,
         selectedTemplateId: "",
         templateCustomFields: templateList,
+        getMediaUrl(path) {
+          if (!path || typeof path !== "string") return "";
+          var p = path.trim();
+          if (p.startsWith("http")) return p;
+          if (p.startsWith("/uploads/")) return "/api/media" + p;
+          if (p.startsWith("/")) return "/api/media" + p;
+          return "/api/media/uploads/" + p;
+        },
         initCustomFields() {
-          // Garantir que cada item tenha pelo menos uma row
           this.customFields.forEach((item) => {
             if (!item.rows || item.rows.length === 0) {
-              item.rows = [{ id: Date.now(), name: "", value: "" }];
+              item.rows = [{ id: Date.now(), name: "", value: "", type: "text" }];
+            } else {
+              item.rows.forEach((r) => {
+                if (r.type !== "file" && r.type !== "editor") r.type = "text";
+              });
             }
           });
         },
         submitNewField() {
           const name = (this.newFieldName || "").trim();
           if (!name) return;
+          const baseId = Date.now();
+          const rows = [];
+          if (this.newFieldTypeTexto) {
+            rows.push({ id: baseId, name: "", value: "", type: "text" });
+          }
+          if (this.newFieldTypeEditor) {
+            rows.push({ id: baseId + (rows.length > 0 ? rows.length : 0), name: "", value: "", type: "editor" });
+          }
+          if (this.newFieldTypeArquivo) {
+            rows.push({ id: baseId + rows.length, name: "", value: "", type: "file" });
+          }
+          if (rows.length === 0) {
+            rows.push({ id: baseId, name: "", value: "", type: "text" });
+          }
           this.customFields.push({
-            id: Date.now(),
+            id: baseId + 2,
             title: name,
-            rows: [{ id: Date.now() + 1, name: "", value: "" }],
+            rows,
             template: false,
           });
           this.newFieldName = "";
+          this.newFieldTypeTexto = false;
+          this.newFieldTypeEditor = false;
+          this.newFieldTypeArquivo = false;
           this.modalOpen = false;
         },
         submitFromTemplate() {
@@ -303,7 +433,7 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
           if (!id) return;
           const t = this.templateCustomFields.find((x) => x.id === id);
           if (!t) return;
-          let rows = [{ id: Date.now(), name: "", value: "" }];
+          let rows = [{ id: Date.now(), name: "", value: "", type: "text" }];
           if (t.meta_values) {
             try {
               const meta = JSON.parse(t.meta_values);
@@ -317,6 +447,7 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
                   id: base + i,
                   name: typeof f.name === "string" ? f.name : "",
                   value: typeof f.value === "string" ? f.value : "",
+                  type: f.type === "file" ? "file" : f.type === "editor" ? "editor" : "text",
                 }));
               }
             } catch (_) {}
@@ -365,7 +496,7 @@ const { initialData = [], templateCustomFields = [] } = Astro.props;
           }
         },
         addRow(item) {
-          item.rows.push({ id: Date.now(), name: "", value: "" });
+          item.rows.push({ id: Date.now(), name: "", value: "", type: "" });
         },
       };
     };

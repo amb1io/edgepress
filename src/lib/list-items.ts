@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, like, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, ne, sql } from "drizzle-orm";
 import {
   postTypes,
   posts,
@@ -29,6 +29,8 @@ export type GetListItemsParams = {
   page?: number;
   /** Optional filters: column name -> search string (LIKE) */
   filter?: Record<string, string>;
+  /** Quando definido (ex.: perfil autor), lista apenas posts deste autor. */
+  authorId?: string;
 };
 
 export type GetListItemsResult = {
@@ -78,6 +80,8 @@ export async function getListItems(
     eq(postTypes.slug, typeSlug),
     // Excluir posts "pai" do menu (show_in_menu = true); listar só os filhos/conteúdo
     sql`(json_extract(${posts.meta_values}, '$.show_in_menu') IS NULL OR json_extract(${posts.meta_values}, '$.show_in_menu') != 1)`,
+    // Excluir posts na lixeira
+    ne(posts.status, "trash"),
   ];
   if (status) {
     conditions.push(
@@ -92,6 +96,9 @@ export async function getListItems(
   }
   if (filter.author) {
     conditions.push(like(user.name, `%${filter.author}%`));
+  }
+  if (params.authorId) {
+    conditions.push(eq(posts.author_id, params.authorId));
   }
 
   if (filter.categories) {

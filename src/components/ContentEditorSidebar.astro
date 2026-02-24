@@ -1,0 +1,232 @@
+---
+import TaxonomiesBlocks from "./TaxonomiesBlocks.astro";
+import LanguageDropdown from "./LanguageDropdown.astro";
+import UppyUpload from "./UppyUpload.astro";
+import { t } from "../i18n/index.ts";
+import type { Locale } from "../i18n/index.ts";
+
+type TaxonomyBlock = {
+  id: number;
+  name: string;
+  slug: string;
+  type: string;
+  children: { id: number; name: string; slug: string }[];
+};
+
+interface Props {
+  locale: string;
+  asideAccordionName: string;
+  action: string;
+  users: { id: string; name: string }[];
+  initialLocaleId: number | null;
+  initialSlug: string;
+  initialExcerpt: string;
+  hasPostThumbnail: boolean;
+  thumbnailUrl: string;
+  taxonomyBlocks: TaxonomyBlock[];
+  selectedTermIds: number[];
+}
+
+const {
+  locale,
+  asideAccordionName,
+  action,
+  users,
+  initialLocaleId,
+  initialSlug = "",
+  initialExcerpt = "",
+  hasPostThumbnail,
+  thumbnailUrl,
+  taxonomyBlocks,
+  selectedTermIds,
+} = Astro.props;
+---
+
+<aside
+  class="w-3/12 min-w-[180px] shrink-0 flex flex-col gap-4 border-l border-base-300 bg-base-100 py-4 -my-6 text-sm"
+>
+  <div class="mx-6">
+    <button type="submit" class="btn btn-primary btn-md w-full">
+      {action === "new"
+        ? t(locale, "admin.content.saveNew")
+        : t(locale, "admin.content.saveEdit")}
+    </button>
+  </div>
+
+  <div class="flex flex-col gap-4">
+    <div class="join join-vertical w-full bg-base-100">
+      <div class="collapse collapse-arrow join-item border border-base-300">
+        <input
+          type="radio"
+          name={asideAccordionName}
+          checked
+          aria-label="Overview"
+        />
+        <div class="collapse-title font-semibold text-sm py-2 min-h-0">
+          Overview
+        </div>
+        <div class="collapse-content text-sm">
+          <div class="flex flex-col gap-3">
+            <div class="form-control">
+              <label for="status" class="label py-0">
+                <span class="label-text text-xs">{t(locale, "admin.list.status")}</span>
+              </label>
+              <select
+                id="status"
+                name="status"
+                class="select select-bordered select-sm w-full"
+                x-model="status"
+              >
+                <option value="draft">{t(locale, "admin.content.statusDraft")}</option>
+                <option value="published">{t(locale, "admin.content.statusPublished")}</option>
+                <option value="archived">{t(locale, "admin.content.statusArchived")}</option>
+              </select>
+            </div>
+
+            <div class="form-control">
+              <label for="slug" class="label py-0">
+                <span class="label-text text-xs">{t(locale, "admin.content.slug")}</span>
+              </label>
+              <input
+                type="text"
+                id="slug"
+                name="slug"
+                required
+                class="input input-bordered input-sm w-full font-mono text-sm"
+                value={initialSlug}
+                x-model="slug"
+              />
+            </div>
+
+            <div class="form-control">
+              <label for="author_id" class="label py-0">
+                <span class="label-text text-xs">{t(locale, "admin.list.author")}</span>
+              </label>
+              <select
+                id="author_id"
+                name="author_id"
+                class="select select-bordered select-sm w-full"
+                x-model="author_id"
+              >
+                <option value="">—</option>
+                {users.map((u) => (
+                  <option value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div class="form-control">
+              <label for="excerpt" class="label py-0">
+                <span class="label-text text-xs">
+                  {t(locale, "admin.content.excerpt")}
+                  <span class="text-base-content/50">(250)</span>
+                </span>
+              </label>
+              <textarea
+                id="excerpt"
+                name="excerpt"
+                rows="4"
+                maxlength="250"
+                class="textarea textarea-bordered textarea-sm w-full text-sm resize-y"
+                placeholder={t(locale, "admin.content.excerpt")}
+                x-model="excerpt"
+              >
+                {initialExcerpt}
+              </textarea>
+              <p class="text-xs text-base-content/50 mt-1" x-text="excerpt.length + '/250'" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <TaxonomiesBlocks
+        taxonomyBlocks={taxonomyBlocks}
+        selectedTermIds={selectedTermIds}
+        locale={locale}
+        accordionName={asideAccordionName}
+        siblings
+      />
+
+      <div class="collapse collapse-arrow join-item border border-base-300 language-accordion">
+        <input
+          type="radio"
+          name={asideAccordionName}
+          aria-label={t(locale, "admin.content.language")}
+        />
+        <div class="collapse-title font-semibold text-sm py-2 min-h-0">
+          {t(locale, "admin.content.language")}
+        </div>
+        <div class="collapse-content text-sm">
+          <div class="flex flex-col gap-3">
+            <div class="form-control">
+              <label class="label py-0">
+                <span class="label-text text-xs">{t(locale, "admin.content.language")}</span>
+              </label>
+              <LanguageDropdown selectedLocaleId={initialLocaleId} fieldName="id_locale_code" cols={1} />
+              <p class="text-xs text-base-content/50 mt-1">
+                Selecione o idioma para este conteúdo
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {hasPostThumbnail && (
+        <div class="collapse collapse-arrow join-item border border-base-300">
+          <input
+            type="radio"
+            name={asideAccordionName}
+            aria-label={t(locale, "admin.content.thumbnail")}
+          />
+          <div class="collapse-title font-semibold text-sm py-2 min-h-0">
+            {t(locale, "admin.content.thumbnail")}
+          </div>
+          <div class="collapse-content text-sm">
+            <div class="flex flex-col gap-3">
+              <div
+                class="rounded-lg border border-base-300 bg-base-200/30 p-4 relative"
+                x-show="thumbnail_url && thumbnail_url.trim() !== ''"
+                style={thumbnailUrl ? "display: block;" : "display: none;"}
+              >
+                <div class="flex justify-between items-start mb-2">
+                  <p class="text-sm font-medium text-base-content/70">
+                    {t(locale, "admin.content.currentThumbnail")}
+                  </p>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-circle btn-ghost btn-error"
+                    title="Remover thumbnail"
+                    @click="window.deleteContentThumbnail && window.deleteContentThumbnail($el.closest('form'), window.Alpine.$data($el.closest('form')))"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <img
+                  src={thumbnailUrl || ""}
+                  :src="thumbnail_url || ''"
+                  alt="Thumbnail"
+                  class="max-w-full h-auto rounded"
+                />
+              </div>
+              <div class="form-control">
+                <label class="label py-0">
+                  <span class="label-text text-xs">{t(locale, "admin.content.uploadThumbnail")}</span>
+                </label>
+                <UppyUpload
+                  containerId="uppy-thumbnail"
+                  locale={locale as Locale}
+                  mode="edit"
+                  height={280}
+                  eventName="thumbnail-uploaded"
+                  containerClass="uppy-edit-container min-h-[280px] w-full"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+</aside>

@@ -1,0 +1,141 @@
+---
+/**
+ * Template para o tipo "settings" (formulário baseado na tabela settings).
+ * Campos: name, value, autoload. Em edit preenche com os dados do registro.
+ */
+import AdminLayout from "../layouts/AdminLayout.astro";
+import AdminFormContainer from "../components/admin/AdminFormContainer.astro";
+import AdminFormActions from "../components/admin/AdminFormActions.astro";
+import { t, type Locale } from "../i18n/index.ts";
+import type { MenuItem } from "../lib/menu.ts";
+
+export interface Props {
+  locale: string;
+  postTypeSlug: string;
+  action: string;
+  idParam: string | null;
+  menuItems: MenuItem[];
+  currentUser: { email: string; name: string };
+  /** Registro da configuração quando action === "edit" */
+  record: { id: number; name: string; value: string; autoload: boolean } | null;
+}
+
+const { locale, postTypeSlug, action, menuItems, currentUser, record } = Astro.props;
+const currentLocale = locale as Locale;
+
+const pageTitle =
+  action === "new"
+    ? t(currentLocale, "admin.content.newTitle", { type: t(currentLocale, "postType.settings") })
+    : t(currentLocale, "admin.content.editTitle", { type: t(currentLocale, "postType.settings") });
+
+const initialName = record?.name ?? "";
+const initialValue = record?.value ?? "";
+const initialAutoload = record?.autoload ?? true;
+const isEdit = action === "edit" && record != null;
+const formAction = isEdit ? `/api/settings/${record.id}` : "/api/settings";
+const listUrl = `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`;
+---
+
+<AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={currentUser}>
+  <div slot="header-actions">
+    <span class="text-sm text-base-content/70">{currentUser.email}</span>
+  </div>
+
+  <script
+    define:vars={{
+      initialName,
+      initialValue,
+      initialAutoload,
+    }}
+  >
+    document.addEventListener("alpine:init", () => {
+      window.Alpine.data("settingsForm", () => ({
+        name: initialName,
+        value: initialValue,
+        autoload: initialAutoload,
+      }));
+    });
+  </script>
+
+  <AdminFormContainer>
+    <div id="settings-form-error" class="min-h-6"></div>
+    <form
+      method="post"
+      action={formAction}
+      x-data="settingsForm"
+      class="flex flex-col gap-4 settings-form"
+      hx-target="#settings-form-error"
+      hx-swap="innerHTML"
+      hx-post={!isEdit ? "/api/settings" : undefined}
+      hx-put={isEdit ? formAction : undefined}
+    >
+      <div class="form-control">
+        <label for="setting-name" class="label">
+          <span class="label-text">{t(currentLocale, "admin.settings.name")}</span>
+        </label>
+        <input
+          type="text"
+          id="setting-name"
+          name="name"
+          required
+          class="input input-bordered w-full"
+          x-model="name"
+          value={initialName}
+        />
+      </div>
+
+      <div class="form-control">
+        <label for="setting-value" class="label">
+          <span class="label-text">{t(currentLocale, "admin.settings.value")}</span>
+        </label>
+        <textarea
+          id="setting-value"
+          name="value"
+          class="textarea textarea-bordered w-full min-h-24"
+          x-model="value"
+          rows={4}
+        >{initialValue}</textarea>
+      </div>
+
+      <div class="form-control">
+        <label class="label cursor-pointer justify-start gap-2">
+          <input
+            type="checkbox"
+            name="autoload"
+            value="1"
+            class="checkbox checkbox-sm checkbox-primary"
+            x-model="autoload"
+            checked={initialAutoload}
+          />
+          <span class="label-text">{t(currentLocale, "admin.settings.autoload")}</span>
+        </label>
+      </div>
+
+      <AdminFormActions
+        submitLabel={isEdit
+          ? t(currentLocale, "admin.content.saveEdit")
+          : t(currentLocale, "admin.content.saveNew")}
+        cancelHref={listUrl}
+        cancelLabel={t(currentLocale, "admin.content.cancel")}
+      />
+    </form>
+  </AdminFormContainer>
+</AdminLayout>
+
+<script>
+  document.body.addEventListener("htmx:afterRequest", (ev) => {
+    const detail = ev.detail;
+    if (!detail?.successful && detail?.xhr?.status === 400) {
+      const errorEl = document.getElementById("settings-form-error");
+      if (errorEl) {
+        try {
+          const data = JSON.parse(detail?.xhr?.responseText ?? "{}");
+          const err = typeof data?.error === "string" ? data.error : "Erro ao salvar.";
+          errorEl.innerHTML = `<p class="text-error text-sm">${err}</p>`;
+        } catch {
+          errorEl.textContent = "Erro ao salvar.";
+        }
+      }
+    }
+  });
+</script>

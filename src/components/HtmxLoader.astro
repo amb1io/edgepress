@@ -1,0 +1,94 @@
+---
+/**
+ * Loader global exibido durante toda requisição HTMX.
+ * Usa o mesmo visual do Loader.astro (DaisyUI loading-xl, fundo branco 30%).
+ * Mostra "Processando..." durante a requisição; em erro mostra "Houve um erro" em vermelho e botão X para fechar.
+ * Controle via eventos htmx:beforeRequest, htmx:afterRequest, htmx:responseError.
+ */
+---
+
+<div
+  id="global-htmx-loader"
+  class="fixed inset-0 hidden flex-col items-center justify-center bg-white/30 z-[100]"
+  role="status"
+  aria-live="polite"
+  aria-label="Processando"
+>
+  <div id="global-htmx-loader-loading" class="flex flex-col items-center">
+    <span class="loading loading-spinner loading-xl text-primary" aria-hidden="true"></span>
+    <p class="mt-4 text-lg font-medium text-base-content">Processando...</p>
+  </div>
+  <div id="global-htmx-loader-error" class="flex flex-col items-center hidden">
+    <span class="loading loading-spinner loading-xl text-primary" aria-hidden="true"></span>
+    <p class="mt-4 text-lg font-medium flex items-center justify-center gap-2 text-error">
+      <span>Houve um erro</span>
+      <button
+        type="button"
+        id="global-htmx-loader-close"
+        class="btn btn-ghost btn-sm btn-circle text-error hover:bg-error/20"
+        aria-label="Fechar"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-5 w-5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </p>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const wrapper = document.getElementById("global-htmx-loader");
+    const loadingEl = document.getElementById("global-htmx-loader-loading");
+    const errorEl = document.getElementById("global-htmx-loader-error");
+    const closeBtn = document.getElementById("global-htmx-loader-close");
+
+    if (!wrapper || !loadingEl || !errorEl || !closeBtn) return;
+
+    const w = wrapper;
+    const loading = loadingEl;
+    const errEl = errorEl;
+
+    let requestFailed = false;
+
+    function showLoading() {
+      requestFailed = false;
+      w.classList.remove("hidden");
+      w.classList.add("flex");
+      loading.classList.remove("hidden");
+      errEl.classList.add("hidden");
+      w.setAttribute("aria-label", "Processando");
+    }
+
+    function showError() {
+      requestFailed = true;
+      w.classList.remove("hidden");
+      w.classList.add("flex");
+      loading.classList.add("hidden");
+      errEl.classList.remove("hidden");
+      w.setAttribute("aria-label", "Erro no processamento");
+    }
+
+    function hide() {
+      w.classList.add("hidden");
+      w.classList.remove("flex");
+      loading.classList.remove("hidden");
+      errEl.classList.add("hidden");
+      requestFailed = false;
+    }
+
+    document.body.addEventListener("htmx:beforeRequest", showLoading);
+    document.body.addEventListener("htmx:afterRequest", function () {
+      if (!requestFailed) hide();
+    });
+    document.body.addEventListener("htmx:responseError", showError);
+    closeBtn.addEventListener("click", hide);
+  })();
+</script>

@@ -1,0 +1,72 @@
+---
+/**
+ * Componente de ações para DataList com dropdown do DaisyUI.
+ * Usa HTMX (hx-delete, hx-post) para deletar e duplicar; HX-Refresh na resposta recarrega a página.
+ */
+export interface DataListActionsProps {
+  editLink: string;
+  deletePath?: string;
+  deleteConfirm: string;
+  duplicatePath?: string;
+  editLabel?: string;
+  deleteLabel?: string;
+  duplicateLabel?: string;
+  actionsLabel?: string;
+}
+
+const {
+  editLink,
+  deletePath,
+  deleteConfirm,
+  duplicatePath,
+  editLabel = "Editar",
+  deleteLabel = "Deletar",
+  duplicateLabel = "Duplicar",
+  actionsLabel = "Actions",
+} = Astro.props;
+---
+
+<div class="dropdown dropdown-end flex justify-start">
+  <label tabindex="0" class="btn btn-sm">
+    {actionsLabel}
+  </label>
+  <ul
+    tabindex="0"
+    class="dropdown-content menu bg-base-100 rounded-box z-50 w-40 border border-base-300 p-1 shadow-lg"
+  >
+    <li>
+      <a href={editLink} class="text-sm text-blue-600 focus:text-white">
+        {editLabel}
+      </a>
+    </li>
+    {
+      duplicatePath && (
+        <li>
+          <button
+            type="button"
+            class="text-sm w-full text-left"
+            hx-post={duplicatePath}
+            hx-swap="none"
+          >
+            {duplicateLabel}
+          </button>
+        </li>
+      )
+    }
+    {
+      deletePath && (
+        <li>
+          <button
+            type="button"
+            class="text-sm text-error w-full text-left"
+            hx-delete={deletePath}
+            hx-confirm={deleteConfirm}
+            hx-swap="none"
+          >
+            {deleteLabel}
+          </button>
+        </li>
+      )
+    }
+  </ul>
+</div>

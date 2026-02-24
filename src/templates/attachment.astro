@@ -5,6 +5,8 @@
  * Cada arquivo enviado gera um novo Post; modal edita; modo edit mostra formulário.
  */
 import AdminLayout from "../layouts/AdminLayout.astro";
+import AdminFormContainer from "../components/admin/AdminFormContainer.astro";
+import AdminFormActions from "../components/admin/AdminFormActions.astro";
 import { Icon } from "astro-icon/components";
 import { db } from "../db/index.ts";
 import { postTypes, posts } from "../db/schema.ts";
@@ -225,71 +227,40 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
             }
           }
 
-          // Aguardar um tick para garantir que o Alpine atualizou os campos hidden
           await new Promise((resolve) => setTimeout(resolve, 0));
 
-          // Criar FormData e submeter - usar valores do Alpine state para garantir sincronização
-          const formData = new FormData();
-          const currentId = this.postId ?? this.initialPostId;
-          const isEdit = currentId != null && currentId !== "";
-          
-          formData.set("post_type", form.querySelector('input[name="post_type"]')?.value || "");
-          formData.set("action", isEdit ? "edit" : "new");
-          formData.set("locale", form.querySelector('input[name="locale"]')?.value || "");
-          formData.set("status", this.status || "published");
-          formData.set("id", isEdit ? String(currentId) : "");
-          formData.set("title", this.title || "");
-          formData.set("slug", this.slug || "");
-          formData.set("meta_mime_type", this.mime_type || "");
-          formData.set("meta_attachment_file", this.attachment_file || "");
-          formData.set("meta_attachment_path", this.attachment_path || "");
-          formData.set("meta_attachment_alt", this.attachment_alt || "");
+          const formAction = form.getAttribute("action") || "/api/posts";
+          const htmx = (typeof window !== "undefined" && (window as unknown as { htmx?: { ajax: (method: string, url: string, opts: { source: HTMLFormElement; target: string; swap: string }) => void } }).htmx);
+          if (htmx?.ajax) {
+            htmx.ajax("post", formAction, {
+              source: form,
+              target: "#attachment-form-error",
+              swap: "innerHTML",
+            });
+            return;
+          }
 
+          const formData = new FormData(form);
           try {
-            // Usar getAttribute para evitar conflito com input[name="action"]
-            const formAction = form.getAttribute("action") || "/api/posts";
             const res = await fetch(formAction, {
               method: form.method || "POST",
               body: formData,
               headers: { Accept: "application/json" },
             });
-
             if (res.ok) {
               window.location.href = `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`;
             } else {
-              // Em caso de erro, pode mostrar mensagem ou deixar o form submeter normalmente
               form.submit();
             }
           } catch {
-            // Em caso de erro, submeter normalmente
             form.submit();
-          }
-        },
-        async deleteAttachment() {
-          const id = this.postId ?? this.initialPostId;
-          if (!id) return;
-          try {
-            const res = await fetch(`/api/posts/${id}`, { method: "DELETE" });
-            if (!res.ok) return;
-            this.hasImage = false;
-            this.postId = null;
-            this.imageUrl = "";
-            this.title = "";
-            this.slug = "";
-            this.attachment_path = "";
-            this.attachment_file = "";
-            this.mime_type = "";
-            this.attachment_alt = "";
-            window.dispatchEvent(new CustomEvent("attachment-deleted"));
-            window.location.href = `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`;
-          } catch {
-            // ignore
           }
         },
       }));
     });
   </script>
 
+  <div id="attachment-form-error" class="min-h-[1.5rem] px-6" aria-live="polite"></div>
   <form
     method="post"
     action="/api/posts"
@@ -350,7 +321,7 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
     ) : null}
 
     {isEditMode ? (
-      <div class="p-6 max-w-2xl mx-auto flex flex-col gap-5">
+      <AdminFormContainer class="mx-auto flex flex-col gap-5">
         <div class="form-control">
           <label for="attachment-title-edit" class="label">
             <span class="label-text">{t(currentLocale, "admin.list.titleColumn")}</span>
@@ -441,25 +412,23 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
             </div>
           </dl>
         </div>
-        <div class="flex flex-wrap gap-2">
-          <button type="submit" class="btn btn-primary">
-            {t(currentLocale, "admin.content.update")}
-          </button>
-          <a
-            href={`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`}
-            class="btn btn-ghost"
-          >
-            {t(currentLocale, "admin.content.cancel")}
-          </a>
+        <AdminFormActions
+          submitLabel={t(currentLocale, "admin.content.update")}
+          cancelHref={`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`}
+          cancelLabel={t(currentLocale, "admin.content.cancel")}
+        >
           <button
             type="button"
+            slot="extra"
             class="btn btn-ghost text-error"
-            @click="deleteAttachment()"
+            hx-delete={`/api/posts/${idParam}`}
+            hx-confirm={t(currentLocale, "admin.list.deleteConfirm")}
+            hx-swap="none"
           >
             {t(currentLocale, "admin.list.delete")}
           </button>
-        </div>
-      </div>
+        </AdminFormActions>
+      </AdminFormContainer>
     ) : null}
 
     <template x-teleport="body">
@@ -640,11 +609,32 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
     }
   }
 
+  /** @param {CustomEvent<{ items: { id: number; title: string; url: string; path?: string }[] }>} ev */
+  function handleMediaManagerSelect(ev) {
+    const items = ev?.detail?.items;
+    if (!items?.length) return;
+    const first = items[0];
+    if (!first) return;
+    const alpineRoot = document.querySelector("[x-data*='attachmentForm']");
+    const Alpine = (window as unknown as { Alpine?: { $data: (el: Element) => Record<string, unknown> } }).Alpine;
+    if (!alpineRoot || !Alpine) return;
+    const ctx = Alpine.$data(alpineRoot);
+    if (!ctx || typeof ctx !== "object") return;
+    ctx["hasImage"] = true;
+    ctx["imageUrl"] = first.url;
+    ctx["attachment_path"] = first.path ?? "";
+    ctx["attachment_file"] = first.title || "";
+    ctx["postId"] = first.id;
+  }
+
   function onReady() {
     window.addEventListener("attachment-uploaded", (ev: Event) => {
       handleAttachmentUploaded(
         ev as CustomEvent<{ path: string; imageUrl: string; filename: string; originalFilename?: string; mimeType: string }>
       );
+    });
+    window.addEventListener("media-manager-select", (ev: Event) => {
+      handleMediaManagerSelect(ev as CustomEvent<{ items: { id: number; title: string; url: string; path?: string }[] }>);
     });
   }
 

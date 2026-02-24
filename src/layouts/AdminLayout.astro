@@ -1,10 +1,12 @@
 ---
 import "../assets/app.css";
-import { Icon } from "astro-icon/components";
-import { getRelativeLocaleUrl } from "astro:i18n";
-import { t, type Locale } from "../i18n/index.ts";
-import { resolveMenuOption, type MenuItem } from "../lib/menu.ts";
+import { type Locale } from "../i18n/index.ts";
+import type { MenuItem } from "../lib/menu.ts";
 import AdminHeader from "../components/AdminHeader.astro";
+import AdminSidebar from "../components/AdminSidebar.astro";
+import HtmxLoader from "../components/HtmxLoader.astro";
+// HTMX carregado do pacote instalado (não CDN)
+import htmxScript from "htmx.org/dist/htmx.min.js?url";
 
 interface Props {
   title: string;
@@ -19,13 +21,6 @@ interface Props {
 
 const { title, locale, menuItems = [], user } = Astro.props;
 const currentLocale = locale as Locale;
-const base = (path: string) => getRelativeLocaleUrl(currentLocale, path);
-/** Preserva query string em links do menu (ex: admin/content?post_type=post&action=new). */
-const menuHref = (link: string) => {
-  const i = link.indexOf("?");
-  if (i === -1) return base(link);
-  return base(link.slice(0, i)) + "?" + link.slice(i + 1);
-};
 ---
 
 <!doctype html>
@@ -37,153 +32,12 @@ const menuHref = (link: string) => {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title}</title>
+    <script src={htmxScript}></script>
   </head>
   <body class="min-h-screen bg-base-200">
+    <HtmxLoader />
     <div class="flex min-h-screen">
-      <aside
-        class="w-1/12 min-w-[200px] bg-base-100 border-r border-base-300 flex flex-col shrink-0"
-      >
-        <div class="px-4 flex items-center min-h-14 border-b border-base-300">
-          <a href={base("admin")} class="font-semibold text-lg text-primary"
-            >{t(currentLocale, "admin.brand")}</a
-          >
-        </div>
-        <nav class="flex-1 p-2" aria-label="Menu admin">
-          <ul
-            class="menu menu-lg rounded-none gap-1 bg-transparent p-0 min-w-full"
-          >
-            {
-              menuItems.map((item) => {
-                const parentName =
-                  t(currentLocale, `postType.${item.postTypeSlug}`) ||
-                  item.postTypeName;
-                // Se algum menu_option tem o mesmo nome do slug do post_type, o pai vira link
-                // e esse option não aparece no submenu.
-                const slugMatchingOption = item.menuOptions.find(
-                  (opt) => opt === item.postTypeSlug,
-                );
-                const parentLink = slugMatchingOption
-                  ? resolveMenuOption(
-                      slugMatchingOption,
-                      item.postTypeSlug,
-                      item.postTypeName,
-                      currentLocale,
-                      t,
-                    ).link
-                  : null;
-                const submenuOptions = item.menuOptions.filter(
-                  (opt) => opt !== item.postTypeSlug,
-                );
-                const hasSubmenu = submenuOptions.length > 0;
-
-                if (parentLink !== null && !hasSubmenu) {
-                  // Só o option que bate com o slug (ex: Dashboard) → pai é link direto
-                  return (
-                    <li>
-                      <a
-                        href={menuHref(parentLink)}
-                        class="rounded-md gap-2 py-2 font-medium flex items-center"
-                      >
-                        <Icon name={item.icon} size={20} />
-                        {parentName}
-                      </a>
-                    </li>
-                  );
-                }
-                if (parentLink !== null && hasSubmenu) {
-                  // Pai é link + submenu com os outros options
-                  return (
-                    <li class="menu-item-parent">
-                      <a
-                        href={menuHref(parentLink)}
-                        class="rounded-md gap-2 py-2 font-medium flex items-center"
-                      >
-                        <Icon name={item.icon} size={20} />
-                        {parentName}
-                      </a>
-                      <ul class="menu gap-1 bg-transparent p-0 pl-4 min-w-full border-l border-base-300 ml-2">
-                        {submenuOptions.map((opt) => {
-                          const resolved = resolveMenuOption(
-                            opt,
-                            item.postTypeSlug,
-                            item.postTypeName,
-                            currentLocale,
-                            t,
-                          );
-                          return (
-                            <li>
-                              <a
-                                href={menuHref(resolved.link)}
-                                class="rounded-md gap-2 text-sm"
-                              >
-                                {resolved.text}
-                              </a>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </li>
-                  );
-                }
-                if (item.menuOptions.length > 0) {
-                  // Comportamento original: pai sem link + submenu com todos
-                  return (
-                    <li class="menu-item-parent">
-                      <span class="rounded-md gap-2 py-2 font-medium text-base-content/80 flex items-center">
-                        <Icon name={item.icon} size={20} />
-                        {parentName}
-                      </span>
-                      <ul class="menu gap-1 bg-transparent p-0 pl-4 min-w-full border-l border-base-300 ml-2">
-                        {item.menuOptions.map((opt) => {
-                          const resolved = resolveMenuOption(
-                            opt,
-                            item.postTypeSlug,
-                            item.postTypeName,
-                            currentLocale,
-                            t,
-                          );
-                          return (
-                            <li>
-                              <a
-                                href={menuHref(resolved.link)}
-                                class="rounded-md gap-2 text-sm"
-                              >
-                                {resolved.text}
-                              </a>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </li>
-                  );
-                }
-                const first = item.menuOptions[0];
-                const resolved = first
-                  ? resolveMenuOption(
-                      first,
-                      item.postTypeSlug,
-                      item.postTypeName,
-                      currentLocale,
-                      t,
-                    )
-                  : {
-                      text: parentName,
-                      link: `admin/${item.postTypeSlug}`,
-                      icon: "line-md:document",
-                    };
-                return (
-                  <li>
-                    <a href={menuHref(resolved.link)} class="rounded-md gap-2">
-                      <Icon name={item.icon} size={20} />
-                      {resolved.text}
-                    </a>
-                  </li>
-                );
-              })
-            }
-          </ul>
-        </nav>
-      </aside>
+      <AdminSidebar locale={locale} menuItems={menuItems} />
 
       <div class="flex-1 flex flex-col min-w-0">
         <AdminHeader title={title} locale={locale} user={user}>
@@ -194,31 +48,6 @@ const menuHref = (link: string) => {
         </main>
       </div>
     </div>
-    <script>
-      import { authClient } from "../lib/auth-client.ts";
-
-      // Handler para logout - executa quando o DOM estiver pronto
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", () => {
-          const logoutLink = document.getElementById("logout-link");
-          if (logoutLink) {
-            logoutLink.addEventListener("click", async (e) => {
-              e.preventDefault();
-              await authClient.signOut();
-              window.location.href = "/login";
-            });
-          }
-        });
-      } else {
-        const logoutLink = document.getElementById("logout-link");
-        if (logoutLink) {
-          logoutLink.addEventListener("click", async (e) => {
-            e.preventDefault();
-            await authClient.signOut();
-            window.location.href = "/login";
-          });
-        }
-      }
-    </script>
+    <!-- Logout: link "Sair" no AdminHeader aponta para /api/logout -->
   </body>
 </html>

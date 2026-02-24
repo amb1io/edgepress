@@ -1,6 +1,6 @@
 // Post statuses
-export const POST_STATUSES = ['published', 'draft', 'archived'] as const;
-export type PostStatus = typeof POST_STATUSES[number];
+export const POST_STATUSES = ["published", "draft", "archived"] as const;
+export type PostStatus = (typeof POST_STATUSES)[number];
 
 // HTTP status codes
 export const HTTP_STATUS_CODES = {
@@ -28,13 +28,26 @@ export const DEFAULT_PAGINATION = {
 // Upload constants
 export const UPLOAD_CONSTANTS = {
   MAX_FILE_SIZE: 20 * 1024 * 1024, // 20MB
-  ALLOWED_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-  ALLOWED_DOCUMENT_TYPES: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  /** Tipos de imagem aceitos (incluindo AVIF e outros; image/* cobre genérico, tipos explícitos garantem compatibilidade) */
+  ALLOWED_IMAGE_TYPES: [
+    "image/*",
+    "image/avif",
+    "image/webp",
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/svg+xml",
+  ],
+  ALLOWED_DOCUMENT_TYPES: [
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ],
 } as const;
 
 // Content types
 export const CONTENT_TYPES = {
-  JSON: 'application/json',
-  HTML: 'text/html',
-  TEXT: 'text/plain',
+  JSON: "application/json",
+  HTML: "text/html",
+  TEXT: "text/plain",
 } as const;

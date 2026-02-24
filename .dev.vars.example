@@ -1,7 +1,13 @@
-# Copy to .dev.vars for local Workers dev (wrangler dev)
-# .dev.vars is loaded by wrangler and not committed
+# Copy to .dev.vars for local Workers dev (wrangler dev / astro dev com proxy)
+# O Wrangler carrega apenas .dev.vars — use este arquivo como modelo e coloque os valores reais em .dev.vars (não commitar).
+# No terminal onde roda npm run dev, você deve ver "[Password reset] Enviando email via Resend para ..." se as credenciais estiverem presentes.
+
 BETTER_AUTH_SECRET=your-secret-at-least-32-chars
 BETTER_AUTH_URL=http://localhost:8788
 BETTER_AUTH_TRUSTED_ORIGINS=http://localhost,http://localhost:8788
 
-"# R2: Create the 'edgepress-media' bucket on the Cloudflare dashboard for media uploads (/api/upload)"
+# Resend: "from" deve ser um email de domínio verificado no painel do Resend (Domains).
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxx
+RESEND_FROM=contato@seudominio.com
+
+# R2: Create the 'edgepress-media' bucket on the Cloudflare dashboard for media uploads (/api/upload)

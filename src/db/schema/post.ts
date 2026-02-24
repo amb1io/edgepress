@@ -22,7 +22,7 @@ export const posts = sqliteTable(
     slug: text().notNull().unique(),
     excerpt: text(),
     body: text(),
-    status: text({ enum: ["published", "draft", "archived"] }).default("draft"),
+    status: text({ enum: ["published", "draft", "archived", "trash"] }).default("draft"),
     meta_values: text(),
     published_at: int(),
     created_at: int(),

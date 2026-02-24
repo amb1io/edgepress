@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 
 // Auth: apenas editor ou admin podem deletar posts
 import { requireMinRole } from "../../../lib/api-auth.ts";
+import { htmxRefreshResponse } from "../../../lib/utils/http-responses.ts";
 
 export const prerender = false;
 
@@ -59,7 +60,10 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
     
     // Deletar o post
     await db.delete(posts).where(eq(posts.id, postId));
-    
+
+    if (request.headers.get("HX-Request") === "true") {
+      return htmxRefreshResponse();
+    }
     return new Response(JSON.stringify({ success: true, id: postId }), {
       status: 200,
       headers: { "Content-Type": "application/json" },

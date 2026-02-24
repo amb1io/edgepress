@@ -14,166 +14,94 @@
 import type { APIRoute } from "astro";
 import { db } from "../../../db/index.ts";
 import { getTableContentWithCache } from "../../../lib/content-cache.ts";
-import { getTableNames } from "../../../lib/db-utils.ts";
+import { getTableNames, getContentApiRuntime, getSafeTableName, VALID_TABLE_IDENTIFIER } from "../../../lib/db-utils.ts";
 import { posts } from "../../../db/schema.ts";
 import { and, eq, inArray } from "drizzle-orm";
-import { getPostMedia } from "../../../lib/services/media-service.ts";
 import { isValidSlug } from "../../../lib/utils/validation.ts";
 import { parseMetaValues } from "../../../lib/utils/meta-parser.ts";
+import { buildContentPostPayload } from "../../../lib/content-post-payload.ts";
+import {
+  badRequestResponse,
+  errorResponse,
+  internalServerErrorResponse,
+  jsonResponse,
+  notFoundResponse,
+} from "../../../lib/utils/http-responses.ts";
+import { HTTP_STATUS_CODES } from "../../../lib/constants/index.ts";
 
 export const prerender = false;
 
-type MediaForSmartBody = {
-  id: number;
-  meta_values?: string | null;
-};
-
-function normalizeAttachmentPath(rawPath: string): string {
-  if (!rawPath) return "";
-  let path = rawPath;
-
-  // Se vier como URL completa, extrair apenas o pathname
-  try {
-    if (path.startsWith("http://") || path.startsWith("https://")) {
-      path = new URL(path).pathname;
-    }
-  } catch {
-    // ignora erro de URL inválida
-  }
-
-  // Remover prefixo /api/media ou /api se existir, para chegar em /uploads/...
-  if (path.startsWith("/api/media")) {
-    path = path.slice("/api/media".length);
-  }
-  if (path.startsWith("/api/")) {
-    path = path.slice("/api".length);
-  }
-
-  if (!path.startsWith("/")) {
-    path = `/${path}`;
-  }
-
-  return path;
-}
-
-function buildBodySmart(
-  body: string | null | undefined,
-  media: MediaForSmartBody[] | null | undefined
-): string {
-  if (!body) return "";
-
-  const mediaList = Array.isArray(media) ? media : [];
-
-  // Mapa: attachment_path normalizado -> id da mídia
-  const pathToId = new Map<string, number>();
-  for (const media of mediaList) {
-    const meta = parseMetaValues(media.meta_values ?? null);
-    const attachmentPath = meta.attachment_path;
-    if (attachmentPath) {
-      const normalized = normalizeAttachmentPath(attachmentPath);
-      pathToId.set(normalized, media.id);
-    }
-  }
-
-  let seq = 0;
-
-  return body.replace(/<img\b[^>]*>/gi, (imgTag) => {
-    // Extrair src ou data-url da tag <img>
-    const attrMatch = imgTag.match(/\s(?:data-url|src)=["']([^"']+)["']/i);
-    const url = attrMatch?.[1] ?? "";
-
-    let tokenId: number;
-    if (url) {
-      const normalized = normalizeAttachmentPath(url);
-      const foundId = pathToId.get(normalized);
-      if (typeof foundId === "number") {
-        tokenId = foundId;
-      } else {
-        // fallback: sequência se não houver match exato
-        tokenId = ++seq;
-      }
-    } else {
-      // se não tiver URL, ainda assim gera um token sequencial
-      tokenId = ++seq;
-    }
-
-    return `{media_${tokenId}}`;
-  });
-}
-
 export const GET: APIRoute = async ({ params, url, locals }) => {
-  const segment = params.table;
+  const segment = params["table"];
   if (!segment) {
-    return new Response(
-      JSON.stringify({ error: "invalid_param", message: "Path segment is required" }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
-    );
+    return badRequestResponse("Path segment is required");
   }
 
-  type KVLike = { get(key: string, type?: "json"): Promise<unknown>; put(key: string, value: string): Promise<void> };
-  const kv = (locals as { runtime?: { env?: { edgepress_cache?: KVLike | null } } }).runtime?.env?.edgepress_cache ?? null;
-
-  // 1) Tentar tratar como nome de tabela (identificador simples)
-  const IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+  const { kv } = getContentApiRuntime(locals);
   const allowedTables = await getTableNames(db);
-  const isIdentifier = IDENTIFIER.test(segment);
+  const safeTable = getSafeTableName(segment, allowedTables);
 
-  if (isIdentifier) {
-    // Se é identificador mas não está na lista de tabelas conhecidas, responde 404 de tabela
-    if (!allowedTables.includes(segment)) {
-      return new Response(
-        JSON.stringify({ error: "table_not_found", message: "Table not found or not allowed" }),
-        { status: 404, headers: { "Content-Type": "application/json" } }
-      );
-    }
+  if (safeTable === null && VALID_TABLE_IDENTIFIER.test(segment)) {
+    return notFoundResponse("Table not found or not allowed");
+  }
 
+  // 1) Tratar como nome de tabela quando for identificador permitido
+  if (safeTable !== null) {
     const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") ?? "10", 10) || 10));
     const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10) || 1);
     const order = url.searchParams.get("order") ?? undefined;
     const orderDir = (url.searchParams.get("orderDir") === "asc" ? "asc" : "desc") as "asc" | "desc";
     const filter: Record<string, string> = {};
     for (const [key, value] of url.searchParams) {
-      if (key.startsWith("filter_") && value) filter[key.replace(/^filter_/, "")] = value;
+      if (!key.startsWith("filter_") || !value) continue;
+      const filterKey = key.replace(/^filter_/, "");
+      if (filterKey === "post_type") {
+        if (/^\d+$/.test(value)) {
+          filter["post_type_id"] = value;
+        } else {
+          filter["post_types_slug"] = value;
+        }
+      } else {
+        filter[filterKey] = value;
+      }
     }
 
     try {
+      const filterParam = Object.keys(filter).length ? filter : undefined;
       const result = await getTableContentWithCache({
-        kv: kv ?? null,
+        kv,
         db,
-        table: segment,
-        params: { order, orderDir, limit, page, filter: Object.keys(filter).length ? filter : undefined },
+        table: safeTable,
+        params: {
+          ...(order != null && order !== "" && { order }),
+          orderDir,
+          limit,
+          page,
+          ...(filterParam != null && { filter: filterParam }),
+        },
       });
 
       if (result.columns.includes("meta_values")) {
         result.items = result.items.map((item) => ({
           ...item,
           meta_values:
-            item.meta_values != null
-              ? parseMetaValues(String(item.meta_values))
+            item["meta_values"] != null
+              ? parseMetaValues(String(item["meta_values"]))
               : ({} as Record<string, string>),
         }));
       }
 
-      return new Response(JSON.stringify(result), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return jsonResponse(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Internal server error";
-      return new Response(JSON.stringify({ error: "server_error", message }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+      return internalServerErrorResponse(message);
     }
   }
 
   // 2) Caso não seja tabela conhecida, tratar como slug de post
   const slug = segment;
   if (!isValidSlug(slug)) {
-    return new Response(
-      JSON.stringify({ error: "invalid_slug", message: "Slug inválido" }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
-    );
+    return badRequestResponse("Slug inválido");
   }
 
   // Filtro de status: por padrão apenas 'published'
@@ -195,15 +123,12 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
   const statusKey = statusList.join(",");
   const postCacheKey = `post:${slug}:status=${statusKey}`;
 
-  // Primeiro, tentar o KV pela chave do slug
+  // Autenticado: bypass KV e vai direto ao DB. Não autenticado: tenta KV primeiro.
   if (kv) {
     try {
       const cached = (await kv.get(postCacheKey, "json")) as Record<string, unknown> | null;
       if (cached && typeof cached === "object") {
-        return new Response(JSON.stringify(cached), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
+        return jsonResponse(cached);
       }
     } catch {
       // Se o KV falhar, segue para o banco
@@ -252,27 +177,10 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
       updated_at: number | null;
     } | undefined;
     if (!post) {
-      return new Response(
-        JSON.stringify({ error: "post_not_found", message: "Post not found", slug }),
-        { status: 404, headers: { "Content-Type": "application/json" } }
-      );
+      return errorResponse("Post not found", HTTP_STATUS_CODES.NOT_FOUND, { slug });
     }
 
-    const media = await getPostMedia(db as never, post.id);
-    const meta = parseMetaValues(post.meta_values);
-    const body_smart = buildBodySmart(post.body, media as MediaForSmartBody[]);
-
-    const mediaWithParsedMeta = (media as { meta_values?: string | null }[]).map((m) => ({
-      ...m,
-      meta_values: parseMetaValues(m.meta_values ?? null),
-    }));
-
-    const payload = {
-      ...post,
-      meta_values: meta,
-      body_smart,
-      media: mediaWithParsedMeta,
-    };
+    const payload = await buildContentPostPayload(db, post);
 
     if (kv) {
       try {
@@ -282,15 +190,9 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
       }
     }
 
-    return new Response(JSON.stringify(payload), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse(payload);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal server error";
-    return new Response(JSON.stringify({ error: "server_error", message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return internalServerErrorResponse(message);
   }
 };

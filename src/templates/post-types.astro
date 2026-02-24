@@ -1,0 +1,657 @@
+---
+/**
+ * Template da página "Post Types" em Settings: lista tipos de post e formulário para criar/editar.
+ * Meta schema é editado como formulário estruturado (key, type, default) em vez de JSON bruto.
+ */
+import AdminLayout from "../layouts/AdminLayout.astro";
+import AdminFormContainer from "../components/admin/AdminFormContainer.astro";
+import AdminFormActions from "../components/admin/AdminFormActions.astro";
+import { t, type Locale } from "../i18n/index.ts";
+import type { MenuItem } from "../lib/menu.ts";
+import type { MetaSchemaItem } from "../db/schema/meta_schema.ts";
+import { LINE_MD_ICONS, DEFAULT_ICON, isValidLineMdIcon } from "../lib/line-md-icons.ts";
+
+export interface PostTypeRow {
+  id: number;
+  slug: string;
+  name: string;
+  meta_schema: unknown;
+  created_at: number | null;
+  updated_at: number | null;
+}
+
+/** Valores de tradução do nome do post type por locale (namespace postType, key = slug). */
+export interface PostTypeTranslations {
+  pt_BR: string;
+  es_ES: string;
+  en_US: string;
+}
+
+export interface Props {
+  locale: string;
+  menuItems: MenuItem[];
+  currentUser: { email: string; name: string };
+  items: PostTypeRow[];
+  /** Quando em edição, o registro sendo editado */
+  editRecord: PostTypeRow | null;
+  /** Valores do post de menu (tabela posts) quando em edição; preenche o formulário */
+  menuPostMetaValues?: Record<string, unknown> | null;
+  /** Traduções do nome do post type (PT_BR, ES, EN_US) quando em edição */
+  postTypeTranslations?: PostTypeTranslations | null;
+  /** Post types que não têm show_in_menu = true (para checkbox "post_types" no meta schema) */
+  postTypesNotInMenu?: { id: number; slug: string; name: string }[];
+}
+
+function defaultToDisplay(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number") return String(value);
+  if (Array.isArray(value)) return JSON.stringify(value);
+  return String(value);
+}
+
+const FIXED_META_KEYS = new Set(["show_in_menu", "menu_order", "menu_options", "icon", "post_thumbnail", "post_types", "taxonomy"]);
+
+function parseMetaSchema(meta: unknown): MetaSchemaItem[] {
+  if (Array.isArray(meta)) return meta as MetaSchemaItem[];
+  if (typeof meta === "string") {
+    try {
+      const parsed = JSON.parse(meta) as unknown;
+      return Array.isArray(parsed) ? (parsed as MetaSchemaItem[]) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function getMetaByKey(items: MetaSchemaItem[], key: string): MetaSchemaItem | undefined {
+  return items.find((i) => i.key === key);
+}
+
+function parseMetaSchemaForForm(meta: unknown, values?: Record<string, unknown> | null): { key: string; type: string; defaultDisplay: string }[] {
+  const arr = parseMetaSchema(meta);
+  const v = values ?? {};
+  return arr
+    .filter((item) => !FIXED_META_KEYS.has(item.key ?? ""))
+    .map((item) => {
+      const key = item.key ?? "";
+      const fromValues = key ? v[key] : undefined;
+      return {
+        key,
+        type: item.type ?? "string",
+        defaultDisplay: defaultToDisplay(fromValues !== undefined ? fromValues : item.default),
+      };
+    });
+}
+
+function getFixedMetaInitial(meta: unknown, values?: Record<string, unknown> | null) {
+  const arr = parseMetaSchema(meta);
+  const v = values ?? {};
+  const showInMenu = (v["show_in_menu"] as boolean) ?? (getMetaByKey(arr, "show_in_menu")?.default as boolean) ?? false;
+  const menuOrder = (v["menu_order"] as number) ?? (getMetaByKey(arr, "menu_order")?.default as number) ?? 0;
+  const menuOptions = v["menu_options"] ?? getMetaByKey(arr, "menu_options")?.default;
+  const menuOptionsDisplay = Array.isArray(menuOptions) ? (menuOptions as string[]).join(",") : "new,list";
+  const iconRaw = (v["icon"] as string) ?? (getMetaByKey(arr, "icon")?.default as string) ?? "";
+  const icon = isValidLineMdIcon(iconRaw) ? iconRaw : DEFAULT_ICON;
+  const postThumbnail = (v["post_thumbnail"] as boolean) ?? (getMetaByKey(arr, "post_thumbnail")?.default as boolean) ?? false;
+  const postTypesVal = v["post_types"] ?? getMetaByKey(arr, "post_types")?.default;
+  const postTypesSelected = Array.isArray(postTypesVal) ? (postTypesVal as string[]) : [];
+  const taxonomyVal = v["taxonomy"] ?? getMetaByKey(arr, "taxonomy")?.default;
+  const taxonomySelected = Array.isArray(taxonomyVal) ? (taxonomyVal as string[]) : [];
+  return { showInMenu, menuOrder, menuOptionsDisplay, icon, postThumbnail, postTypesSelected, taxonomySelected };
+}
+
+const { locale, menuItems, currentUser, items, editRecord, menuPostMetaValues, postTypeTranslations, postTypesNotInMenu = [] } = Astro.props;
+const currentLocale = locale as Locale;
+const isEdit = editRecord != null;
+
+const initialSlug = editRecord?.slug ?? "";
+const initialName = editRecord?.name ?? "";
+const initialMetaSchemaItems = parseMetaSchemaForForm(editRecord?.meta_schema ?? null, menuPostMetaValues);
+const fixedInitial = getFixedMetaInitial(editRecord?.meta_schema ?? null, menuPostMetaValues);
+const defaultTranslations = { pt_BR: "", es_ES: "", en_US: "" };
+const initialTranslations = postTypeTranslations ?? defaultTranslations;
+
+const META_TYPES = ["string", "number", "boolean", "array"];
+
+const formAction = isEdit ? `/api/post-types/${editRecord!.id}` : "/api/post-types";
+const listUrl = `/${locale}/admin/settings?page=post_types`;
+---
+
+<AdminLayout
+  title={t(currentLocale, "menu.option.post_types") || "Post Types"}
+  locale={locale}
+  menuItems={menuItems}
+  user={currentUser}
+>
+  <div class="p-6 flex flex-col gap-6">
+    <div class="flex flex-wrap items-center gap-2 justify-between">
+      <h2 class="text-xl font-semibold">{t(currentLocale, "menu.option.post_types") || "Post Types"}</h2>
+    </div>
+
+    <div class="grid gap-6 lg:grid-cols-2">
+      <AdminFormContainer>
+        <h3 class="font-medium mb-3">
+          {isEdit
+            ? t(currentLocale, "admin.content.editTitle", { type: editRecord?.name ?? "" })
+            : t(currentLocale, "admin.postTypes.new") || "Novo tipo de post"}
+        </h3>
+        <div id="post-types-form-error" class="min-h-6"></div>
+        <form
+          method="post"
+          action={formAction}
+          class="flex flex-col gap-4"
+          hx-target="#post-types-form-error"
+          hx-swap="innerHTML"
+          hx-post={isEdit ? undefined : "/api/post-types"}
+          hx-put={isEdit ? formAction : undefined}
+          data-is-edit={String(isEdit)}
+        >
+          {isEdit && <input type="hidden" name="slug" value={initialSlug} />}
+          <div class="form-control">
+            <label for="post-type-name" class="label">
+              <span class="label-text">{t(currentLocale, "admin.postTypes.name") || "Nome"}</span>
+            </label>
+            <input
+              type="text"
+              id="post-type-name"
+              required
+              class="input input-bordered w-full"
+              value={initialName}
+              name="name"
+            />
+          </div>
+          <div class="form-control">
+            <label for="post-type-slug" class="label">
+              <span class="label-text">{t(currentLocale, "admin.content.slug")}</span>
+            </label>
+            <input
+              type="text"
+              id="post-type-slug"
+              required
+              class="input input-bordered w-full"
+              value={initialSlug}
+              name={isEdit ? undefined : "slug"}
+              disabled={isEdit}
+            />
+            {isEdit && (
+              <p class="text-xs text-base-content/60 mt-1">
+                {t(currentLocale, "admin.postTypes.slugReadonly") || "Slug não pode ser alterado na edição."}
+              </p>
+            )}
+          </div>
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">{t(currentLocale, "admin.postTypes.languages") ?? "Languages"}</span>
+            </label>
+            <div class="space-y-2 rounded-lg border border-base-300 p-3 bg-base-200/30">
+              <div class="form-control">
+                <label for="translation-pt_BR" class="label py-0">
+                  <span class="label-text text-sm">PT_BR</span>
+                </label>
+                <input
+                  type="text"
+                  id="translation-pt_BR"
+                  name="translation_pt_BR"
+                  class="input input-bordered input-sm w-full"
+                  value={initialTranslations.pt_BR}
+                  placeholder={initialName}
+                />
+              </div>
+              <div class="form-control">
+                <label for="translation-es_ES" class="label py-0">
+                  <span class="label-text text-sm">ES</span>
+                </label>
+                <input
+                  type="text"
+                  id="translation-es_ES"
+                  name="translation_es_ES"
+                  class="input input-bordered input-sm w-full"
+                  value={initialTranslations.es_ES}
+                  placeholder={initialName}
+                />
+              </div>
+              <div class="form-control">
+                <label for="translation-en_US" class="label py-0">
+                  <span class="label-text text-sm">EN_US</span>
+                </label>
+                <input
+                  type="text"
+                  id="translation-en_US"
+                  name="translation_en_US"
+                  class="input input-bordered input-sm w-full"
+                  value={initialTranslations.en_US}
+                  placeholder={initialName}
+                />
+              </div>
+            </div>
+          </div>
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">{t(currentLocale, "admin.postTypes.metaSchemaTitle") || "Meta schema"}</span>
+            </label>
+            <input type="hidden" name="meta_schema" id="meta_schema_value" value="[]" />
+            <input type="hidden" name="meta_values" id="meta_values_value" value="{}" />
+
+            <div class="space-y-4 rounded-lg border border-base-300 p-3 bg-base-200/30">
+              <label class="label cursor-pointer justify-start gap-2">
+                <input type="checkbox" id="fixed-show-in-menu" class="checkbox checkbox-sm checkbox-primary" data-fixed-show-in-menu checked={fixedInitial.showInMenu} />
+                <span class="label-text">{t(currentLocale, "admin.postTypes.showInMenu")}</span>
+              </label>
+              <div id="show-in-menu-extra" class="ms-4 flex flex-col gap-2 border-l-2 border-base-300 pl-3" data-visible={String(fixedInitial.showInMenu)}>
+                <div class="form-control">
+                  <label for="fixed-menu-order" class="label py-0">
+                    <span class="label-text text-sm">{t(currentLocale, "admin.postTypes.menuOrder")}</span>
+                  </label>
+                  <input type="number" id="fixed-menu-order" class="input input-bordered input-sm w-24" data-fixed-menu-order value={fixedInitial.menuOrder} />
+                </div>
+                <div class="form-control">
+                  <label for="fixed-menu-options" class="label py-0">
+                    <span class="label-text text-sm">{t(currentLocale, "admin.postTypes.menuOptions")}</span>
+                  </label>
+                  <input type="text" id="fixed-menu-options" class="input input-bordered input-sm w-full font-mono" data-fixed-menu-options value={fixedInitial.menuOptionsDisplay} placeholder="new,list" />
+                </div>
+                <div class="form-control">
+                  <label for="fixed-icon" class="label py-0">
+                    <span class="label-text text-sm">{t(currentLocale, "admin.postTypes.icon")}</span>
+                  </label>
+                  <select id="fixed-icon" class="select select-bordered select-sm w-full font-mono" data-fixed-icon value={fixedInitial.icon}>
+                    {LINE_MD_ICONS.map((iconName) => (
+                      <option value={iconName}>{iconName}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <label class="label cursor-pointer justify-start gap-2">
+                <input type="checkbox" id="fixed-post-thumbnail" class="checkbox checkbox-sm checkbox-primary" data-fixed-post-thumbnail checked={fixedInitial.postThumbnail} />
+                <span class="label-text">{t(currentLocale, "admin.postTypes.postThumbnail")}</span>
+              </label>
+
+              <div class="form-control border-t border-base-300 pt-3 mt-2">
+                <label class="label py-1">
+                  <span class="label-text font-medium">{t(currentLocale, "admin.postTypes.taxonomyLabel") || "Taxonomias"}</span>
+                </label>
+                <div class="flex flex-wrap gap-3">
+                  <label class="label cursor-pointer justify-start gap-2 py-0">
+                    <input
+                      type="checkbox"
+                      class="checkbox checkbox-sm checkbox-primary fixed-taxonomy-cb"
+                      data-fixed-taxonomy-type="category"
+                      checked={fixedInitial.taxonomySelected.includes("category")}
+                    />
+                    <span class="label-text text-sm">{t(currentLocale, "taxonomy.type.category")}</span>
+                  </label>
+                  <label class="label cursor-pointer justify-start gap-2 py-0">
+                    <input
+                      type="checkbox"
+                      class="checkbox checkbox-sm checkbox-primary fixed-taxonomy-cb"
+                      data-fixed-taxonomy-type="tag"
+                      checked={fixedInitial.taxonomySelected.includes("tag")}
+                    />
+                    <span class="label-text text-sm">{t(currentLocale, "taxonomy.type.tag")}</span>
+                  </label>
+                </div>
+              </div>
+
+              {postTypesNotInMenu.length > 0 && (
+                <div class="form-control border-t border-base-300 pt-3 mt-2">
+                  <label class="label py-1">
+                    <span class="label-text font-medium">{t(currentLocale, "admin.postTypes.postTypesLabel") || "Tipos de post (custom fields, etc.)"}</span>
+                  </label>
+                  <div class="flex flex-wrap gap-3">
+                    {postTypesNotInMenu.map((pt) => (
+                      <div>
+                        <label class="label cursor-pointer justify-start gap-2 py-0">
+                          <input
+                            type="checkbox"
+                            class="checkbox checkbox-sm checkbox-primary fixed-post-types-cb"
+                            data-fixed-post-type-slug={pt.slug}
+                            checked={fixedInitial.postTypesSelected.includes(pt.slug)}
+                          />
+                          <span class="label-text text-sm">{pt.name}</span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <p class="text-sm text-base-content/70 mt-2">{t(currentLocale, "admin.postTypes.extraFields")}</p>
+            <div id="meta-schema-fields" class="space-y-3 border border-base-300 rounded-lg p-3 bg-base-200/50 mt-1">
+              {initialMetaSchemaItems.map((item, idx) => (
+                <div class="meta-schema-row flex flex-wrap items-center gap-2" data-index={idx}>
+                  <input
+                    type="text"
+                    class="input input-bordered input-sm flex-1 min-w-24"
+                    placeholder={t(currentLocale, "admin.postTypes.fieldKey")}
+                    value={item.key}
+                    data-ms-key
+                  />
+                  <select class="select select-bordered select-sm w-28" data-ms-type>
+                    {META_TYPES.map((type) => (
+                      <option value={type} selected={type === item.type}>{type}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    class="input input-bordered input-sm flex-1 min-w-24 font-mono text-sm"
+                    placeholder={t(currentLocale, "admin.postTypes.fieldDefault")}
+                    value={item.defaultDisplay}
+                    data-ms-default
+                  />
+                  <button type="button" class="btn btn-ghost btn-sm btn-square text-error ms-remove-row" aria-label={t(currentLocale, "admin.postTypes.removeField")}>
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button type="button" id="meta-schema-add-row" class="btn btn-ghost btn-sm mt-2">
+              {t(currentLocale, "admin.postTypes.addField")}
+            </button>
+          </div>
+          <AdminFormActions
+            submitLabel={isEdit ? t(currentLocale, "admin.content.saveEdit") : t(currentLocale, "admin.content.saveNew")}
+            cancelHref={listUrl}
+            cancelLabel={t(currentLocale, "admin.content.cancel")}
+          />
+        </form>
+      </AdminFormContainer>
+
+      <div>
+        <h3 class="font-medium mb-3">{t(currentLocale, "admin.list.title")}</h3>
+        {items.length === 0 ? (
+          <p class="text-base-content/70">{t(currentLocale, "admin.list.noItems")}</p>
+        ) : (
+          <ul class="space-y-2">
+            {items.map((row) => (
+              <li
+                class="flex items-center justify-between gap-2 p-3 bg-base-100 border border-base-300 rounded-lg"
+              >
+                <div>
+                  <span class="font-medium">{row.name}</span>
+                  <span class="text-base-content/60 text-sm ml-2">{row.slug}</span>
+                </div>
+                <div class="flex gap-1">
+                  <a
+                    href={`/${locale}/admin/settings?page=post_types&edit=${row.id}`}
+                    class="btn btn-ghost btn-sm"
+                  >
+                    {t(currentLocale, "admin.list.edit")}
+                  </a>
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-sm text-error post-type-delete-btn"
+                    data-delete-url={`/api/post-types/${row.id}`}
+                    data-row-id={row.id}
+                  >
+                    {t(currentLocale, "admin.list.delete")}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  </div>
+
+  <dialog id="delete-post-type-modal" class="modal">
+    <div class="modal-box">
+      <p id="delete-post-type-modal-message" class="py-2">
+        {t(currentLocale, "admin.postTypes.deleteConfirm") || "Se apagar o post type todos os posts associados serão deletados."}
+      </p>
+      <div class="modal-action">
+        <form method="dialog">
+          <button type="button" class="btn btn-ghost btn-sm cancel-delete-post-type">{t(currentLocale, "admin.content.cancel") || "Cancelar"}</button>
+          <button type="button" class="btn btn-error btn-sm confirm-delete-post-type">{t(currentLocale, "admin.postTypes.confirmYes") || "Sim"}</button>
+        </form>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button type="submit">fechar</button>
+    </form>
+  </dialog>
+</AdminLayout>
+
+<style>
+  #show-in-menu-extra[data-visible="false"] {
+    display: none;
+  }
+</style>
+
+<script>
+  import { initPostTypeSlugFromName } from "../scripts/post-type-form.ts";
+
+  (function () {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initPostTypeSlugFromName);
+    } else {
+      initPostTypeSlugFromName();
+    }
+  })();
+
+  (function () {
+    const META_TYPES = ["string", "number", "boolean", "array"];
+
+    const showInMenuCheck = document.getElementById("fixed-show-in-menu") as HTMLInputElement | null;
+    const showInMenuExtra = document.getElementById("show-in-menu-extra");
+    function toggleShowInMenuExtra() {
+      if (showInMenuExtra) showInMenuExtra.setAttribute("data-visible", showInMenuCheck?.checked ? "true" : "false");
+    }
+    showInMenuCheck?.addEventListener("change", toggleShowInMenuExtra);
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", toggleShowInMenuExtra);
+    } else {
+      toggleShowInMenuExtra();
+    }
+
+    function buildMetaSchemaFromFields() {
+      const arr: { key: string; type: string; default?: unknown }[] = [];
+
+      const showInMenu = (document.querySelector("[data-fixed-show-in-menu]") as HTMLInputElement)?.checked ?? false;
+      arr.push({ key: "show_in_menu", type: "boolean", default: showInMenu });
+
+      if (showInMenu) {
+        const menuOrderEl = document.querySelector("[data-fixed-menu-order]") as HTMLInputElement | null;
+        const menuOrder = menuOrderEl ? Number(menuOrderEl.value) || 0 : 0;
+        arr.push({ key: "menu_order", type: "number", default: menuOrder });
+
+        const menuOptionsEl = document.querySelector("[data-fixed-menu-options]") as HTMLInputElement | null;
+        const menuOptionsStr = menuOptionsEl?.value?.trim() ?? "new,list";
+        const menuOptions = menuOptionsStr.split(",").map((s) => s.trim()).filter(Boolean);
+        arr.push({ key: "menu_options", type: "array", default: menuOptions });
+
+        const iconEl = document.querySelector("[data-fixed-icon]") as HTMLSelectElement | null;
+        const icon = iconEl?.value?.trim() ?? "line-md:document";
+        arr.push({ key: "icon", type: "string", default: icon });
+      }
+
+      const postThumbnail = (document.querySelector("[data-fixed-post-thumbnail]") as HTMLInputElement)?.checked ?? false;
+      arr.push({ key: "post_thumbnail", type: "boolean", default: postThumbnail });
+
+      const postTypesChecked = document.querySelectorAll(".fixed-post-types-cb:checked");
+      const postTypesSlugs = Array.from(postTypesChecked)
+        .map((el) => (el as HTMLElement).dataset["fixedPostTypeSlug"])
+        .filter(Boolean) as string[];
+      arr.push({ key: "post_types", type: "array", default: postTypesSlugs });
+
+      const taxonomyChecked = document.querySelectorAll(".fixed-taxonomy-cb:checked");
+      const taxonomyTypes = Array.from(taxonomyChecked)
+        .map((el) => (el as HTMLElement).dataset["fixedTaxonomyType"])
+        .filter(Boolean) as string[];
+      arr.push({ key: "taxonomy", type: "array", default: taxonomyTypes });
+
+      const rows = document.querySelectorAll("#meta-schema-fields .meta-schema-row");
+      rows.forEach((row) => {
+        const keyInput = row.querySelector("[data-ms-key]") as HTMLInputElement;
+        const typeSelect = row.querySelector("[data-ms-type]") as unknown as HTMLSelectElement | null;
+        if (!typeSelect) return;
+        const defaultInput = row.querySelector("[data-ms-default]") as HTMLInputElement;
+        const key = keyInput?.value?.trim();
+        const type = typeSelect?.value ?? "string";
+        if (!key) return;
+        let defaultVal: unknown = undefined;
+        const defaultStr = defaultInput?.value?.trim();
+        if (defaultStr !== "" && defaultStr !== undefined) {
+          if (type === "number") defaultVal = Number(defaultStr);
+          else if (type === "boolean") defaultVal = defaultStr === "true";
+          else if (type === "array") {
+            try {
+              defaultVal = JSON.parse(defaultStr);
+            } catch {
+              defaultVal = defaultStr.includes(",") ? defaultStr.split(",").map((s) => s.trim()) : [];
+            }
+          } else defaultVal = defaultStr;
+        }
+        arr.push({ key, type, ...(defaultVal !== undefined && { default: defaultVal }) });
+      });
+
+      const schemaHidden = document.getElementById("meta_schema_value") as HTMLInputElement;
+      if (schemaHidden) schemaHidden.value = JSON.stringify(arr);
+
+      const metaValues: Record<string, unknown> = {};
+      metaValues["show_in_menu"] = showInMenu;
+      if (showInMenu) {
+        metaValues["menu_order"] = (document.querySelector("[data-fixed-menu-order]") as HTMLInputElement)?.value ? Number((document.querySelector("[data-fixed-menu-order]") as HTMLInputElement).value) || 0 : 0;
+        const menuOptEl = document.querySelector("[data-fixed-menu-options]") as HTMLInputElement | null;
+        metaValues["menu_options"] = menuOptEl?.value?.trim() ? menuOptEl.value.split(",").map((s) => s.trim()).filter(Boolean) : ["new", "list"];
+        metaValues["icon"] = (document.querySelector("[data-fixed-icon]") as HTMLSelectElement | null)?.value?.trim() || "line-md:document";
+      }
+      metaValues["post_thumbnail"] = postThumbnail;
+      const postTypesCheckedForValues = document.querySelectorAll(".fixed-post-types-cb:checked");
+      metaValues["post_types"] = Array.from(postTypesCheckedForValues)
+        .map((el) => (el as HTMLElement).dataset["fixedPostTypeSlug"])
+        .filter(Boolean);
+      const taxonomyCheckedForValues = document.querySelectorAll(".fixed-taxonomy-cb:checked");
+      metaValues["taxonomy"] = Array.from(taxonomyCheckedForValues)
+        .map((el) => (el as HTMLElement).dataset["fixedTaxonomyType"])
+        .filter(Boolean);
+      rows.forEach((row) => {
+        const keyInput = row.querySelector("[data-ms-key]") as HTMLInputElement;
+        const typeSelect = row.querySelector("[data-ms-type]") as unknown as HTMLSelectElement | null;
+        if (!typeSelect) return;
+        const defaultInput = row.querySelector("[data-ms-default]") as HTMLInputElement;
+        const key = keyInput?.value?.trim();
+        const type = typeSelect?.value ?? "string";
+        if (!key) return;
+        let val: unknown = undefined;
+        const defaultStr = defaultInput?.value?.trim();
+        if (defaultStr !== "" && defaultStr !== undefined) {
+          if (type === "number") val = Number(defaultStr);
+          else if (type === "boolean") val = defaultStr === "true";
+          else if (type === "array") {
+            try { val = JSON.parse(defaultStr); } catch { val = defaultStr.includes(",") ? defaultStr.split(",").map((s) => s.trim()) : []; }
+          } else val = defaultStr;
+        }
+        if (val !== undefined) metaValues[key] = val;
+      });
+      const valuesHidden = document.getElementById("meta_values_value") as HTMLInputElement;
+      if (valuesHidden) valuesHidden.value = JSON.stringify(metaValues);
+    }
+
+    function addRow() {
+      const container = document.getElementById("meta-schema-fields");
+      if (!container) return;
+      const row = document.createElement("div");
+      row.className = "meta-schema-row flex flex-wrap items-center gap-2";
+      const keyPlaceholder = container.closest("form")?.querySelector("[data-ms-key]")?.getAttribute("placeholder") ?? "Chave";
+      const defaultPlaceholder = container.closest("form")?.querySelector("[data-ms-default]")?.getAttribute("placeholder") ?? "Valor padrão";
+      row.innerHTML = `
+        <input type="text" class="input input-bordered input-sm flex-1 min-w-24" placeholder="${keyPlaceholder}" data-ms-key />
+        <select class="select select-bordered select-sm w-28" data-ms-type">
+          ${META_TYPES.map((t) => `<option value="${t}">${t}</option>`).join("")}
+        </select>
+        <input type="text" class="input input-bordered input-sm flex-1 min-w-24 font-mono text-sm" placeholder="${defaultPlaceholder}" data-ms-default />
+        <button type="button" class="btn btn-ghost btn-sm btn-square text-error ms-remove-row" aria-label="Remover">×</button>
+      `;
+      row.querySelector(".ms-remove-row")?.addEventListener("click", () => row.remove());
+      container.appendChild(row);
+    }
+
+    const form = document.querySelector("#meta-schema-fields")?.closest("form");
+    if (form) {
+      form.addEventListener("submit", buildMetaSchemaFromFields);
+    }
+
+    document.getElementById("meta-schema-add-row")?.addEventListener("click", addRow);
+
+    document.querySelectorAll(".ms-remove-row").forEach((btn) => {
+      btn.addEventListener("click", () => btn.closest(".meta-schema-row")?.remove());
+    });
+
+    const deleteModal = document.getElementById("delete-post-type-modal") as HTMLDialogElement | null;
+    const confirmDeleteBtn = document.querySelector(".confirm-delete-post-type");
+    const cancelDeleteBtn = document.querySelector(".cancel-delete-post-type");
+    let pendingDeleteUrl: string | null = null;
+
+    document.querySelectorAll(".post-type-delete-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        pendingDeleteUrl = (btn as HTMLElement).dataset["deleteUrl"] ?? null;
+        if (deleteModal && pendingDeleteUrl) {
+          deleteModal.showModal();
+        }
+      });
+    });
+
+    confirmDeleteBtn?.addEventListener("click", async () => {
+      if (!pendingDeleteUrl || !deleteModal) return;
+      try {
+        const res = await fetch(pendingDeleteUrl, {
+          method: "DELETE",
+          headers: { "HX-Request": "true" },
+        });
+        if (res.ok) {
+          deleteModal.close();
+          pendingDeleteUrl = null;
+          window.location.reload();
+        } else {
+          const data = await res.json().catch(() => ({})) as { error?: string };
+          alert(typeof data?.error === "string" ? data.error : "Erro ao excluir.");
+        }
+      } catch (e) {
+        alert("Erro ao excluir.");
+      }
+    });
+
+    cancelDeleteBtn?.addEventListener("click", () => {
+      deleteModal?.close();
+      pendingDeleteUrl = null;
+    });
+
+    document.body.addEventListener("htmx:afterRequest", (ev: Event) => {
+      const evt = ev as CustomEvent & { detail?: { successful?: boolean; target?: HTMLElement; trigger?: HTMLElement; xhr?: { status?: number; responseText?: string; responseURL?: string } } };
+      const detail = evt.detail;
+      if (!detail?.successful && detail?.xhr?.status === 400) {
+        try {
+          const data = JSON.parse(detail?.xhr?.responseText ?? "{}") as { error?: string };
+          const err = typeof data?.error === "string" ? data.error : "Erro ao salvar.";
+          const isDeletePostType = detail?.trigger?.getAttribute?.("hx-delete")?.includes("/api/post-types/");
+          if (isDeletePostType) {
+            alert(err);
+            return;
+          }
+          const errorEl = document.getElementById("post-types-form-error");
+          if (errorEl) errorEl.innerHTML = `<p class="text-error text-sm">${err}</p>`;
+        } catch {
+          const errorEl = document.getElementById("post-types-form-error");
+          if (errorEl) errorEl.textContent = "Erro ao salvar.";
+        }
+      } else if (detail?.successful) {
+        const trigger = detail?.trigger;
+        const form = trigger?.closest?.("form") ?? (trigger as HTMLFormElement | null);
+        const hxPost = form?.getAttribute?.("hx-post");
+        const hxPut = form?.getAttribute?.("hx-put");
+        const isCreatePostType = hxPost === "/api/post-types";
+        const isEditPostType = hxPut?.startsWith?.("/api/post-types/");
+        const targetId = detail?.target?.id;
+        const wantsRefresh = (detail?.xhr as XMLHttpRequest | undefined)?.getResponseHeader?.("HX-Refresh") === "true";
+        if (isCreatePostType || isEditPostType || targetId === "post-types-form-error" || wantsRefresh) {
+          window.location.reload();
+        }
+      }
+    });
+  })();
+</script>

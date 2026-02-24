@@ -3,6 +3,7 @@
  */
 
 import Uppy from "@uppy/core";
+import { UPLOAD_CONSTANTS } from "./constants/index.ts";
 import Dashboard from "@uppy/dashboard";
 import ImageEditor from "@uppy/image-editor";
 import XHRUpload from "@uppy/xhr-upload";
@@ -20,14 +21,49 @@ const UPPY_LOCALES: Record<string, typeof pt_BR> = {
 };
 
 const CODE_EXTS = [
-  ".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs", ".py", ".rb", ".php", ".java",
-  ".c", ".cpp", ".h", ".hpp", ".cs", ".go", ".rs", ".vue", ".svelte", ".astro",
-  ".sh", ".bash", ".ps1", ".bat", ".cmd", ".sql", ".html", ".htm", ".css",
-  ".scss", ".less", ".json", ".xml", ".yaml", ".yml", ".md", ".lock",
+  ".js",
+  ".ts",
+  ".jsx",
+  ".tsx",
+  ".mjs",
+  ".cjs",
+  ".py",
+  ".rb",
+  ".php",
+  ".java",
+  ".c",
+  ".cpp",
+  ".h",
+  ".hpp",
+  ".cs",
+  ".go",
+  ".rs",
+  ".vue",
+  ".svelte",
+  ".astro",
+  ".sh",
+  ".bash",
+  ".ps1",
+  ".bat",
+  ".cmd",
+  ".sql",
+  ".html",
+  ".htm",
+  ".css",
+  ".scss",
+  ".less",
+  ".json",
+  ".xml",
+  ".yaml",
+  ".yml",
+  ".md",
+  ".lock",
 ];
 
 function getExt(name: string): string {
-  return name.includes(".") ? name.slice(name.lastIndexOf(".")).toLowerCase() : "";
+  return name.includes(".")
+    ? name.slice(name.lastIndexOf(".")).toLowerCase()
+    : "";
 }
 
 export interface UppyInitOptions {
@@ -38,6 +74,8 @@ export interface UppyInitOptions {
   eventName: string;
   hideUploadButton: boolean;
   clearOnComplete: boolean;
+  /** Nome do evento disparado ao concluir (ex.: ao clicar "Concluído" no dashboard) */
+  completeEventName?: string;
 }
 
 export function initUppyInstance(options: UppyInitOptions): Uppy | null {
@@ -49,6 +87,7 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
     eventName,
     hideUploadButton,
     clearOnComplete,
+    completeEventName,
   } = options;
 
   const target = document.getElementById(containerId);
@@ -57,13 +96,26 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
   // Verificar se já foi inicializado
   if ((target as unknown as { __uppy?: Uppy }).__uppy) return null;
 
-  const form = target.closest("form") || document.querySelector<HTMLFormElement>('form[action="/api/posts"]');
-  const appLocale = (form?.querySelector<HTMLInputElement>('input[name="locale"]')?.value ?? currentLocale).toLowerCase();
-  const normalizedLocale = appLocale === "pt_br" ? "pt-br" : appLocale.startsWith("en") ? "en" : appLocale.startsWith("es") ? "es" : appLocale;
+  const form =
+    target.closest("form") ||
+    document.querySelector<HTMLFormElement>('form[action="/api/posts"]');
+  const appLocale = (
+    form?.querySelector<HTMLInputElement>('input[name="locale"]')?.value ??
+    currentLocale
+  ).toLowerCase();
+  const normalizedLocale =
+    appLocale === "pt_br"
+      ? "pt-br"
+      : appLocale.startsWith("en")
+        ? "en"
+        : appLocale.startsWith("es")
+          ? "es"
+          : appLocale;
   const uppyLocale = UPPY_LOCALES[normalizedLocale] ?? pt_BR;
 
   const isEdit = mode === "edit";
-  const containerHeight = height || (isEdit ? 280 : Math.max(400, window.innerHeight - 64));
+  const containerHeight =
+    height || (isEdit ? 280 : Math.max(400, window.innerHeight - 64));
   const maxFiles = isEdit ? 1 : 50;
   const autoProceed = isEdit;
   const hideUploadBtn = hideUploadButton;
@@ -73,8 +125,12 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
     locale: uppyLocale,
     autoProceed,
     restrictions: {
-      maxFileSize: 20 * 1024 * 1024,
-      allowedFileTypes: ["image/*", "audio/*", "application/pdf"],
+      maxFileSize: UPLOAD_CONSTANTS.MAX_FILE_SIZE,
+      allowedFileTypes: [
+        ...UPLOAD_CONSTANTS.ALLOWED_IMAGE_TYPES,
+        "audio/*",
+        "application/pdf",
+      ],
       maxNumberOfFiles: maxFiles,
     },
   });
@@ -96,8 +152,20 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
     getResponseData(xhr: XMLHttpRequest) {
       try {
         const raw = xhr.response ?? xhr.responseText;
-        if (typeof raw === "object" && raw !== null && "key" in raw) return raw as { key?: string; path?: string; mimeType?: string; filename?: string };
-        if (typeof raw === "string") return JSON.parse(raw) as { key?: string; path?: string; mimeType?: string; filename?: string };
+        if (typeof raw === "object" && raw !== null && "key" in raw)
+          return raw as {
+            key?: string;
+            path?: string;
+            mimeType?: string;
+            filename?: string;
+          };
+        if (typeof raw === "string")
+          return JSON.parse(raw) as {
+            key?: string;
+            path?: string;
+            mimeType?: string;
+            filename?: string;
+          };
       } catch {
         // ignore
       }
@@ -105,7 +173,8 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
     },
   });
 
-  const codeFilesErrorMsg = form?.dataset["codeFilesError"] ?? "Code files are not allowed.";
+  const codeFilesErrorMsg =
+    form?.dataset["codeFilesError"] ?? "Code files are not allowed.";
   uppy.on("file-added", (file) => {
     if (CODE_EXTS.includes(getExt(file.name ?? ""))) {
       uppy.removeFile(file.id);
@@ -120,7 +189,9 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
 
   uppy.on("upload-success", (file, response) => {
     if (!file) return;
-    const body = (response?.body ?? response) as { key?: string; path?: string; mimeType?: string; filename?: string } | undefined;
+    const body = (response?.body ?? response) as
+      | { key?: string; path?: string; mimeType?: string; filename?: string }
+      | undefined;
     if (!body || !("key" in body)) return;
     const path = body.path ?? "";
     // Converter path do R2 para URL acessível via endpoint /api/media/
@@ -132,7 +203,11 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
           ? `/api/media${path}`
           : `/api/media/uploads/${path}`;
     // Usar o nome original do arquivo (antes de qualquer renomeação no Uppy)
-    const originalFilename = (file.meta?.["originalName"] as string) || file.name || body.filename || "";
+    const originalFilename =
+      (file.meta?.["originalName"] as string) ||
+      file.name ||
+      body.filename ||
+      "";
     window.dispatchEvent(
       new CustomEvent(eventName, {
         detail: {
@@ -142,11 +217,16 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
           originalFilename: originalFilename,
           mimeType: body.mimeType ?? "",
         },
-      })
+      }),
     );
   });
 
   uppy.on("complete", () => {
+    if (completeEventName) {
+      window.dispatchEvent(
+        new CustomEvent(completeEventName, { detail: { containerId } }),
+      );
+    }
     if (clearOnComplete) {
       setTimeout(() => uppy.cancelAll(), 100);
     }
@@ -155,7 +235,9 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
   (target as unknown as { __uppy?: Uppy }).__uppy = uppy;
   if (typeof window !== "undefined" && isEdit) {
     // Criar chave baseada no containerId: "uppy-edit" -> "uppyEditInstance", "uppy-thumbnail" -> "uppyThumbnailInstance"
-    const camelCaseId = containerId.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+    const camelCaseId = containerId.replace(/-([a-z])/g, (_, letter) =>
+      letter.toUpperCase(),
+    );
     const instanceKey = `uppy${camelCaseId.charAt(0).toUpperCase() + camelCaseId.slice(1)}Instance`;
     (window as unknown as Record<string, Uppy | undefined>)[instanceKey] = uppy;
   }

@@ -41,7 +41,15 @@ if (TemplateComponent) {
   if (!user) {
     return Astro.redirect("/login");
   }
-  menuItems = await getMenuItems(db);
+  const { getRoleFromUser, canAccessRoute, filterMenuItemsByRole } = await import("../../../lib/permissions.ts");
+  const roleId = getRoleFromUser(user);
+  const pathname = Astro.url.pathname;
+  const allowed = await canAccessRoute(db, roleId, pathname);
+  if (!allowed) {
+    return Astro.redirect(`/${defaultLocale}/login`);
+  }
+  const allMenuItems = await getMenuItems(db);
+  menuItems = await filterMenuItemsByRole(db, allMenuItems, roleId);
   Astro.url.searchParams.forEach((value, key) => {
     params[key] = value;
   });

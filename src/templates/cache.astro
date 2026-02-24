@@ -1,0 +1,71 @@
+---
+/**
+ * Template da página "Cache" em Settings: lista chaves/valores do KV e botão para resetar cache.
+ */
+import AdminLayout from "../layouts/AdminLayout.astro";
+import DataList from "../components/DataList.astro";
+import { t, type Locale } from "../i18n/index.ts";
+import type { MenuItem } from "../lib/menu.ts";
+
+export interface Props {
+  locale: string;
+  menuItems: MenuItem[];
+  currentUser: { email: string; name: string };
+  kvItems: { key: string; valuePreview: string }[];
+}
+
+const { locale, menuItems, currentUser, kvItems } = Astro.props;
+const currentLocale = locale as Locale;
+
+const pageTitle = t(currentLocale, "admin.cache.title");
+const columns = [
+  { key: "key", label: t(currentLocale, "admin.cache.key") },
+  { key: "valuePreview", label: t(currentLocale, "admin.cache.valuePreview") },
+];
+
+const listItems = kvItems.map((item) => ({
+  key: item.key,
+  valuePreview: item.valuePreview,
+}));
+
+const resetConfirm =
+  t(currentLocale, "admin.cache.resetConfirm") !== "admin.cache.resetConfirm"
+    ? t(currentLocale, "admin.cache.resetConfirm")
+    : "Tem certeza que deseja resetar todo o cache? Todas as chaves serão removidas.";
+const resetButtonLabel = t(currentLocale, "admin.cache.resetButton");
+---
+
+<AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={currentUser}>
+  <div slot="header-actions">
+    <span class="text-sm text-base-content/70">{currentUser.email}</span>
+  </div>
+
+  <div class="p-6" x-data="{ loading: false }">
+    <div class="flex flex-col gap-4">
+      <div class="flex justify-end">
+        <button
+          type="button"
+          id="cache-reset-btn"
+          class="btn btn-error text-white"
+          hx-get="/api/kv-clear"
+          hx-trigger="click"
+          hx-confirm={resetConfirm}
+          hx-swap="none"
+          @htmx:before-request="loading = true"
+          @htmx:after-request="loading = false"
+          :disabled="loading"
+        >
+          <span x-show="!loading" x-cloak>{resetButtonLabel}</span>
+          <span x-show="loading" x-cloak>…</span>
+        </button>
+      </div>
+
+      <DataList
+        columns={columns}
+        items={listItems}
+        emptyMessage={t(currentLocale, "admin.cache.noItems")}
+        emptyColspan={2}
+      />
+    </div>
+  </div>
+</AdminLayout>

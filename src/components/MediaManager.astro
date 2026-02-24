@@ -1,0 +1,309 @@
+---
+/**
+ * Biblioteca de mídia: listagem de imagens com seleção (radio ou checkbox).
+ * Usa MediaLibraryList (cards DaisyUI). Se items forem passados, usa lista server-side; senão carrega via API no client.
+ * Emite "media-manager-close" e "media-manager-select" (detail: { items: { id, title, url, path }[] }).
+ */
+export interface MediaLibraryItem {
+  id: number;
+  title: string;
+  url: string;
+  path?: string;
+}
+
+export interface Props {
+  gallery?: boolean;
+  /** Se passado, lista é renderizada no servidor; senão carrega no client */
+  items?: MediaLibraryItem[];
+}
+
+const { gallery = false, items: serverItems = [] } = Astro.props;
+const nameId = `media-manager-${gallery ? "gallery" : "single"}-${Math.random().toString(36).slice(2, 9)}`;
+const hasServerItems = serverItems.length > 0;
+---
+
+<div
+  class="media-manager flex flex-col h-full"
+  data-media-manager
+  data-gallery={gallery}
+  data-name-id={nameId}
+  data-items={hasServerItems ? JSON.stringify(serverItems) : ""}
+>
+  <header class="media-manager-header border-b border-base-300 pb-3 mb-3">
+    <div class="grid grid-cols-3 gap-2 sm:gap-4 items-center">
+      <h2 class="text-lg font-semibold text-base-content truncate">
+        Biblioteca de Mídia
+      </h2>
+      <div class="flex justify-center min-w-0">
+        <input
+          type="search"
+          class="input input-bordered input-sm w-full max-w-xs"
+          placeholder="Buscar..."
+          data-media-manager-search
+          autocomplete="off"
+        />
+      </div>
+      <div class="flex justify-end">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-circle"
+          aria-label="Fechar"
+          data-media-manager-close
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="media-manager-body flex-1 overflow-y-auto min-h-[200px]">
+    <div
+      class="media-manager-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"
+      data-media-manager-grid
+    >
+      {!hasServerItems ? (
+        <p
+          class="col-span-full text-sm text-base-content/60 text-center py-8"
+          data-media-manager-loading
+        >
+          Carregando…
+        </p>
+      ) : null}
+    </div>
+  </div>
+
+  <footer class="media-manager-footer border-t border-base-300 pt-3 mt-3">
+    <button
+      type="button"
+      class="btn btn-primary btn-sm w-full"
+      disabled
+      data-media-manager-add
+    >
+      Adicionar
+    </button>
+  </footer>
+</div>
+
+<style>
+  .media-manager {
+    min-width: 320px;
+  }
+  .media-library-card.selected,
+  .media-manager-grid .media-library-card.selected {
+    border-color: oklch(var(--p)) !important;
+    box-shadow: 0 0 0 2px oklch(var(--p) / 0.3);
+  }
+  .media-library-card figure:hover {
+    background: #ccc;
+  }
+</style>
+
+<script define:vars={{ nameId, gallery, hasServerItems }}>
+  (function () {
+    const root = document.querySelector(
+      "[data-media-manager][data-name-id='" + nameId + "']",
+    );
+    if (!root) return;
+
+    const grid = root.querySelector("[data-media-manager-grid]");
+    const loadingEl = root.querySelector("[data-media-manager-loading]");
+    const searchEl = root.querySelector("[data-media-manager-search]");
+    const addBtn = root.querySelector("[data-media-manager-add]");
+    const closeBtn = root.querySelector("[data-media-manager-close]");
+
+    let items = [];
+    const dataItems = root.getAttribute("data-items");
+    if (dataItems) {
+      try {
+        items = JSON.parse(dataItems);
+      } catch (_) {}
+    }
+
+    function buildUrl(path) {
+      if (!path) return "";
+      if (path.startsWith("http")) return path;
+      if (path.startsWith("/uploads/")) return "/api/media" + path;
+      if (path.startsWith("/")) return "/api/media" + path;
+      return "/api/media/uploads/" + path;
+    }
+
+    function getItemsMap() {
+      const cards = root.querySelectorAll("[data-media-card]");
+      if (items.length > 0) return items;
+      return Array.from(cards).map((el) => {
+        const id = parseInt(el.getAttribute("data-id") || "0", 10);
+        const img = el.querySelector("img");
+        const titleEl = el.querySelector(".card-title");
+        return {
+          id,
+          title: titleEl?.textContent?.trim() || "",
+          url: img?.src || img?.getAttribute("src") || "",
+          path: "",
+        };
+      });
+    }
+
+    function getSelectedItems() {
+      const inputs = root.querySelectorAll(
+        'input[name="' +
+          nameId +
+          '"]:checked, input[name="' +
+          nameId +
+          '[]"]:checked',
+      );
+      const ids = Array.from(inputs).map((inp) =>
+        parseInt(inp instanceof HTMLInputElement ? inp.value : "", 10),
+      );
+      const map = getItemsMap();
+      return map.filter((it) => ids.includes(it.id));
+    }
+
+    function updateAddDisabled() {
+      if (addBtn) addBtn.disabled = getSelectedItems().length === 0;
+    }
+
+    function renderCards(list) {
+      if (!grid) return;
+      if (loadingEl) loadingEl.remove();
+      grid.querySelectorAll("[data-media-card]").forEach((el) => el.remove());
+      grid.querySelectorAll(".text-error").forEach((el) => el.remove());
+      items = (list || []).map((it) => ({
+        id: it.id,
+        title: it.title || "",
+        url: it.url || buildUrl(it.path || it.attachment_path),
+        path: it.path || "",
+      }));
+      items.forEach((item) => {
+        const wrap = document.createElement("label");
+        wrap.className =
+          "media-library-card card bg-base-100 shadow-sm cursor-pointer overflow-hidden border-2 border-transparent transition-colors";
+        wrap.setAttribute("data-media-card", "");
+        wrap.setAttribute("data-id", String(item.id));
+        const safeUrl = (item.url || "").replace(/"/g, "&quot;");
+        const safeTitle = (item.title || "").replace(/"/g, "&quot;");
+        wrap.innerHTML =
+          '<figure class="aspect-square overflow-hidden media-library-card-figure">' +
+          (item.url
+            ? '<img src="' + safeUrl + '" alt="' + safeTitle + '" loading="lazy" class="w-full h-full object-cover" />'
+            : '<div class="w-full h-full flex items-center justify-center bg-base-200 text-base-content/50 text-xs">Sem preview</div>') +
+          "</figure>" +
+          '<div class="card-body p-2 min-h-0"><h3 class="card-title text-xs truncate" title="' +
+          safeTitle +
+          '">' +
+          (item.title || "—") +
+          "</h3></div>" +
+          (gallery
+            ? '<input type="checkbox" name="' + nameId + '[]" value="' + item.id + '" class="sr-only" />'
+            : '<input type="radio" name="' + nameId + '" value="' + item.id + '" class="sr-only" />');
+        grid.appendChild(wrap);
+      });
+      bindCards();
+    }
+
+    function bindCards() {
+      const cards = root.querySelectorAll("[data-media-card]");
+      cards.forEach((card) => {
+        const input = card.querySelector(
+          'input[type="radio"], input[type="checkbox"]',
+        );
+        if (!input || !("checked" in input)) return;
+
+        card.addEventListener("click", (e) => {
+          e.preventDefault();
+          if (gallery) {
+            input.checked = !input.checked;
+          } else {
+            cards.forEach((c) => {
+              c.classList.remove("border-primary", "selected");
+              c.classList.add("border-transparent");
+              const inp = c.querySelector('input[type="radio"]');
+              if (inp && "checked" in inp) inp.checked = false;
+            });
+            input.checked = true;
+            card.classList.add("border-primary", "selected");
+            card.classList.remove("border-transparent");
+          }
+          if (gallery) {
+            if (input.checked) card.classList.add("border-primary", "selected");
+            else card.classList.remove("border-primary", "selected");
+          }
+          updateAddDisabled();
+        });
+      });
+      updateAddDisabled();
+    }
+
+    function loadFromApi(searchQuery) {
+      if (!grid) return;
+      const q = searchQuery ? "?q=" + encodeURIComponent(searchQuery.trim()) : "";
+      fetch("/api/media/list" + q)
+        .then((r) => r.json())
+        .then((data) => {
+          renderCards(data.items || []);
+        })
+        .catch(() => {
+          grid.querySelectorAll("[data-media-card]").forEach((el) => el.remove());
+          const err = document.createElement("p");
+          err.className = "col-span-full text-sm text-error text-center py-8";
+          err.textContent = "Erro ao carregar imagens.";
+          grid.appendChild(err);
+          if (loadingEl) loadingEl.remove();
+        });
+    }
+
+    if (hasServerItems && items.length > 0) {
+      renderCards(items);
+    } else if (!hasServerItems && grid) {
+      loadFromApi("");
+    }
+
+    if (searchEl) {
+      let searchTimeout = null;
+      searchEl.addEventListener("input", () => {
+        const value = searchEl.value || "";
+        if (searchTimeout) clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => loadFromApi(value), 300);
+      });
+    }
+
+    closeBtn?.addEventListener("click", () => {
+      root.dispatchEvent(
+        new CustomEvent("media-manager-close", { bubbles: true }),
+      );
+    });
+
+    addBtn?.addEventListener("click", () => {
+      const selected = getSelectedItems();
+      const byId = new Map((items || []).map((it) => [it.id, it]));
+      const withPath = selected.map((it) => {
+        const full = byId.get(it.id);
+        return {
+          id: it.id,
+          title: it.title,
+          url: it.url,
+          path:
+            (full && "path" in full ? full.path : undefined) ?? it.path ?? "",
+        };
+      });
+      root.dispatchEvent(
+        new CustomEvent("media-manager-select", {
+          bubbles: true,
+          detail: { items: withPath },
+        }),
+      );
+    });
+  })();
+</script>
