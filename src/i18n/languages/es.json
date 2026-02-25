@@ -34,6 +34,7 @@
   "menu.option.new": "Nuevo",
   "menu.option.dashboard": "Panel",
   "menu.option.general": "Ajustes",
+  "menu.option.cache": "Cache",
   "menu.option.taxonomies_type_category": "Categorías",
   "menu.option.post_types": "Tipos de entrada",
   "postType.post": "Entrada",

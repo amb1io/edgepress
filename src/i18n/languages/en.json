@@ -34,6 +34,7 @@
   "menu.option.new": "New",
   "menu.option.dashboard": "Dashboard",
   "menu.option.general": "Settings",
+  "menu.option.cache": "Cache",
   "menu.option.taxonomies_type_category": "Categories",
   "menu.option.post_types": "Post Types",
   "postType.post": "Post",
