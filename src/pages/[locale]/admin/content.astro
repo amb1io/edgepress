@@ -8,6 +8,7 @@ import UserTemplate from "../../../templates/user.astro";
 import AttachmentTemplate from "../../../templates/attachment.astro";
 import TranslationsTemplate from "../../../templates/translations_languages.astro";
 import SettingsTemplate from "../../../templates/settings.astro";
+import ThemesTemplate from "../../../templates/themes.astro";
 import { db } from "../../../db/index.ts";
 import { getRecordById } from "../../../lib/content-source.ts";
 import TaxonomyAddModal from "../../../components/TaxonomyAddModal.astro";
@@ -36,6 +37,11 @@ const user = Astro.locals.user;
 if (!user) {
   return Astro.redirect("/login");
 }
+const layoutUser = {
+  email: user.email,
+  name: user.name,
+  image: user.image ?? null,
+};
 
 const { getRoleFromUser, canAccessRoute, filterMenuItemsByRole, isAuthorRole } = await import("../../../lib/permissions.ts");
 const roleId = getRoleFromUser(user);
@@ -77,6 +83,7 @@ const showUserTemplate = postTypeSlug === "user";
 const showAttachmentTemplate = postTypeSlug === "attachment";
 const showTranslationsTemplate = postTypeSlug === "translations_languages";
 const showSettingsTemplate = postTypeSlug === "settings";
+const showThemesTemplate = postTypeSlug === "themes";
 
 /** Registro da configuração para SettingsTemplate (edit). */
 let settingsRecord: { id: number; name: string; value: string; autoload: boolean } | null = null;
@@ -85,17 +92,14 @@ if (showSettingsTemplate && action === "edit" && idParam) {
   if (res.kind === "table" && res.record) {
     const r = res.record;
     settingsRecord = {
-      id: Number(r.id),
-      name: String(r.name ?? ""),
-      value: String(r.value ?? ""),
-      autoload: Boolean(r.autoload),
+      id: Number(r["id"]),
+      name: String(r["name"] ?? ""),
+      value: String(r["value"] ?? ""),
+      autoload: Boolean(r["autoload"]),
     };
   }
 }
 
-let typeRow: { id: number; name: string; meta_schema: unknown } | undefined;
-let typeId = 0;
-let typeName = "";
 let taxonomyBlocks: { id: number; name: string; slug: string; type: string; children: { id: number; name: string; slug: string }[] }[] = [];
 let selectedTermIds: number[] = [];
 let users: { id: string; name: string }[] = [];
@@ -124,7 +128,6 @@ let thumbnailUrl = "";
 let thumbnailAttachmentId: number | null = null;
 let hasPostThumbnail = false;
 let hasCustomFields = false;
-let customFieldsTypeId: number | null = null;
 let initialCustomFields: Array<{ id: number; title: string; rows: Array<{ id: number; name: string; value: string; type?: string }> }> = [];
 let templateCustomFieldsList: Array<{ id: number; title: string; meta_values: string | null }> = [];
 
@@ -141,9 +144,6 @@ if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate &&
   if (isContentPageRedirect(result)) {
     return Astro.redirect(result.url);
   }
-  typeRow = result.typeRow;
-  typeId = result.typeId;
-  typeName = result.typeName;
   taxonomyBlocks = result.taxonomyBlocks;
   selectedTermIds = result.selectedTermIds;
   users = result.users;
@@ -162,7 +162,6 @@ if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate &&
   thumbnailAttachmentId = result.thumbnailAttachmentId;
   hasPostThumbnail = result.hasPostThumbnail;
   hasCustomFields = result.hasCustomFields;
-  customFieldsTypeId = result.customFieldsTypeId;
   initialCustomFields = result.initialCustomFields;
   templateCustomFieldsList = result.templateCustomFieldsList;
 }
@@ -184,7 +183,8 @@ const showAlternateTemplate =
   showUserTemplate ||
   showAttachmentTemplate ||
   showTranslationsTemplate ||
-  showSettingsTemplate;
+  showSettingsTemplate ||
+  showThemesTemplate;
 ---
 {showUserTemplate && <UserTemplate {...templateProps} />}
 {showAttachmentTemplate && <AttachmentTemplate {...templateProps} />}
@@ -192,8 +192,9 @@ const showAlternateTemplate =
 {showSettingsTemplate && (
   <SettingsTemplate {...templateProps} record={settingsRecord} />
 )}
+{showThemesTemplate && <ThemesTemplate {...templateProps} />}
 {!showAlternateTemplate && (
-<AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={user}>
+<AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={layoutUser}>
   <!-- Dados iniciais para o form (script sem import para não quebrar como módulo) -->
   <script
     define:vars={{

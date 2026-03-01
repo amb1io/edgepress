@@ -37,6 +37,11 @@ const translationsMetaSchema = buildMetaSchema([
   { key: "menu_options", type: "array", default: ["new", "list"] },
 ]);
 
+const themesMetaSchema = buildMetaSchema([
+  { key: "show_in_menu", type: "boolean", default: true },
+  { key: "menu_options", type: "array", default: ["new", "list"] },
+]);
+
 /** Post types padrão: os mesmos que o seed cria. Usado por runSeed e pela UI Post Types. */
 export const DEFAULT_POST_TYPES: DefaultPostTypeRow[] = [
   { slug: "post", name: "Post", meta_schema: postMetaSchema },
@@ -46,6 +51,7 @@ export const DEFAULT_POST_TYPES: DefaultPostTypeRow[] = [
   { slug: "user", name: "User", meta_schema: buildMetaSchema([]) },
   { slug: "attachment", name: "Attachment", meta_schema: attachmentMetaSchema },
   { slug: "translations_languages", name: "Translations Languages", meta_schema: translationsMetaSchema },
+  { slug: "themes", name: "Themes", meta_schema: themesMetaSchema },
   { slug: "custom_fields", name: "Custom Fields", meta_schema: buildMetaSchema([]) },
 ];
 

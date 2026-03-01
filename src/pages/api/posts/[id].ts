@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 
 // Database
 import { db } from "../../../db/index.ts";
-import { posts, postsMedia, postsTaxonomies } from "../../../db/schema.ts";
+import { postTypes, posts, postsMedia, postsTaxonomies } from "../../../db/schema.ts";
 
 // ORM
 import { eq } from "drizzle-orm";
@@ -10,6 +10,7 @@ import { eq } from "drizzle-orm";
 // Auth: apenas editor ou admin podem deletar posts
 import { requireMinRole } from "../../../lib/api-auth.ts";
 import { htmxRefreshResponse } from "../../../lib/utils/http-responses.ts";
+import { invalidateThemeCache } from "../../../lib/kv-cache-sync.ts";
 
 export const prerender = false;
 
@@ -52,6 +53,12 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
   }
   const postId = parseInt(id, 10);
   try {
+    const [targetPost] = await db
+      .select({ post_type_id: posts.post_type_id })
+      .from(posts)
+      .where(eq(posts.id, postId))
+      .limit(1);
+
     // Deletar relações de taxonomias
     await db.delete(postsTaxonomies).where(eq(postsTaxonomies.post_id, postId));
     
@@ -60,6 +67,17 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
     
     // Deletar o post
     await db.delete(posts).where(eq(posts.id, postId));
+
+    if (targetPost) {
+      const [typeRow] = await db
+        .select({ slug: postTypes.slug })
+        .from(postTypes)
+        .where(eq(postTypes.id, targetPost.post_type_id))
+        .limit(1);
+      if (typeRow?.slug === "themes") {
+        await invalidateThemeCache(locals);
+      }
+    }
 
     if (request.headers.get("HX-Request") === "true") {
       return htmxRefreshResponse();

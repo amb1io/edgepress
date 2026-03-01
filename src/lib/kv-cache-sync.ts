@@ -6,9 +6,17 @@
 import type { App } from "../env.d.ts";
 import { getKvFromLocals } from "./utils/runtime-locals.ts";
 import type { Database } from "./types/database.ts";
-import { posts } from "../db/schema.ts";
+import { posts, postTypes } from "../db/schema.ts";
 import { eq } from "drizzle-orm";
 import { buildContentPostPayload } from "./content-post-payload.ts";
+import {
+  getActiveThemeFromDb,
+  THEME_ACTIVE_KV_KEY,
+  THEME_META_KV_PREFIX,
+  THEME_STATUS_KV_PREFIX,
+  getThemeSnapshotById,
+  parseThemeImportState,
+} from "./services/theme-service.ts";
 
 /** Deleta todas as chaves com o prefixo dado. Ignora erros de KV. */
 export async function deleteKvKeysByPrefix(kv: App.KVLike, prefix: string): Promise<void> {
@@ -79,6 +87,26 @@ export async function syncPostCache(
   }
 
   await invalidateContentListByTable(locals, "posts");
+
+  // Themes exigem projeção de cache dedicada para resolver tema ativo no runtime.
+  try {
+    const [postRow] = await db
+      .select({ post_type_id: posts.post_type_id })
+      .from(posts)
+      .where(eq(posts.id, postId))
+      .limit(1);
+    if (!postRow) return;
+    const [typeRow] = await db
+      .select({ slug: postTypes.slug })
+      .from(postTypes)
+      .where(eq(postTypes.id, postRow.post_type_id))
+      .limit(1);
+    if (typeRow?.slug === "themes") {
+      await syncThemeCache(locals, db);
+    }
+  } catch {
+    // ignora falha de sincronização de tema
+  }
 }
 
 /**
@@ -121,4 +149,69 @@ export async function invalidateI18nCache(
     return;
   }
   await deleteKvKeysByPrefix(kv, "i18n:");
+}
+
+/**
+ * Invalida cache de tema (tema ativo + metadados por slug).
+ */
+export async function invalidateThemeCache(locals: App.Locals): Promise<void> {
+  const kv = getKvFromLocals(locals);
+  if (!kv) return;
+  try {
+    await kv.delete?.(THEME_ACTIVE_KV_KEY);
+  } catch {
+    // ignora
+  }
+  await deleteKvKeysByPrefix(kv, THEME_META_KV_PREFIX);
+  await deleteKvKeysByPrefix(kv, THEME_STATUS_KV_PREFIX);
+}
+
+/**
+ * Recalcula e projeta em KV o tema ativo e seus metadados canônicos.
+ */
+export async function syncThemeCache(
+  locals: App.Locals,
+  db: Database,
+): Promise<void> {
+  const kv = getKvFromLocals(locals);
+  if (!kv) return;
+  try {
+    const activeTheme = await getActiveThemeFromDb(db);
+    await kv.put(THEME_ACTIVE_KV_KEY, JSON.stringify(activeTheme));
+    if (activeTheme.meta?.theme_slug) {
+      await kv.put(
+        `${THEME_META_KV_PREFIX}${activeTheme.meta.theme_slug}`,
+        JSON.stringify(activeTheme.meta),
+      );
+    }
+  } catch {
+    // ignora falhas de sync de tema para não impactar fluxo principal
+  }
+}
+
+/**
+ * Atualiza em KV o status de importação de um tema específico.
+ */
+export async function syncThemeStatusCacheByPostId(
+  locals: App.Locals,
+  db: Database,
+  themePostId: number
+): Promise<void> {
+  const kv = getKvFromLocals(locals);
+  if (!kv) return;
+  try {
+    const snapshot = await getThemeSnapshotById(db, themePostId);
+    if (!snapshot) return;
+    const state = parseThemeImportState(snapshot.meta_values);
+    await kv.put(
+      `${THEME_STATUS_KV_PREFIX}${snapshot.slug}`,
+      JSON.stringify({
+        id: snapshot.id,
+        slug: snapshot.slug,
+        ...state,
+      })
+    );
+  } catch {
+    // ignora falhas de sync de status
+  }
 }

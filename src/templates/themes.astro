@@ -1,0 +1,268 @@
+---
+import AdminLayout from "../layouts/AdminLayout.astro";
+import AdminFormContainer from "../components/admin/AdminFormContainer.astro";
+import AdminFormActions from "../components/admin/AdminFormActions.astro";
+import ContentFormNotification from "../components/ContentFormNotification.astro";
+import { db } from "../db/index.ts";
+import type { MenuItem } from "../lib/menu.ts";
+import { parseMetaValues } from "../lib/utils/meta-parser.ts";
+import {
+  getContentPageData,
+  isContentPageRedirect,
+} from "../lib/services/content-page-data.ts";
+import { t, type Locale } from "../i18n/index.ts";
+
+export interface Props {
+  locale: string;
+  postTypeSlug: string;
+  action: string;
+  idParam: string | null;
+  menuItems: MenuItem[];
+  currentUser: {
+    id?: string;
+    email?: string;
+    name?: string;
+  };
+}
+
+const { locale, postTypeSlug, action, idParam, menuItems, currentUser } = Astro.props;
+const currentLocale = locale as Locale;
+const isEdit = action === "edit";
+const listUrl = `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`;
+
+const result = await getContentPageData({
+  db,
+  locale,
+  postTypeSlug,
+  action,
+  idParam,
+  userId: String(currentUser?.id ?? ""),
+});
+
+if (isContentPageRedirect(result)) {
+  return Astro.redirect(result.url);
+}
+
+const pageTitle = result.pageTitle;
+const initialTitle = result.initialTitle;
+const initialSlug = result.initialSlug;
+const initialStatus = result.initialStatus || "draft";
+const initialAuthorId = result.initialAuthorId;
+const postId = result.post?.id ?? null;
+const postMeta = parseMetaValues(result.post?.meta_values ?? null);
+const initialIsActive = postMeta["requested_active"] === "1" || postMeta["is_active"] === "1";
+const initialGitHubRepoUrl = postMeta["github_repo_url"] ?? "";
+const initialGitHubRef = postMeta["github_ref"] ?? "main";
+const initialThemeSubdir = postMeta["theme_subdir"] ?? "";
+const initialVersion = postMeta["version"] ?? "1.0.0";
+const initialSupports = postMeta["supports"] ?? "single,archive,page";
+const initialAuthor = postMeta["author"] ?? "";
+const initialPreviewImage = postMeta["preview_image"] ?? "";
+---
+
+<AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={currentUser}>
+  <script
+    define:vars={{
+      initialTitle: String(initialTitle || ""),
+      initialSlug: String(initialSlug || ""),
+      initialExcerpt: "",
+      initialStatus: String(initialStatus || "draft"),
+      initialAuthorId: String(initialAuthorId || ""),
+      thumbnailPath: "",
+      thumbnailUrl: "",
+      initialThumbnailAttachmentId: 0,
+    }}
+  >
+    window.__contentFormProps = {
+      initialTitle,
+      initialSlug,
+      initialExcerpt,
+      initialStatus,
+      initialAuthorId,
+      thumbnailPath,
+      thumbnailUrl,
+      initialThumbnailAttachmentId,
+    };
+  </script>
+  <script>
+    import "../scripts/content-form-init.ts";
+  </script>
+
+  <AdminFormContainer>
+    <form
+      method="post"
+      action="/api/posts"
+      class="flex flex-col gap-4 themes-form"
+      x-data="contentForm"
+      data-is-edit={String(isEdit)}
+      x-init="if ($el.dataset.isEdit !== 'true') slug = (window.slugify && window.slugify(title)) || ''"
+    >
+      <ContentFormNotification />
+      <div id="content-form-error" class="min-h-6"></div>
+
+      <input type="hidden" name="post_type" value={postTypeSlug} />
+      <input type="hidden" name="action" value={action} />
+      {postId && <input type="hidden" name="id" value={postId} />}
+      <input type="hidden" name="locale" value={locale} />
+      <input type="hidden" name="status" value={initialStatus} />
+
+      <div class="form-control">
+        <label for="theme-title" class="label">
+          <span class="label-text">{t(currentLocale, "admin.list.titleColumn")}</span>
+        </label>
+        <input
+          id="theme-title"
+          type="text"
+          name="title"
+          class="input input-bordered w-full"
+          required
+          x-model="title"
+          @input="slug = (window.slugify && window.slugify(title)) || ''"
+          value={initialTitle}
+        />
+      </div>
+
+      <div class="form-control">
+        <label for="theme-slug" class="label">
+          <span class="label-text">Slug</span>
+        </label>
+        <input
+          id="theme-slug"
+          type="text"
+          name="slug"
+          class="input input-bordered w-full"
+          required
+          x-model="slug"
+          value={initialSlug}
+        />
+      </div>
+
+      <div class="form-control">
+        <label class="label cursor-pointer justify-start gap-2">
+          <input type="hidden" name="meta_is_active" value="0" />
+          <input
+            type="checkbox"
+            name="meta_is_active"
+            value="1"
+            class="checkbox checkbox-sm checkbox-primary"
+            checked={initialIsActive}
+          />
+          <span class="label-text">Ativar este tema</span>
+        </label>
+      </div>
+
+      <div class="form-control">
+        <label for="theme-github-repo-url" class="label">
+          <span class="label-text">URL do repositório GitHub do tema</span>
+        </label>
+        <input
+          id="theme-github-repo-url"
+          type="url"
+          name="meta_github_repo_url"
+          class="input input-bordered w-full"
+          placeholder="https://github.com/owner/theme-repo"
+          value={initialGitHubRepoUrl}
+        />
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+          <label for="theme-github-ref" class="label">
+            <span class="label-text">Git ref (branch/tag)</span>
+          </label>
+          <input
+            id="theme-github-ref"
+            type="text"
+            name="meta_github_ref"
+            class="input input-bordered w-full"
+            placeholder="main"
+            value={initialGitHubRef}
+          />
+        </div>
+
+        <div class="form-control">
+          <label for="theme-subdir" class="label">
+            <span class="label-text">Subdiretório do tema (opcional)</span>
+          </label>
+          <input
+            id="theme-subdir"
+            type="text"
+            name="meta_theme_subdir"
+            class="input input-bordered w-full"
+            placeholder="packages/theme"
+            value={initialThemeSubdir}
+          />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+          <label for="theme-version" class="label">
+            <span class="label-text">Versão</span>
+          </label>
+          <input
+            id="theme-version"
+            type="text"
+            name="meta_version"
+            class="input input-bordered w-full"
+            placeholder="1.0.0"
+            value={initialVersion}
+          />
+        </div>
+
+        <div class="form-control">
+          <label for="theme-author" class="label">
+            <span class="label-text">Autor</span>
+          </label>
+          <input
+            id="theme-author"
+            type="text"
+            name="meta_author"
+            class="input input-bordered w-full"
+            value={initialAuthor}
+          />
+        </div>
+      </div>
+
+      <div class="form-control">
+        <label for="theme-supports" class="label">
+          <span class="label-text">Supports (CSV)</span>
+        </label>
+        <input
+          id="theme-supports"
+          type="text"
+          name="meta_supports"
+          class="input input-bordered w-full"
+          placeholder="single,archive,page"
+          value={initialSupports}
+        />
+      </div>
+
+      <div class="form-control">
+        <label for="theme-preview-image" class="label">
+          <span class="label-text">Preview image URL</span>
+        </label>
+        <input
+          id="theme-preview-image"
+          type="url"
+          name="meta_preview_image"
+          class="input input-bordered w-full"
+          placeholder="https://..."
+          value={initialPreviewImage}
+        />
+      </div>
+
+      <p class="text-sm text-base-content/70">
+        <code>theme_slug</code> e <code>theme_path</code> são derivados automaticamente do slug do tema (<code>/src/themes/{'{theme_slug}'}</code>).
+      </p>
+
+      <AdminFormActions
+        submitLabel={isEdit
+          ? t(currentLocale, "admin.content.saveEdit")
+          : t(currentLocale, "admin.content.saveNew")}
+        cancelHref={listUrl}
+        cancelLabel={t(currentLocale, "admin.content.cancel")}
+      />
+    </form>
+  </AdminFormContainer>
+</AdminLayout>

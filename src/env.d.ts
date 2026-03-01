@@ -53,7 +53,16 @@ declare global {
     interface Locals {
       user: import("better-auth").User | null;
       session: import("better-auth").Session | null;
-      runtime?: { env?: { edgepress_cache?: App.KVLike | null } };
+      runtime?: {
+        env?: {
+          edgepress_cache?: App.KVLike | null;
+          THEME_IMPORT_DISPATCH_REPO?: string;
+          THEME_IMPORT_GITHUB_TOKEN?: string;
+          THEME_IMPORT_EVENT_TYPE?: string;
+          THEME_IMPORT_CALLBACK_SECRET?: string;
+          THEME_PACKAGE_METADATA_SECRET?: string;
+        };
+      };
     }
   }
 
