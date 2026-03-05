@@ -94,10 +94,29 @@ Comportamento por tipo de segmento:
 **Listagem (ex: `/api/content/posts`):**
 
 - **Auth:** não obrigatória.
-- **Query:**  
-  `page`, `limit`, `order`, `orderDir` (asc/desc), `filter_<col>=value` (LIKE). Para filtrar por tipo de post use **`filter_post_type`** com **id** (número) ou **slug** (ex: `post`, `page`, `custom_fields`): `filter_post_type=8` ou `filter_post_type=post`. Para filtrar por idioma na tabela `posts`: **`locale`** (código, ex. `pt-br`, `en`) ou **`locale_id`** / **`id_locale_code`** (id numérico da tabela `locales`).
-- **Resposta:** `200` — `{ items, total, page, limit, totalPages, columns }`. Itens podem incluir colunas de tabelas relacionadas (ex: `locales_language`, `user_name`). Para tabela `posts`, colunas de self-join usam prefixo `posts_ref_*`. Na listagem de `posts`, o registro “pai” do menu lateral do admin (post com `show_in_menu = 1`) é excluído do resultado.
+- **Query (parâmetros comuns):**
+  - `page`, `limit` — paginação (padrão `page=1`, `limit=10`; máximo 100).
+  - `order`, `orderDir` — ordenação por coluna (`orderDir`: `asc` ou `desc`; padrão `desc`).
+  - `filter_<col>=value` — filtro por coluna (LIKE no valor). Colunas da tabela ou de tabelas relacionadas (ex: `filter_title=foo`, `filter_locales_language=Português`).
+- **Query (tabela `posts` — filtros específicos):**
+  - **Tipo de post:** `filter_post_type` com **id** (número) ou **slug**: `filter_post_type=post`, `filter_post_type=page`, `filter_post_type=8`.
+  - **Idioma:** `locale` (código, ex: `pt-br`, `en`) ou `locale_id` / `id_locale_code` (id numérico da tabela `locales`). Ex.: `locale=pt-br`, `locale_id=1`.
+  - **Taxonomia:**  
+    - `filter_taxonomy_id` — id do termo em `taxonomies` (ex: `filter_taxonomy_id=5`).  
+    - `filter_taxonomy_slug` — slug do termo (ex: `filter_taxonomy_slug=tecnologia`).  
+    - `filter_taxonomy_type` — (opcional) tipo do termo para desambiguar por slug (ex: `filter_taxonomy_type=category&filter_taxonomy_slug=tecnologia`).
+  - **Ordenação por custom field:** `order=meta_<nome>` — ordena pela chave em `meta_values` (ex: `order=meta_order&orderDir=asc`).
+- **Resposta:** `200` — `{ items, total, page, limit, totalPages, columns }`. Itens podem incluir colunas de tabelas relacionadas (ex: `locales_language`, `user_name`). Para tabela `posts`, colunas de self-join usam prefixo `posts_ref_*`. O registro “pai” do menu lateral do admin (post com `show_in_menu = 1`) **não** é incluído na listagem de `posts`.
 - **Cache:** não autenticado → KV; autenticado → DB direto.
+
+**Exemplos de listagem de posts:**
+
+```
+GET /api/content/posts?locale=pt-br&limit=20
+GET /api/content/posts?filter_post_type=post&filter_taxonomy_slug=tecnologia&filter_taxonomy_type=category
+GET /api/content/posts?filter_taxonomy_id=5&order=meta_order&orderDir=asc
+GET /api/content/posts?locale_id=1&page=2&order=created_at&orderDir=desc
+```
 
 **Post por slug (ex: `/api/content/meu-post`):**
 
@@ -297,4 +316,4 @@ Comportamento por tipo de segmento:
 
 ---
 
-*Documento gerado com base no código em `src/pages/api/`. Última atualização: estado atual do repositório.*
+*Documento gerado com base no código em `src/pages/api/` e `src/lib/list-table-dynamic.ts`. Inclui parâmetros de listagem de conteúdo: locale, taxonomia, ordenação por custom field (meta_*), exclusão do post menu (show_in_menu).*
