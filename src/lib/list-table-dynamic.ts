@@ -176,7 +176,13 @@ export async function getTableList(
   const page = Math.max(1, params.page ?? 1);
   const offset = (page - 1) * limit;
   const orderDir = params.orderDir === "asc" ? "ASC" : "DESC";
-  const orderCol = params.order && displayColumns.includes(params.order) ? params.order : displayColumns[0] || columns[0];
+  const metaOrderCandidate = safeTable === "posts" && params.order?.startsWith("meta_") && params.order.length > 5
+    ? params.order.slice(5)
+    : null;
+  const useMetaOrder = metaOrderCandidate != null && /^[a-zA-Z0-9_]+$/.test(metaOrderCandidate);
+  const orderCol = useMetaOrder
+    ? params.order!
+    : (params.order && displayColumns.includes(params.order) ? params.order : displayColumns[0] || columns[0]);
   const filter = params.filter ?? {};
 
   // Construir JOINs (com alias para self-join para evitar ambiguidade)
@@ -193,13 +199,39 @@ export async function getTableList(
   const joinSql = joins.length > 0 ? ` ${joins.join(" ")}` : "";
 
   // Construir WHERE com filtros (incluindo campos relacionados)
-  const filterCols = Object.keys(filter).filter((k) => displayColumns.includes(k) && filter[k]);
-  
+  const taxonomyFilterKeys = ["taxonomy_id", "taxonomy_slug", "taxonomy_type"];
+  const filterCols = Object.keys(filter).filter(
+    (k) => !taxonomyFilterKeys.includes(k) && displayColumns.includes(k) && filter[k]
+  );
+
   const whereParts: string[] = [];
   // Na listagem de posts: excluir status "trash" e excluir o post "pai" do menu lateral (show_in_menu = 1)
   if (safeTable === "posts") {
     whereParts.push(`${quotedTable}."status" != 'trash'`);
     whereParts.push(`(json_extract(${quotedTable}."meta_values", '$.show_in_menu') IS NULL OR json_extract(${quotedTable}."meta_values", '$.show_in_menu') != 1)`);
+    // Filtro por taxonomia: filter_taxonomy_id (id do termo) ou filter_taxonomy_slug (+ opcional filter_taxonomy_type)
+    const taxonomyId = filter["taxonomy_id"];
+    const taxonomySlug = filter["taxonomy_slug"];
+    const taxonomyType = filter["taxonomy_type"];
+    if (taxonomyId != null && taxonomyId.trim() !== "" && /^\d+$/.test(taxonomyId)) {
+      whereParts.push(
+        `${quotedTable}."id" IN (SELECT "post_id" FROM "posts_taxonomies" WHERE "term_id" = ${parseInt(taxonomyId, 10)})`
+      );
+    } else if (taxonomySlug != null && taxonomySlug.trim() !== "") {
+      const slugEscaped = escapeSqliteString(taxonomySlug.trim());
+      const typeEscaped = taxonomyType != null && taxonomyType.trim() !== ""
+        ? escapeSqliteString(taxonomyType.trim())
+        : null;
+      if (typeEscaped != null) {
+        whereParts.push(
+          `${quotedTable}."id" IN (SELECT pt."post_id" FROM "posts_taxonomies" pt INNER JOIN "taxonomies" t ON pt."term_id" = t."id" WHERE t."slug" = '${slugEscaped}' AND t."type" = '${typeEscaped}')`
+        );
+      } else {
+        whereParts.push(
+          `${quotedTable}."id" IN (SELECT pt."post_id" FROM "posts_taxonomies" pt INNER JOIN "taxonomies" t ON pt."term_id" = t."id" WHERE t."slug" = '${slugEscaped}')`
+        );
+      }
+    }
   }
   for (const col of filterCols) {
     const rawValue = filter[col];
@@ -226,9 +258,17 @@ export async function getTableList(
   }
   const whereSql = whereParts.length > 0 ? ` WHERE ${whereParts.join(" AND ")}` : "";
 
-  // Construir ORDER BY
+  // Construir ORDER BY (inclui custom field em meta_values quando order = "meta_<key>" na tabela posts)
+  const META_ORDER_PREFIX = "meta_";
+  const metaOrderKey = safeTable === "posts" && orderCol.startsWith(META_ORDER_PREFIX) && orderCol.length > META_ORDER_PREFIX.length
+    ? orderCol.slice(META_ORDER_PREFIX.length)
+    : null;
+  const isSafeMetaKey = metaOrderKey != null && /^[a-zA-Z0-9_]+$/.test(metaOrderKey);
+
   let quotedOrderCol: string;
-  if (columns.includes(orderCol)) {
+  if (isSafeMetaKey) {
+    quotedOrderCol = `json_extract(${quotedTable}."meta_values", '$.${metaOrderKey.replace(/"/g, '""')}')`;
+  } else if (columns.includes(orderCol)) {
     quotedOrderCol = `${quotedTable}."${escapeIdentifier(orderCol)}"`;
   } else {
     const related = relatedWithAliases.find((r) => {
