@@ -95,8 +95,8 @@ Comportamento por tipo de segmento:
 
 - **Auth:** não obrigatória.
 - **Query:**  
-  `page`, `limit`, `order`, `orderDir` (asc/desc), `filter_<col>=value` (LIKE). Para filtrar por tipo de post use **`filter_post_type`** com **id** (número) ou **slug** (ex: `post`, `page`, `custom_fields`): `filter_post_type=8` ou `filter_post_type=post`.
-- **Resposta:** `200` — `{ items, total, page, limit, totalPages, columns }`. Itens podem incluir colunas de tabelas relacionadas (ex: `locales_language`, `user_name`). Para tabela `posts`, colunas de self-join usam prefixo `posts_ref_*`.
+  `page`, `limit`, `order`, `orderDir` (asc/desc), `filter_<col>=value` (LIKE). Para filtrar por tipo de post use **`filter_post_type`** com **id** (número) ou **slug** (ex: `post`, `page`, `custom_fields`): `filter_post_type=8` ou `filter_post_type=post`. Para filtrar por idioma na tabela `posts`: **`locale`** (código, ex. `pt-br`, `en`) ou **`locale_id`** / **`id_locale_code`** (id numérico da tabela `locales`).
+- **Resposta:** `200` — `{ items, total, page, limit, totalPages, columns }`. Itens podem incluir colunas de tabelas relacionadas (ex: `locales_language`, `user_name`). Para tabela `posts`, colunas de self-join usam prefixo `posts_ref_*`. Na listagem de `posts`, o registro “pai” do menu lateral do admin (post com `show_in_menu = 1`) é excluído do resultado.
 - **Cache:** não autenticado → KV; autenticado → DB direto.
 
 **Post por slug (ex: `/api/content/meu-post`):**

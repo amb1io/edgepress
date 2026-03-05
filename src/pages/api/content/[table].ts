@@ -15,7 +15,7 @@ import type { APIRoute } from "astro";
 import { db } from "../../../db/index.ts";
 import { getTableContentWithCache } from "../../../lib/content-cache.ts";
 import { getTableNames, getContentApiRuntime, getSafeTableName, VALID_TABLE_IDENTIFIER } from "../../../lib/db-utils.ts";
-import { posts } from "../../../db/schema.ts";
+import { posts, locales } from "../../../db/schema.ts";
 import { and, eq, inArray } from "drizzle-orm";
 import { isValidSlug } from "../../../lib/utils/validation.ts";
 import { parseMetaValues } from "../../../lib/utils/meta-parser.ts";
@@ -63,6 +63,21 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
         }
       } else {
         filter[filterKey] = value;
+      }
+    }
+
+    // Filtro por idioma: locale (código, ex. pt-br) ou locale_id / id_locale_code (id numérico)
+    const localeParam = url.searchParams.get("locale");
+    const localeIdParam = url.searchParams.get("locale_id") ?? url.searchParams.get("id_locale_code");
+    if (safeTable === "posts" && (localeParam != null || localeIdParam != null)) {
+      if (localeIdParam != null && /^\d+$/.test(localeIdParam)) {
+        filter["id_locale_code"] = localeIdParam;
+      } else if (localeParam != null && localeParam.trim() !== "") {
+        const localeCode = localeParam.trim().toLowerCase().replace(/-/g, "_");
+        const [row] = await db.select({ id: locales.id }).from(locales).where(eq(locales.locale_code, localeCode)).limit(1);
+        if (row != null) {
+          filter["id_locale_code"] = String(row.id);
+        }
       }
     }
 
