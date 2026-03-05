@@ -196,15 +196,18 @@ export async function getTableList(
   const filterCols = Object.keys(filter).filter((k) => displayColumns.includes(k) && filter[k]);
   
   const whereParts: string[] = [];
-  // Na listagem de posts, excluir status "trash"
+  // Na listagem de posts: excluir status "trash" e excluir o post "pai" do menu lateral (show_in_menu = 1)
   if (safeTable === "posts") {
     whereParts.push(`${quotedTable}."status" != 'trash'`);
+    whereParts.push(`(json_extract(${quotedTable}."meta_values", '$.show_in_menu') IS NULL OR json_extract(${quotedTable}."meta_values", '$.show_in_menu') != 1)`);
   }
   for (const col of filterCols) {
     const rawValue = filter[col];
     const escaped = escapeSqliteString(rawValue);
     if (columns.includes(col)) {
       if (col === "post_type_id" && /^\d+$/.test(rawValue)) {
+        whereParts.push(`${quotedTable}."${escapeIdentifier(col)}" = ${parseInt(rawValue, 10)}`);
+      } else if (col === "id_locale_code" && /^\d+$/.test(rawValue)) {
         whereParts.push(`${quotedTable}."${escapeIdentifier(col)}" = ${parseInt(rawValue, 10)}`);
       } else {
         whereParts.push(`${quotedTable}."${escapeIdentifier(col)}" LIKE '%${escaped}%'`);
