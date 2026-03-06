@@ -122,7 +122,7 @@ GET /api/content/posts?locale_id=1&page=2&order=created_at&orderDir=desc
 
 - **Auth:** não obrigatória.
 - **Query:** `status` (opcional) — valores permitidos: `published`, `draft`, `archived`. Padrão: só `published`.
-- **Resposta:** `200` — objeto **hierárquico**: o pai é o post/post_type; dentro dele: **meta_schema** (JSON estruturado do tipo do post), **meta_values** (JSON estruturado), **custom_fields** (JSON estruturado — campos personalizados filhos), **body_smart**, **media**. Campos do post: `id`, `post_type_id`, `title`, `slug`, `excerpt`, `body`, `status`, `published_at`, `created_at`, `updated_at`, etc.
+- **Resposta:** `200` — objeto **hierárquico**: o pai é o post/post_type; dentro dele: **meta_schema** (JSON estruturado do tipo do post), **meta_values** (JSON estruturado), **custom_fields** (JSON estruturado — campos personalizados filhos), **body_smart**, **media**, **taxonomies** (array de termos associados ao post: `id`, `name`, `slug`, `type`, `description`, `parent_id`). Campos do post: `id`, `post_type_id`, `title`, `slug`, `excerpt`, `body`, `status`, `published_at`, `created_at`, `updated_at`, etc.
 - **Erros:** `400` (slug inválido), `404` (post não encontrado).
 - **Cache:** não autenticado → KV primeiro; autenticado → DB direto.
 
@@ -131,7 +131,7 @@ GET /api/content/posts?locale_id=1&page=2&order=created_at&orderDir=desc
 - **Auth:** não obrigatória.
 - **Params:** `table` — nome da tabela (ex: `posts`, `settings`); segundo segmento — **id** (numérico) ou **slug** (apenas para `posts`).
 - **Comportamento:**
-  - **table = "posts":** aceita **id** ou **slug** no segundo segmento. Retorna o mesmo payload hierárquico: post (pai) + **meta_schema**, **meta_values**, **custom_fields**, **body_smart**, **media**.
+  - **table = "posts":** aceita **id** ou **slug** no segundo segmento. Retorna o mesmo payload hierárquico: post (pai) + **meta_schema**, **meta_values**, **custom_fields**, **body_smart**, **media**, **taxonomies**.
   - **Outras tabelas:** apenas **id** numérico. Retorna uma linha com `WHERE id = ?`. Se tiver coluna `meta_values`, é retornada parseada.
 - **Resposta:** `200` — objeto do registro ou `404` (not found) / `400` (id ou slug inválido).
 - **Cache (só para posts):** não autenticado → KV primeiro (`post:id:{id}` ou `post:{slug}:status=...`); autenticado → DB direto.
