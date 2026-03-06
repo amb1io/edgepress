@@ -1,11 +1,11 @@
 /**
  * Monta o payload hierárquico de um post para a API content:
  * - Objeto pai: post (post_type em questão)
- * - Dentro: meta_schema (JSON), meta_values (JSON), custom_fields (JSON), body_smart, media
+ * - Dentro: meta_schema (JSON), meta_values (JSON), custom_fields (JSON), body_smart, media, taxonomies
  */
 import { eq, and } from "drizzle-orm";
 import type { Database } from "./types/database.ts";
-import { posts, postTypes } from "../db/schema.ts";
+import { posts, postTypes, postsTaxonomies, taxonomies } from "../db/schema.ts";
 import { getPostMedia } from "./services/media-service.ts";
 import { getPostTypeId } from "./services/post-service.ts";
 import { parseMetaValues } from "./utils/meta-parser.ts";
@@ -37,6 +37,36 @@ export type CustomFieldItem = {
 
 /** Meta schema do post_types (array de { key, type, default? }) */
 export type MetaSchemaItem = { key: string; type: string; default?: unknown };
+
+/** Termo de taxonomia associado ao post (para o payload da API). */
+export type PostTaxonomyItem = {
+  id: number;
+  name: string;
+  slug: string;
+  type: string;
+  description: string | null;
+  parent_id: number | null;
+};
+
+/** Busca taxonomias vinculadas ao post (para incluir no payload da API content). */
+export async function getPostTaxonomiesForPayload(
+  db: Database,
+  postId: number
+): Promise<PostTaxonomyItem[]> {
+  const rows = await db
+    .select({
+      id: taxonomies.id,
+      name: taxonomies.name,
+      slug: taxonomies.slug,
+      type: taxonomies.type,
+      description: taxonomies.description,
+      parent_id: taxonomies.parent_id,
+    })
+    .from(postsTaxonomies)
+    .innerJoin(taxonomies, eq(postsTaxonomies.term_id, taxonomies.id))
+    .where(eq(postsTaxonomies.post_id, postId));
+  return rows as PostTaxonomyItem[];
+}
 
 /** Busca meta_schema do tipo do post (post_types.meta_schema) como JSON estruturado. */
 export async function getPostMetaSchema(
@@ -88,7 +118,7 @@ export async function getPostCustomFields(
   });
 }
 
-/** Monta o payload completo do post com hierarquia: post (pai) + meta_schema, meta_values, custom_fields, body_smart, media. */
+/** Monta o payload completo do post com hierarquia: post (pai) + meta_schema, meta_values, custom_fields, body_smart, media, taxonomies. */
 export async function buildContentPostPayload(
   db: Database,
   post: PostRow
@@ -109,11 +139,13 @@ export async function buildContentPostPayload(
   meta_schema: MetaSchemaItem[];
   meta_values: Record<string, unknown>;
   custom_fields: CustomFieldItem[];
+  taxonomies: PostTaxonomyItem[];
 }> {
-  const [meta_schema, custom_fields, media] = await Promise.all([
+  const [meta_schema, custom_fields, media, taxonomiesList] = await Promise.all([
     getPostMetaSchema(db, post.post_type_id),
     getPostCustomFields(db, post.id),
     getPostMedia(db as never, post.id),
+    getPostTaxonomiesForPayload(db, post.id),
   ]);
 
   const meta_values = parseMetaValues(post.meta_values) as Record<string, unknown>;
@@ -140,5 +172,6 @@ export async function buildContentPostPayload(
     meta_schema,
     meta_values,
     custom_fields,
+    taxonomies: taxonomiesList,
   };
 }
