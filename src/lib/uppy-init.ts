@@ -158,6 +158,7 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
             path?: string;
             mimeType?: string;
             filename?: string;
+            cloudflareImageId?: string;
           };
         if (typeof raw === "string")
           return JSON.parse(raw) as {
@@ -165,6 +166,7 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
             path?: string;
             mimeType?: string;
             filename?: string;
+            cloudflareImageId?: string;
           };
       } catch {
         // ignore
@@ -190,7 +192,13 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
   uppy.on("upload-success", (file, response) => {
     if (!file) return;
     const body = (response?.body ?? response) as
-      | { key?: string; path?: string; mimeType?: string; filename?: string }
+      | {
+          key?: string;
+          path?: string;
+          mimeType?: string;
+          filename?: string;
+          cloudflareImageId?: string;
+        }
       | undefined;
     if (!body || !("key" in body)) return;
     const path = body.path ?? "";
@@ -208,6 +216,7 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
       file.name ||
       body.filename ||
       "";
+    const cloudflareImageId = body.cloudflareImageId;
     window.dispatchEvent(
       new CustomEvent(eventName, {
         detail: {
@@ -216,6 +225,7 @@ export function initUppyInstance(options: UppyInitOptions): Uppy | null {
           filename: body.filename ?? "",
           originalFilename: originalFilename,
           mimeType: body.mimeType ?? "",
+          cloudflareImageId,
         },
       }),
     );

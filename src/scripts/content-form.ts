@@ -148,6 +148,7 @@ export function initContentForm(props: ContentFormInitProps): void {
       mimeType?: string;
       filename?: string;
       originalFilename?: string;
+      cloudflareImageId?: string;
     }>;
     const form = document.querySelector('form[action="/api/posts"]');
     const Alpine = window.Alpine;
@@ -193,6 +194,9 @@ export function initContentForm(props: ContentFormInitProps): void {
     fd.set("meta_attachment_file", customEvent.detail?.filename ?? "");
     fd.set("meta_attachment_path", customEvent.detail?.path ?? "");
     fd.set("meta_attachment_alt", "");
+    if (customEvent.detail?.cloudflareImageId) {
+      fd.set("meta_cloudflare_image_id", customEvent.detail.cloudflareImageId);
+    }
 
     try {
       const res = await fetch("/api/posts", {
