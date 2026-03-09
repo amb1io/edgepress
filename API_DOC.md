@@ -235,15 +235,24 @@ GET /api/content/posts?locale_id=1&page=2&order=created_at&orderDir=desc
 - **Auth:** Autor ou superior (role ≤ 2).
 - **Body:** `multipart/form-data` com campo `file` (ou primeiro arquivo).
 - **Limites:** tamanho máximo 20 MB; extensões de código/script bloqueadas; imagens e PDF permitidos (tipos e extensões validados).
-- **Resposta:** `200` — `{ key, path, mimeType, filename }` ou `400` / `413` / `503` (bucket não configurado). Rate limit configurável (ex.: 20 uploads/hora).
+- **Resposta:** `200` — `{ key, path, mimeType, filename, cloudflareImageId? }`. Quando Cloudflare Images está configurado e o arquivo é imagem, pode incluir `cloudflareImageId` para salvar em `meta_values` do attachment. Erros: `400` / `413` / `503` (bucket não configurado). Rate limit configurável (ex.: 20 uploads/hora).
 
 ### `GET /api/media/[...path]` e `GET /api/media/{id}`
 
 - **Auth:** não obrigatória.
-- **Por id:** `GET /api/media/123` — `123` é o id do attachment (post tipo attachment). O servidor busca o registro no banco, lê `attachment_path` (ou `file_path`) em `meta_values`, e serve o arquivo do R2.
-- **Por path:** `GET /api/media/uploads/2024/01/arquivo.jpg` — path do arquivo no R2. Se não começar com `uploads/`, o prefixo é adicionado.
-- **Resposta:** stream do arquivo no R2 com headers `Content-Type` e `Content-Length` quando disponíveis.
+- **Por id:** `GET /api/media/123` — `123` é o id do attachment (post tipo attachment). O servidor busca o registro no banco e:
+  - Se existir `cloudflare_image_id` (ou equivalentes) em `meta_values` e as variáveis de ambiente do Cloudflare Images estiverem configuradas, responde com **redirect 302** para a URL otimizada no Cloudflare Images (flexible variants com `width`, `height`, `format=webp`).
+  - Caso contrário, lê `attachment_path` (ou `file_path`) em `meta_values` e serve o arquivo do R2; para imagens, aplica Image Resizing do Cloudflare e entrega em **WebP**.
+- **Por path:** `GET /api/media/uploads/2024/01/arquivo.jpg` — path do arquivo no R2. Se não começar com `uploads/`, o prefixo é adicionado. Imagens são otimizadas e entregues em WebP (exceto com `raw=1`).
+- **Query params (imagens — aplicam a R2 e Cloudflare Images):**
+  - **`width`** — número (1–4096), largura em pixels.
+  - **`height`** — número (1–4096), altura em pixels.
+  - **`size`** — preset: `thumbnail` | `medium` | `large`. Presets: thumbnail 300×300, medium 800×800, large 1920×1920. Se `width`/`height` forem informados, têm prioridade sobre `size`.
+  - **`raw=1`** — devolve o binário original (sem redimensionar e sem converter para WebP). Útil para download do arquivo original.
+- **Formato de entrega:** sem `raw=1`, imagens são sempre entregues em **WebP** (Content-Type `image/webp`), com redimensionamento conforme `width`, `height` ou `size`. Arquivos não-imagem (PDF, áudio, etc.) são servidos sem alteração.
+- **Resposta:** stream do arquivo (ou redirect 302 para Cloudflare Images), com headers `Content-Type` e `Content-Length` quando aplicável.
 - **Erros:** `404` (arquivo ou attachment não encontrado), `503` (R2 não configurado).
+- **Requisitos opcionais:** para otimização de imagens no R2, Image Resizing deve estar habilitado na zona (Cloudflare). Para redirect ao Cloudflare Images, configurar `CLOUDFLARE_IMAGES_BASE_URL` ou `CLOUDFLARE_IMAGES_ACCOUNT_HASH` (e opcionalmente `CLOUDFLARE_IMAGES_VARIANT`); Flexible variants habilitado no Cloudflare Images para usar parâmetros de tamanho na URL.
 
 ---
 
