@@ -116,6 +116,7 @@ let initialSlug = "";
 let initialExcerpt = "";
 let initialStatus = "draft";
 let initialAuthorId = "";
+let initialOrder = "";
 let initialLocaleId: number | null = null;
 let asideAccordionName = "content-aside";
 let thumbnailPath = "";
@@ -153,6 +154,7 @@ if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate &&
   initialExcerpt = result.initialExcerpt;
   initialStatus = result.initialStatus;
   initialAuthorId = result.initialAuthorId;
+  initialOrder = result.initialOrder;
   initialLocaleId = result.initialLocaleId;
   asideAccordionName = result.asideAccordionName;
   thumbnailPath = result.thumbnailPath;
@@ -200,6 +202,7 @@ const showAlternateTemplate =
       initialExcerpt: String(initialExcerpt || ""),
       initialStatus: String(initialStatus || "draft"),
       initialAuthorId: String(initialAuthorId || ""),
+      initialOrder: String(initialOrder || ""),
       thumbnailPath: String(thumbnailPath || ""),
       thumbnailUrl: String(thumbnailUrl || ""),
       initialThumbnailAttachmentId: initialThumbnailAttachmentId !== null && initialThumbnailAttachmentId !== undefined ? Number(initialThumbnailAttachmentId) : 0,
@@ -211,6 +214,7 @@ const showAlternateTemplate =
       initialExcerpt,
       initialStatus,
       initialAuthorId,
+      initialOrder,
       thumbnailPath,
       thumbnailUrl,
       initialThumbnailAttachmentId,
@@ -291,6 +295,7 @@ const showAlternateTemplate =
         initialLocaleId={initialLocaleId}
         initialSlug={initialSlug}
         initialExcerpt={initialExcerpt}
+        initialOrder={initialOrder}
         hasPostThumbnail={hasPostThumbnail}
         thumbnailUrl={thumbnailUrl}
         taxonomyBlocks={taxonomyBlocks}

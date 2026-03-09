@@ -36,6 +36,7 @@ export type ContentFormInitProps = {
   initialExcerpt: string;
   initialStatus: string;
   initialAuthorId: string;
+  initialOrder: string;
   thumbnailPath: string;
   thumbnailUrl: string;
   initialThumbnailAttachmentId: number;
@@ -47,6 +48,7 @@ export type ContentFormContext = {
   excerpt: string;
   status: string;
   author_id: string;
+  order: string;
   thumbnail_path: string;
   thumbnail_url: string;
   thumbnail_attachment_id: number | null;
@@ -69,6 +71,7 @@ export function initContentForm(props: ContentFormInitProps): void {
     initialExcerpt,
     initialStatus,
     initialAuthorId,
+    initialOrder,
     thumbnailPath,
     thumbnailUrl,
     initialThumbnailAttachmentId,
@@ -84,6 +87,7 @@ export function initContentForm(props: ContentFormInitProps): void {
       excerpt: safeStr(initialExcerpt),
       status: String(initialStatus || "draft"),
       author_id: String(initialAuthorId || ""),
+      order: safeStr(initialOrder),
       thumbnail_path: String(thumbnailPath || ""),
       thumbnail_url: String(thumbnailUrl || ""),
       thumbnail_attachment_id:

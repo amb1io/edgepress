@@ -66,6 +66,7 @@ export type ContentPageDataResult = {
   initialExcerpt: string;
   initialStatus: string;
   initialAuthorId: string;
+  initialOrder: string;
   initialLocaleId: number | null;
   asideAccordionName: string;
   thumbnailPath: string;
@@ -201,6 +202,7 @@ export async function getContentPageData(params: {
   let thumbnailUrl = "";
   let thumbnailAttachmentId: number | null = null;
   let initialCustomFields: InitialCustomFieldItem[] = [];
+  let initialOrder = "";
   const templateCustomFieldsList: TemplateCustomFieldItem[] = [];
 
   if (action === "edit" && idParam) {
@@ -241,6 +243,12 @@ export async function getContentPageData(params: {
     if (post.meta_values) {
       try {
         const meta = JSON.parse(post.meta_values) as Record<string, unknown>;
+        const rawOrder = meta["order"];
+        if (typeof rawOrder === "number") {
+          initialOrder = String(rawOrder);
+        } else if (typeof rawOrder === "string") {
+          initialOrder = rawOrder;
+        }
         const postThumbnailId =
           typeof meta["post_thumbnail_id"] === "string"
             ? parseInt(meta["post_thumbnail_id"], 10)
@@ -416,6 +424,7 @@ export async function getContentPageData(params: {
     initialExcerpt: String(post?.excerpt ?? ""),
     initialStatus: String(post?.status ?? "draft"),
     initialAuthorId,
+    initialOrder,
     initialLocaleId: post?.id_locale_code ?? null,
     asideAccordionName: "content-aside",
     thumbnailPath: String(thumbnailPath),

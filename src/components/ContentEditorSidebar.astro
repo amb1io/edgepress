@@ -21,6 +21,7 @@ interface Props {
   initialLocaleId: number | null;
   initialSlug: string;
   initialExcerpt: string;
+   initialOrder: string;
   hasPostThumbnail: boolean;
   thumbnailUrl: string;
   taxonomyBlocks: TaxonomyBlock[];
@@ -35,6 +36,7 @@ const {
   initialLocaleId,
   initialSlug = "",
   initialExcerpt = "",
+  initialOrder: _initialOrder = "",
   hasPostThumbnail,
   thumbnailUrl,
   taxonomyBlocks,
@@ -95,6 +97,21 @@ const {
                 class="input input-bordered input-sm w-full font-mono text-sm"
                 value={initialSlug}
                 x-model="slug"
+              />
+            </div>
+
+            <div class="form-control">
+              <label for="order" class="label py-0">
+                <span class="label-text text-xs">Order</span>
+              </label>
+              <input
+                type="number"
+                id="order"
+                name="meta_order"
+                class="input input-bordered input-sm w-full font-mono text-sm"
+                value={_initialOrder}
+                x-model="order"
+                min="0"
               />
             </div>
 
