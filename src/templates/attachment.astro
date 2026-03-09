@@ -84,6 +84,10 @@ function parseMeta(metaValues: string | null): Record<string, string> {
         typeof o["attachment_path"] === "string" ? o["attachment_path"] : "",
       attachment_alt:
         typeof o["attachment_alt"] === "string" ? o["attachment_alt"] : "",
+      cloudflare_image_id:
+        typeof o["cloudflare_image_id"] === "string"
+          ? o["cloudflare_image_id"]
+          : "",
     };
   } catch {
     return {};
@@ -98,6 +102,7 @@ const initialMimeType = meta["mime_type"] ?? "";
 const initialAttachmentFile = meta["attachment_file"] ?? "";
 const initialAttachmentPath = meta["attachment_path"] ?? "";
 const initialAttachmentAlt = meta["attachment_alt"] ?? "";
+const initialCloudflareImageId = meta["cloudflare_image_id"] ?? "";
 const hasImageInitial = Boolean(initialAttachmentPath);
 // Converter path do R2 para URL acessível
 // Se já é URL completa (http/https), usar diretamente
@@ -135,6 +140,7 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
       isEditMode,
       locale,
       postTypeSlug,
+      initialCloudflareImageId,
     }}
   >
     window.slugify = function (text) {
@@ -162,6 +168,7 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
         attachment_file: initialAttachmentFile ?? "",
         attachment_path: initialAttachmentPath ?? "",
         attachment_alt: initialAttachmentAlt ?? "",
+        cloudflare_image_id: initialCloudflareImageId ?? "",
         modalOpen: false,
         modalTitle: initialTitle,
         modalSlug: initialSlug,
@@ -230,7 +237,10 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
           await new Promise((resolve) => setTimeout(resolve, 0));
 
           const formAction = form.getAttribute("action") || "/api/posts";
-          const htmx = (typeof window !== "undefined" && (window as unknown as { htmx?: { ajax: (method: string, url: string, opts: { source: HTMLFormElement; target: string; swap: string }) => void } }).htmx);
+          const htmx =
+            typeof window !== "undefined" && window.htmx
+              ? window.htmx
+              : null;
           if (htmx?.ajax) {
             htmx.ajax("post", formAction, {
               source: form,
@@ -260,7 +270,7 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
     });
   </script>
 
-  <div id="attachment-form-error" class="min-h-[1.5rem] px-6" aria-live="polite"></div>
+  <div id="attachment-form-error" class="min-h-6 px-6" aria-live="polite"></div>
   <form
     method="post"
     action="/api/posts"
@@ -309,6 +319,12 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
       name="meta_attachment_alt"
       id="attachment-alt"
       :value="attachment_alt"
+    />
+    <input
+      type="hidden"
+      name="meta_cloudflare_image_id"
+      id="attachment-cloudflare-id"
+      :value="cloudflare_image_id"
     />
 
     {!isEditMode ? (
@@ -534,7 +550,14 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
 <script>
   // Handler para criar posts automaticamente quando arquivos são enviados no modo "new"
   async function handleAttachmentUploaded(
-    e: CustomEvent<{ path: string; imageUrl: string; filename: string; originalFilename?: string; mimeType: string }>
+    e: CustomEvent<{
+      path: string;
+      imageUrl: string;
+      filename: string;
+      originalFilename?: string;
+      mimeType: string;
+      cloudflareImageId?: string;
+    }>
   ) {
     const alpineRoot = document.querySelector("[x-data*='attachmentForm']");
     const Alpine = (window as unknown as { Alpine?: { $data: (el: Element) => Record<string, unknown> } }).Alpine;
@@ -545,6 +568,8 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
       attachment_path?: string;
       attachment_file?: string;
       mime_type?: string;
+      attachment_alt?: string;
+      cloudflare_image_id?: string;
       title?: string;
       slug?: string;
       postId?: number | null;
@@ -556,6 +581,9 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
     ctx.attachment_path = e.detail.path;
     ctx.attachment_file = e.detail.filename;
     ctx.mime_type = e.detail.mimeType;
+    if (e.detail.cloudflareImageId) {
+      ctx.cloudflare_image_id = e.detail.cloudflareImageId;
+    }
     const slugify = (window as unknown as { slugify?: (t: string) => string }).slugify;
     // Usar o nome original do arquivo para o título do post
     const originalFilename = e.detail.originalFilename || e.detail.filename || "Untitled";
@@ -595,6 +623,9 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
     fd.set("meta_attachment_file", e.detail.filename);
     fd.set("meta_attachment_path", e.detail.path);
     fd.set("meta_attachment_alt", "");
+    if (e.detail.cloudflareImageId) {
+      fd.set("meta_cloudflare_image_id", e.detail.cloudflareImageId);
+    }
     try {
       const res = await fetch("/api/posts", {
         method: "POST",
@@ -610,7 +641,7 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
   }
 
   /** @param {CustomEvent<{ items: { id: number; title: string; url: string; path?: string }[] }>} ev */
-  function handleMediaManagerSelect(ev) {
+  function handleMediaManagerSelect(ev: CustomEvent<{ items: { id: number; title: string; url: string; path?: string }[] }>) {
     const items = ev?.detail?.items;
     if (!items?.length) return;
     const first = items[0];
@@ -630,7 +661,14 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
   function onReady() {
     window.addEventListener("attachment-uploaded", (ev: Event) => {
       handleAttachmentUploaded(
-        ev as CustomEvent<{ path: string; imageUrl: string; filename: string; originalFilename?: string; mimeType: string }>
+        ev as CustomEvent<{
+          path: string;
+          imageUrl: string;
+          filename: string;
+          originalFilename?: string;
+          mimeType: string;
+          cloudflareImageId?: string;
+        }>
       );
     });
     window.addEventListener("media-manager-select", (ev: Event) => {

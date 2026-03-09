@@ -10,6 +10,13 @@ import { parseMetaValues } from "../../../lib/utils/meta-parser.ts";
 
 export const prerender = false;
 
+type MediaEnv = {
+  MEDIA_BUCKET?: { get: (key: string) => Promise<R2ObjectBody | null> };
+  CLOUDFLARE_IMAGES_BASE_URL?: string;
+  CLOUDFLARE_IMAGES_ACCOUNT_HASH?: string;
+  CLOUDFLARE_IMAGES_VARIANT?: string;
+};
+
 function pathToR2Key(path: string): string {
   let key = path.trim();
   if (key.startsWith("/")) key = key.slice(1);
@@ -18,16 +25,14 @@ function pathToR2Key(path: string): string {
 }
 
 export const GET: APIRoute = async ({ params, locals }) => {
-  const pathArray = params.path;
+  const pathArray = params["path"];
   if (!pathArray || (Array.isArray(pathArray) && pathArray.length === 0)) {
     return new Response("Not Found", { status: 404 });
   }
 
   const path = Array.isArray(pathArray) ? pathArray.join("/") : pathArray;
 
-  const env = (locals as { runtime?: { env?: Record<string, unknown> } }).runtime?.env as
-    | { MEDIA_BUCKET?: { get: (key: string) => Promise<R2ObjectBody | null> } }
-    | undefined;
+  const env = (locals as { runtime?: { env?: MediaEnv } }).runtime?.env;
   const bucket = env?.MEDIA_BUCKET;
 
   if (!bucket) {
@@ -43,8 +48,44 @@ export const GET: APIRoute = async ({ params, locals }) => {
     if (!media) {
       return new Response("File not found", { status: 404 });
     }
-    const meta = parseMetaValues(media.meta_values);
-    const attachmentPath = meta.attachment_path ?? meta.file_path ?? "";
+    const meta = parseMetaValues(media.meta_values) as Record<string, unknown>;
+
+    // Se houver configuração e ID de Cloudflare Images, redireciona para a imagem otimizada
+    const cfImageId =
+      (meta["cloudflare_image_id"] as string | undefined) ??
+      (meta["cloudflareImageId"] as string | undefined) ??
+      (meta["cf_image_id"] as string | undefined) ??
+      (meta["cloudflare_images_id"] as string | undefined);
+
+    if (cfImageId) {
+      const baseFromEnv =
+        typeof env?.CLOUDFLARE_IMAGES_BASE_URL === "string"
+          ? env.CLOUDFLARE_IMAGES_BASE_URL.trim()
+          : "";
+      const accountHash =
+        typeof env?.CLOUDFLARE_IMAGES_ACCOUNT_HASH === "string"
+          ? env.CLOUDFLARE_IMAGES_ACCOUNT_HASH.trim()
+          : "";
+
+      const baseUrl = baseFromEnv || (accountHash ? `https://imagedelivery.net/${accountHash}` : "");
+
+      if (baseUrl) {
+        const variant =
+          typeof env?.CLOUDFLARE_IMAGES_VARIANT === "string" && env.CLOUDFLARE_IMAGES_VARIANT.trim()
+            ? env.CLOUDFLARE_IMAGES_VARIANT.trim()
+            : "public";
+
+        const cleanedBase = baseUrl.replace(/\/$/, "");
+        const imageUrl = `${cleanedBase}/${encodeURIComponent(cfImageId)}/${encodeURIComponent(
+          variant,
+        )}`;
+
+        return Response.redirect(imageUrl, 302);
+      }
+    }
+
+    const metaParsed = meta as { attachment_path?: string; file_path?: string };
+    const attachmentPath = metaParsed.attachment_path ?? metaParsed.file_path ?? "";
     if (!attachmentPath) {
       return new Response("File not found", { status: 404 });
     }

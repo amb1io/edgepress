@@ -53,11 +53,62 @@ function buildKey(filename: string, _mimeType: string): string {
   return `${UPLOAD_PREFIX}/${y}/${m}/${unique}-${base}${ext}`;
 }
 
+async function uploadToCloudflareImages(
+  file: File,
+  key: string,
+  env: Record<string, string>,
+): Promise<string | null> {
+  const accountId = env.CLOUDFLARE_IMAGES_ACCOUNT_ID;
+  const apiToken = env.CLOUDFLARE_IMAGES_API_TOKEN;
+
+  if (!accountId || !apiToken) {
+    return null;
+  }
+
+  try {
+    const form = new FormData();
+    form.set("file", file);
+    // Usar a key do R2 como ID estável no Cloudflare Images (opcional)
+    form.set("id", key);
+
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/images/v1`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+        },
+        body: form,
+      },
+    );
+
+    if (!res.ok) {
+      console.error("Cloudflare Images upload failed:", res.status, await res.text().catch(() => ""));
+      return null;
+    }
+
+    const json = (await res.json()) as {
+      success?: boolean;
+      result?: { id?: string };
+    };
+
+    if (!json.success || !json.result?.id) {
+      console.error("Cloudflare Images unexpected response:", json);
+      return null;
+    }
+
+    return json.result.id || null;
+  } catch (err) {
+    console.error("Cloudflare Images error:", err);
+    return null;
+  }
+}
+
 export const POST: APIRoute = async ({ request, locals }) => {
   const authResult = await requireMinRole(request, 2, locals);
   if (authResult instanceof Response) return authResult;
 
-  const env = (locals as { runtime?: { env?: Record<string, string> } }).runtime?.env;
+  const env = (locals as { runtime?: { env?: Record<string, string> } }).runtime?.env ?? {};
 
   // Obter rate limits do ambiente
   const rateLimits = getRateLimits(env);
@@ -166,9 +217,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
   }
 
+  // Opcional: enviar também para Cloudflare Images quando for imagem
+  let cloudflareImageId: string | null = null;
+  if (finalMimeType.startsWith("image/")) {
+    cloudflareImageId = await uploadToCloudflareImages(file, key, env);
+  }
+
   const path = `/${key}`;
   return new Response(
-    JSON.stringify({ key, path, mimeType: finalMimeType, filename }),
+    JSON.stringify({
+      key,
+      path,
+      mimeType: finalMimeType,
+      filename,
+      // ID opcional do Cloudflare Images para salvar em meta_values
+      cloudflareImageId: cloudflareImageId ?? undefined,
+    }),
     { status: 200, headers: { "Content-Type": "application/json" } }
   );
 };
