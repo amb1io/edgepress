@@ -101,9 +101,9 @@ Comportamento por tipo de segmento:
 - **Query (tabela `posts` — filtros específicos):**
   - **Tipo de post:** `filter_post_type` com **id** (número) ou **slug**: `filter_post_type=post`, `filter_post_type=page`, `filter_post_type=8`.
   - **Idioma:** `locale` (código, ex: `pt-br`, `en`) ou `locale_id` / `id_locale_code` (id numérico da tabela `locales`). Ex.: `locale=pt-br`, `locale_id=1`.
-  - **Taxonomia:**  
-    - `filter_taxonomy_id` — id do termo em `taxonomies` (ex: `filter_taxonomy_id=5`).  
-    - `filter_taxonomy_slug` — slug do termo (ex: `filter_taxonomy_slug=tecnologia`).  
+  - **Taxonomia:**
+    - `filter_taxonomy_id` — id do termo em `taxonomies` (ex: `filter_taxonomy_id=5`).
+    - `filter_taxonomy_slug` — slug do termo (ex: `filter_taxonomy_slug=tecnologia`).
     - `filter_taxonomy_type` — (opcional) tipo do termo para desambiguar por slug (ex: `filter_taxonomy_type=category&filter_taxonomy_slug=tecnologia`).
   - **Ordenação por custom field:** `order=meta_<nome>` — ordena pela chave em `meta_values` (ex: `order=meta_order&orderDir=asc`).
 - **Resposta:** `200` — `{ items, total, page, limit, totalPages, columns }`. Itens podem incluir colunas de tabelas relacionadas (ex: `locales_language`, `user_name`). Para tabela `posts`, colunas de self-join usam prefixo `posts_ref_*`. O registro “pai” do menu lateral do admin (post com `show_in_menu = 1`) **não** é incluído na listagem de `posts`.
@@ -301,28 +301,28 @@ GET /api/content/posts?locale_id=1&page=2&order=created_at&orderDir=desc
 
 ## Resumo de autenticação por endpoint
 
-| Endpoint | GET | POST | PUT | PATCH | DELETE |
-|----------|-----|------|-----|-------|--------|
-| `/api/settings` | Público | Admin | — | Admin | — |
-| `/api/settings/[id]` | Editor+ | — | Admin | — | Admin |
-| `/api/content/*` | Público (KV/DB) | — | — | — | — |
-| `/api/content/[table]/[id]` | Público (KV/DB para posts) | — | — | — | — |
-| `/api/posts` | — | Autor+ | — | — | — |
-| `/api/posts/[id]` | — | — | — | — | Editor+ |
-| `/api/posts/[id]/duplicate` | — | Autor+ | — | — | — |
-| `/api/i18n/[locale]` | Público (KV/DB) | — | — | — | — |
-| `/api/users` | — | Admin | — | — | — |
-| `/api/users/[id]` | — | — | Admin | — | Admin |
-| `/api/taxonomies` | — | Editor+ | — | — | — |
-| `/api/taxonomies/[id]` | — | Editor+ | Editor+ | — | Editor+ |
-| `/api/translations` | — | Autor+ | — | — | — |
-| `/api/upload` | — | Autor+ | — | — | — |
-| `/api/media/*` | Público | — | — | — | — |
-| `/api/login` | — | Público | — | — | — |
-| `/api/register` | — | Público (rate limit) | — | — | — |
-| `/api/setup` | — | Público (1ª vez) | — | — | — |
-| `/api/auth/*` | — | Público (handler) | — | — | — |
+| Endpoint                    | GET                        | POST                 | PUT     | PATCH | DELETE  |
+| --------------------------- | -------------------------- | -------------------- | ------- | ----- | ------- |
+| `/api/settings`             | Público                    | Admin                | —       | Admin | —       |
+| `/api/settings/[id]`        | Editor+                    | —                    | Admin   | —     | Admin   |
+| `/api/content/*`            | Público (KV/DB)            | —                    | —       | —     | —       |
+| `/api/content/[table]/[id]` | Público (KV/DB para posts) | —                    | —       | —     | —       |
+| `/api/posts`                | —                          | Autor+               | —       | —     | —       |
+| `/api/posts/[id]`           | —                          | —                    | —       | —     | Editor+ |
+| `/api/posts/[id]/duplicate` | —                          | Autor+               | —       | —     | —       |
+| `/api/i18n/[locale]`        | Público (KV/DB)            | —                    | —       | —     | —       |
+| `/api/users`                | —                          | Admin                | —       | —     | —       |
+| `/api/users/[id]`           | —                          | —                    | Admin   | —     | Admin   |
+| `/api/taxonomies`           | —                          | Editor+              | —       | —     | —       |
+| `/api/taxonomies/[id]`      | —                          | Editor+              | Editor+ | —     | Editor+ |
+| `/api/translations`         | —                          | Autor+               | —       | —     | —       |
+| `/api/upload`               | —                          | Autor+               | —       | —     | —       |
+| `/api/media/*`              | Público                    | —                    | —       | —     | —       |
+| `/api/login`                | —                          | Público              | —       | —     | —       |
+| `/api/register`             | —                          | Público (rate limit) | —       | —     | —       |
+| `/api/setup`                | —                          | Público (1ª vez)     | —       | —     | —       |
+| `/api/auth/*`               | —                          | Público (handler)    | —       | —     | —       |
 
 ---
 
-*Documento gerado com base no código em `src/pages/api/` e `src/lib/list-table-dynamic.ts`. Inclui parâmetros de listagem de conteúdo: locale, taxonomia, ordenação por custom field (meta_*), exclusão do post menu (show_in_menu).*
+_Documento gerado com base no código em `src/pages/api/` e `src/lib/list-table-dynamic.ts`. Inclui parâmetros de listagem de conteúdo: locale, taxonomia, ordenação por custom field (meta\__), exclusão do post menu (show_in_menu).\*
