@@ -27,7 +27,7 @@ import "../../../styles/content-editor.css";
 
 const locale = Astro.params["locale"] ?? defaultLocale;
 if (!locales.includes(locale as "en" | "es" | "pt-br")) {
-  return Astro.redirect(`/${defaultLocale}/admin`);
+  return Astro.redirect(`/admin/${defaultLocale}`);
 }
 
 // Pré-carregar traduções
@@ -35,7 +35,7 @@ await ensureTranslationsLoaded(locale);
 
 const user = Astro.locals.user;
 if (!user) {
-  return Astro.redirect("/login");
+  return new Response("Unauthorized", { status: 401 });
 }
 const layoutUser = {
   email: user.email,
@@ -48,7 +48,7 @@ const roleId = getRoleFromUser(user);
 const pathname = Astro.url.pathname;
 const allowed = await canAccessRoute(db, roleId, pathname);
 if (!allowed) {
-  return Astro.redirect(`/${defaultLocale}/login`);
+  return new Response("Forbidden", { status: 403 });
 }
 
 const allMenuItems = await getMenuItems(db);
@@ -65,7 +65,7 @@ const validAction = action === "new" || action === "edit";
 const allowedType = postTypeSlug && postTypesWithNew.includes(postTypeSlug);
 
 if (!allowedType || !validAction) {
-  return Astro.redirect(`/${locale}/admin/list?type=post&limit=10&page=1`);
+  return Astro.redirect(`/admin/${locale}/list?type=post&limit=10&page=1`);
 }
 
 const isUserType = postTypeSlug === "user";
@@ -75,7 +75,7 @@ const isValidEditId = isUserType
 
 if (action === "edit" && (!idParam || !isValidEditId(idParam))) {
   return Astro.redirect(
-    `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`
+    `/admin/${locale}/list?type=${postTypeSlug}&limit=10&page=1`
   );
 }
 
@@ -309,3 +309,4 @@ const showAlternateTemplate =
   </div>
 </AdminLayout>
 )}
+

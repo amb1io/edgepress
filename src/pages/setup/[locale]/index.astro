@@ -1,6 +1,6 @@
 ---
-import Layout from "../../layouts/Layout.astro";
-import Notificacao from "../../components/Notificacao.astro";
+import Layout from "../../../layouts/Layout.astro";
+import Notificacao from "../../../components/Notificacao.astro";
 import htmxScript from "htmx.org/dist/htmx.min.js?url";
 
 const errorMessages: Record<string, string> = {
@@ -41,7 +41,8 @@ const errorMessage = error
           )
         }
 
-        <div id="setup-form-error" class="min-h-[1.5rem]" aria-live="polite"></div>
+        <div id="setup-form-error" class="min-h-[1.5rem]" aria-live="polite">
+        </div>
         <form
           action="/api/setup"
           method="post"

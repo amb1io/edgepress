@@ -7,7 +7,7 @@ import { ensureTranslationsLoaded } from "../../../lib/i18n-helpers.ts";
 
 const locale = Astro.params.locale ?? defaultLocale;
 if (!locales.includes(locale as "en" | "es" | "pt-br")) {
-  return Astro.redirect(`/${defaultLocale}/admin`);
+  return Astro.redirect(`/admin/${defaultLocale}`);
 }
 
 // Pré-carregar traduções
@@ -15,7 +15,7 @@ await ensureTranslationsLoaded(locale);
 
 const user = Astro.locals.user;
 if (!user) {
-  return Astro.redirect("/login");
+  return new Response("Unauthorized", { status: 401 });
 }
 
 const { getRoleFromUser, canAccessRoute, filterMenuItemsByRole } = await import("../../../lib/permissions.ts");
@@ -23,7 +23,7 @@ const roleId = getRoleFromUser(user);
 const pathname = Astro.url.pathname;
 const allowed = await canAccessRoute(db, roleId, pathname);
 if (!allowed) {
-  return Astro.redirect(`/${defaultLocale}/login`);
+  return new Response("Forbidden", { status: 403 });
 }
 
 const allMenuItems = await getMenuItems(db);
@@ -35,3 +35,4 @@ const menuItems = await filterMenuItemsByRole(db, allMenuItems, roleId);
     <p class="text-base-content/70">Media library — coming soon.</p>
   </div>
 </AdminLayout>
+

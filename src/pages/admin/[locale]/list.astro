@@ -11,7 +11,7 @@ import { ensureTranslationsLoaded } from "../../../lib/i18n-helpers.ts";
 
 const locale = Astro.params["locale"] ?? defaultLocale;
 if (!locales.includes(locale as "en" | "es" | "pt-br")) {
-  return Astro.redirect(`/${defaultLocale}/admin`);
+  return Astro.redirect(`/admin/${defaultLocale}`);
 }
 
 // Pré-carregar traduções
@@ -19,7 +19,7 @@ await ensureTranslationsLoaded(locale);
 
 const currentUser = Astro.locals.user;
 if (!currentUser) {
-  return Astro.redirect("/login");
+  return new Response("Unauthorized", { status: 401 });
 }
 
 const { getRoleFromUser, canAccessRoute, filterMenuItemsByRole, canDelete, isAuthorRole } = await import("../../../lib/permissions.ts");
@@ -27,7 +27,7 @@ const roleId = getRoleFromUser(currentUser);
 const pathname = Astro.url.pathname;
 const allowed = await canAccessRoute(db, roleId, pathname);
 if (!allowed) {
-  return Astro.redirect(`/${defaultLocale}/login`);
+  return new Response("Forbidden", { status: 403 });
 }
 
 const allMenuItems = await getMenuItems(db);
@@ -52,7 +52,7 @@ const loadFromTable = sourceKind === "table";
 function buildListUrl(overrides: Record<string, string>) {
   const params = new URLSearchParams(Astro.url.searchParams);
   for (const [k, v] of Object.entries(overrides)) params.set(k, v);
-  return `/${locale}/admin/list?${params.toString()}`;
+  return `/admin/${locale}/list?${params.toString()}`;
 }
 
 function formatDate(ts: number | null) {
@@ -185,7 +185,7 @@ if (loadFromTable) {
 <AdminLayout title={t(locale, "admin.list.title")} locale={locale} menuItems={menuItems} user={currentUser}>
 
   <div class="p-6 overflow-x-auto" style="height: 100%; overflow-y: auto;">
-    <form method="get" action={`/${locale}/admin/list`} class="mb-4 flex flex-wrap items-end gap-2">
+    <form method="get" action={`/admin/${locale}/list`} class="mb-4 flex flex-wrap items-end gap-2">
       <input type="hidden" name="type" value={type} />
       <input type="hidden" name="order" value={order} />
       <input type="hidden" name="orderDir" value={orderDir} />
@@ -257,7 +257,7 @@ if (loadFromTable) {
       editLabel={t(locale, "admin.list.edit")}
       deleteLabel={t(locale, "admin.list.delete")}
       actionConfig={{
-        editLinkTemplate: `/${locale}/admin/content?post_type=${type}&action=edit&id={id}`,
+        editLinkTemplate: `/admin/${locale}/content?post_type=${type}&action=edit&id={id}`,
         deletePathTemplate: userCanDelete ? deletePathTemplate : undefined,
         deleteConfirm: t(locale, "admin.list.deleteConfirm"),
         duplicatePathTemplate: `/api/posts/{id}/duplicate`,
@@ -274,3 +274,4 @@ if (loadFromTable) {
     />
   </div>
 </AdminLayout>
+

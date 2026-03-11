@@ -490,7 +490,7 @@ export function initContentForm(props: ContentFormInitProps): void {
             if (data.id) {
               const postType = formData.get("post_type");
               const loc = formData.get("locale");
-              window.location.href = `/${loc}/admin/list?type=${postType}&limit=10&page=1`;
+              window.location.href = `/admin/${loc}/list?type=${postType}&limit=10&page=1`;
             }
           } catch {
             window.location.reload();

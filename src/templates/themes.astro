@@ -28,7 +28,7 @@ export interface Props {
 const { locale, postTypeSlug, action, idParam, menuItems, currentUser } = Astro.props;
 const currentLocale = locale as Locale;
 const isEdit = action === "edit";
-const listUrl = `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`;
+const listUrl = `/admin/${locale}/list?type=${postTypeSlug}&limit=10&page=1`;
 
 const result = await getContentPageData({
   db,

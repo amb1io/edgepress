@@ -120,7 +120,7 @@ const taxonomyItems = taxonomyRows.map((r) => ({
   language: r.language ?? "—",
 }));
 
-const baseUrl = `/${locale}/admin/${slug}?domain=${domain}&type=${encodeURIComponent(type)}`;
+const baseUrl = `/admin/${locale}/${slug}?domain=${domain}&type=${encodeURIComponent(type)}`;
 
 const initialName = editTaxonomy?.name ?? "";
 const initialSlug = editTaxonomy?.slug ?? "";
@@ -315,7 +315,7 @@ const emptyColspan = columns.length;
     <div
       slot="right"
       id="taxonomy-list-wrapper"
-      data-edit-link-template={`/${locale}/admin/${slug}?domain=${domain}&type=${encodeURIComponent(type)}&action=edit&id={id}`}
+      data-edit-link-template={`/admin/${locale}/${slug}?domain=${domain}&type=${encodeURIComponent(type)}&action=edit&id={id}`}
       data-delete-path-template="/api/taxonomies/{id}"
       data-edit-label={t(locale, "admin.list.edit")}
       data-delete-label={t(locale, "admin.list.delete")}
@@ -333,7 +333,7 @@ const emptyColspan = columns.length;
         editLabel={t(locale, "admin.list.edit")}
         deleteLabel={t(locale, "admin.list.delete")}
         actionConfig={{
-          editLinkTemplate: `/${locale}/admin/${slug}?domain=${domain}&type=${encodeURIComponent(type)}&action=edit&id={id}`,
+          editLinkTemplate: `/admin/${locale}/${slug}?domain=${domain}&type=${encodeURIComponent(type)}&action=edit&id={id}`,
           deletePathTemplate: `/api/taxonomies/{id}`,
           deleteConfirm: t(locale, "admin.list.deleteConfirm"),
         }}

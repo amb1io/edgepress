@@ -1,0 +1,221 @@
+---
+import Theme2026Layout from "../../../layouts/Theme2026Layout.astro";
+
+const page = Math.max(
+  1,
+  parseInt(Astro.url.searchParams.get("page") ?? "1", 10) || 1,
+);
+const limit = Math.min(
+  100,
+  Math.max(1, parseInt(Astro.url.searchParams.get("limit") ?? "10", 10) || 10),
+);
+const order = "created_at";
+const orderDir = "desc";
+
+const apiUrl = new URL("/api/content/posts", Astro.url.origin);
+apiUrl.searchParams.set("page", String(page));
+apiUrl.searchParams.set("limit", String(limit));
+apiUrl.searchParams.set("order", order);
+apiUrl.searchParams.set("orderDir", orderDir);
+apiUrl.searchParams.set("filter_status", "published");
+
+let result: {
+  items: Record<string, unknown>[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  columns: string[];
+};
+try {
+  const res = await fetch(apiUrl.toString());
+  if (!res.ok) {
+    result = {
+      items: [],
+      total: 0,
+      page: 1,
+      limit,
+      totalPages: 0,
+      columns: [],
+    };
+  } else {
+    result = await res.json();
+  }
+} catch {
+  result = { items: [], total: 0, page: 1, limit, totalPages: 0, columns: [] };
+}
+console.log(result);
+
+const { items, total, totalPages } = result;
+const isHtmx = Astro.request.headers.get("HX-Request") === "true";
+
+function formatDate(ts: unknown): string {
+  if (ts == null) return "—";
+  const n = typeof ts === "number" ? ts : parseInt(String(ts), 10);
+  if (Number.isNaN(n)) return "—";
+  return new Date(n).toLocaleDateString("pt-BR", { dateStyle: "short" });
+}
+
+function buildPageUrl(p: number): string {
+  const u = new URL(Astro.url.pathname, Astro.url.origin);
+  u.searchParams.set("page", String(p));
+  if (limit !== 10) u.searchParams.set("limit", String(limit));
+  return u.pathname + u.search;
+}
+---
+
+{
+  isHtmx ? (
+    <div class="space-y-6">
+      <div id="posts-list">
+        {items.length === 0 ? (
+          <p class="text-base-content/70 py-8">Nenhum post encontrado.</p>
+        ) : (
+          <ul class="space-y-4">
+            {items.map((row) => (
+              <li class="card bg-base-100 shadow border border-base-300">
+                <div class="card-body">
+                  <h2 class="card-title text-lg">
+                    <a
+                      href={`/themes/2026/${String(row["slug"] ?? row["id"] ?? "")}`}
+                      class="link link-hover"
+                    >
+                      {String(row["title"] ?? "—")}
+                    </a>
+                  </h2>
+                  {row["excerpt"] && (
+                    <p class="text-base-content/70 text-sm line-clamp-2">
+                      {String(row["excerpt"])}
+                    </p>
+                  )}
+                  <p class="text-xs text-base-content/50">
+                    {formatDate(row["published_at"] ?? row["created_at"])}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {totalPages > 1 && (
+        <div
+          id="posts-pagination"
+          class="flex flex-wrap gap-2 justify-center items-center"
+        >
+          {page > 1 && (
+            <a
+              href={buildPageUrl(page - 1)}
+              class="btn btn-sm btn-ghost"
+              hx-get={buildPageUrl(page - 1)}
+              hx-target="#posts-container"
+              hx-swap="innerHTML"
+              hx-push-url="true"
+            >
+              Anterior
+            </a>
+          )}
+          <span class="text-sm text-base-content/70 px-2">
+            Página {page} de {totalPages} ({total} itens)
+          </span>
+          {page < totalPages && (
+            <a
+              href={buildPageUrl(page + 1)}
+              class="btn btn-sm btn-ghost"
+              hx-get={buildPageUrl(page + 1)}
+              hx-target="#posts-container"
+              hx-swap="innerHTML"
+              hx-push-url="true"
+            >
+              Próxima
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  ) : (
+    <Theme2026Layout title="Posts — Site 2026" basePath="/themes/2026">
+      <div
+        class="max-w-3xl mx-auto"
+        x-data="{ loading: false }"
+        @htmx:beforeRequest.window="loading = true"
+        @htmx:afterRequest.window="loading = false"
+      >
+        <h1 class="text-3xl font-bold text-base-content mb-6">Posts</h1>
+        <div x-show="loading" x-cloak class="flex justify-center py-4">
+          <span class="loading loading-spinner loading-md text-primary" />
+        </div>
+        <div id="posts-container" class="space-y-6">
+          <div id="posts-list">
+            {items.length === 0 ? (
+              <p class="text-base-content/70 py-8">Nenhum post encontrado.</p>
+            ) : (
+              <ul class="space-y-4">
+                {items.map((row) => (
+                  <li class="card bg-base-100 shadow border border-base-300">
+                    <div class="card-body">
+                      <h2 class="card-title text-lg">
+                        <a
+                          href={`/themes/2026/${String(row["slug"] ?? row["id"] ?? "")}`}
+                          class="link link-hover"
+                        >
+                          {String(row["title"] ?? "—")}
+                        </a>
+                      </h2>
+                      {row["excerpt"] && (
+                        <p class="text-base-content/70 text-sm line-clamp-2">
+                          {String(row["excerpt"])}
+                        </p>
+                      )}
+                      <p class="text-xs text-base-content/50">
+                        {formatDate(row["published_at"] ?? row["created_at"])}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {totalPages > 1 && (
+            <div
+              id="posts-pagination"
+              class="flex flex-wrap gap-2 justify-center items-center"
+            >
+              {page > 1 && (
+                <a
+                  href={buildPageUrl(page - 1)}
+                  class="btn btn-sm btn-ghost"
+                  hx-get={buildPageUrl(page - 1)}
+                  hx-target="#posts-container"
+                  hx-swap="innerHTML"
+                  hx-push-url="true"
+                >
+                  Anterior
+                </a>
+              )}
+              <span class="text-sm text-base-content/70 px-2">
+                Página {page} de {totalPages} ({total} itens)
+              </span>
+              {page < totalPages && (
+                <a
+                  href={buildPageUrl(page + 1)}
+                  class="btn btn-sm btn-ghost"
+                  hx-get={buildPageUrl(page + 1)}
+                  hx-target="#posts-container"
+                  hx-swap="innerHTML"
+                  hx-push-url="true"
+                >
+                  Próxima
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </Theme2026Layout>
+  )
+}
+<style is:global>
+  [x-cloak] {
+    display: none !important;
+  }
+</style>

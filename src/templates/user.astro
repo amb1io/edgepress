@@ -112,10 +112,10 @@ const initialRole = editUser?.role ?? 3; // 3 = leitor
       hx-swap={editUser ? "none" : undefined}
       x-data="userForm"
       class="flex flex-col gap-4 user-form"
-      data-redirect-url={`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`}
+      data-redirect-url={`/admin/${locale}/list?type=${postTypeSlug}&limit=10&page=1`}
     >
       <input type="hidden" name="locale" value={locale} />
-      <input type="hidden" name="callbackURL" value={`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`} />
+      <input type="hidden" name="callbackURL" value={`/admin/${locale}/list?type=${postTypeSlug}&limit=10&page=1`} />
       {editUser && <input type="hidden" name="id" value={editUser.id} />}
 
       <div class="form-control">
@@ -222,7 +222,7 @@ const initialRole = editUser?.role ?? 3; // 3 = leitor
         submitLabel={action === "new"
           ? t(currentLocale, "admin.content.saveNew")
           : t(currentLocale, "admin.content.saveEdit")}
-        cancelHref={`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`}
+        cancelHref={`/admin/${locale}/list?type=${postTypeSlug}&limit=10&page=1`}
         cancelLabel={t(currentLocale, "admin.content.cancel")}
       />
     </form>

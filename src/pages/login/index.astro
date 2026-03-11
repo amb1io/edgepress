@@ -64,7 +64,8 @@ const setupSuccess = Astro.url.searchParams.get("setup") === "success";
           )
         }
 
-        <div id="login-form-error" class="min-h-[1.5rem]" aria-live="polite"></div>
+        <div id="login-form-error" class="min-h-[1.5rem]" aria-live="polite">
+        </div>
         <form
           action="/api/login"
           method="post"
@@ -73,8 +74,16 @@ const setupSuccess = Astro.url.searchParams.get("setup") === "success";
           hx-swap="innerHTML"
           class="space-y-4"
         >
-          <input type="hidden" name="locale" value={Astro.params["locale"] ?? "pt-br"} />
-          <input type="hidden" name="callbackURL" value={`/${Astro.params["locale"] ?? "pt-br"}/admin`} />
+          <input
+            type="hidden"
+            name="locale"
+            value={Astro.params["locale"] ?? "pt-br"}
+          />
+          <input
+            type="hidden"
+            name="callbackURL"
+            value={`/admin/${Astro.params["locale"] ?? "pt-br"}`}
+          />
           <div class="form-control w-full">
             <label class="label" for="email">
               <span class="label-text">Email</span>
@@ -105,7 +114,7 @@ const setupSuccess = Astro.url.searchParams.get("setup") === "success";
             />
             <label class="label">
               <a
-                href={`/${Astro.params["locale"] ?? "pt-br"}/login/forgot-password`}
+                href={`/login/forgot-password`}
                 class="label-text-alt link link-hover"
               >
                 Esqueci senha

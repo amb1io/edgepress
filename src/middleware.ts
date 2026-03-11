@@ -10,12 +10,10 @@ import { db } from "./db/index.ts";
 import { settings as settingsTable } from "./db/schema.ts";
 import { eq } from "drizzle-orm";
 
-const protectedPaths = ["/admin"];
-const authPaths = ["/login"];
-const setupPath = `/${defaultLocale}/setup`;
-
 // Endpoints sensíveis que requerem validação extra de CSRF
 const sensitiveAPIPaths = ["/api/posts", "/api/upload", "/api/media"];
+const authPaths = ["/login"];
+const setupPath = `/setup/${defaultLocale}`;
 
 /**
  * Verifica se o setup inicial já foi concluído.
@@ -55,13 +53,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const pathname = new URL(context.request.url).pathname;
   const method = context.request.method.toUpperCase();
 
-  const isSetupPage = pathname === setupPath;
   const isApi = pathname.startsWith("/api");
   const isAuthApi = pathname.startsWith("/api/auth");
   const isSetupApi = pathname === "/api/setup";
-  const isLoginPage = authPaths.some(
-    (p) => pathname === p || pathname.startsWith(p + "/"),
-  );
 
   // Permitir APIs de auth e setup mesmo quando setup não está completo
   // Essas APIs são necessárias para completar o setup inicial
@@ -73,9 +67,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   const setupDone = await isSetupDone(context.request);
 
+  const isSetupPage = pathname === setupPath;
+  const isLoginPage = authPaths.some(
+    (p) => pathname === p || pathname.startsWith(p + "/"),
+  );
+
+  // Lógica de setup:
+  // - Se setup JÁ foi concluído e o usuário tenta acessar /{locale}/setup, redireciona para /admin/{locale}.
+  // - Se setup AINDA NÃO foi concluído, qualquer rota não-API e diferente de /setup (e não /login)
+  //   redireciona para a página de setup.
   if (!isApi && !isLoginPage) {
     if (isSetupPage && setupDone) {
-      return context.redirect(`/${defaultLocale}/admin`);
+      // return context.redirect(`/admin/${defaultLocale}`);
     }
     if (!isSetupPage && !setupDone) {
       return context.redirect(setupPath, 303);
@@ -113,19 +116,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  // Redirect /admin and /admin/* to default locale admin (e.g. /pt-br/admin)
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-    const rest =
-      pathname === "/admin"
-        ? "admin"
-        : pathname.replace(/^\/admin\/?/, "admin/");
-    const newPath =
-      `/${defaultLocale}/${rest}`.replace(/\/$/, "") ||
-      `/${defaultLocale}/admin`;
-    const search = new URL(context.request.url).search;
-    return context.redirect(newPath + search);
-  }
-
   if (!setupDone) {
     context.locals.user = null;
     context.locals.session = null;
@@ -142,30 +132,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  const session = context.locals.session
-    ? { user: context.locals.user!, session: context.locals.session }
-    : null;
+  // Pré-carregar traduções (DB + fallback JSON) para rotas com locale,
+  // suportando tanto /{locale}/... (site público) quanto /admin/{locale}/... (admin).
+  if (!isApi) {
+    const publicMatch = pathname.match(/^\/(en|es|pt-br)(\/|$)/);
+    const adminMatch = pathname.match(/^\/admin\/(en|es|pt-br)(\/|$)/);
+    const localeToLoad =
+      (publicMatch && (publicMatch[1] as "en" | "es" | "pt-br")) ||
+      (adminMatch && (adminMatch[1] as "en" | "es" | "pt-br"));
 
-  const isProtected = protectedPaths.some(
-    (p) => pathname === p || pathname.startsWith(p + "/"),
-  );
-  const isLocaleProtected = /^\/(en|es|pt-br)\/admin/.test(pathname);
-  const isAuthPage = authPaths.some(
-    (p) => pathname === p || pathname.startsWith(p + "/"),
-  );
-
-  if ((isProtected || isLocaleProtected) && !session) {
-    return context.redirect(`/${defaultLocale}/login`);
-  }
-
-  if (isAuthPage && session) {
-    return context.redirect(`/${defaultLocale}/admin`);
-  }
-
-  // Pré-carregar traduções (DB + fallback JSON) para rotas [locale] para que t() use o banco
-  const localeMatch = pathname.match(/^\/(en|es|pt-br)(\/|$)/);
-  if (!isApi && localeMatch) {
-    await ensureTranslationsLoaded(localeMatch[1]);
+    if (localeToLoad) {
+      await ensureTranslationsLoaded(localeToLoad);
+    }
   }
 
   return next();

@@ -1,5 +1,20 @@
 ---
-import { defaultLocale } from "../i18n/index.ts";
-
-return Astro.redirect(`/${defaultLocale}/admin`);
+/**
+ * Raiz do site: carrega o tema default (2026) dentro desta página.
+ * Exibe a home do tema 2026 em / em vez de redirecionar para o admin.
+ */
+import Theme2026Layout from "../layouts/Theme2026Layout.astro";
 ---
+
+<Theme2026Layout title="Site 2026 — Home" basePath="/themes/2026">
+  <div class="max-w-3xl mx-auto">
+    <h1 class="text-4xl font-bold text-base-content mb-4">
+      Bem-vindo ao Site 2026
+    </h1>
+    <p class="text-lg text-base-content/80 mb-6">
+      Este é o tema padrão do repositório de temas. Acesse a listagem de posts
+      para ver o conteúdo do banco de dados.
+    </p>
+    <a href="/themes/2026/posts" class="btn btn-primary">Ver posts</a>
+  </div>
+</Theme2026Layout>

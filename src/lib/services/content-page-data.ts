@@ -135,7 +135,7 @@ export async function getContentPageData(params: {
     .limit(1);
 
   if (!typeRowResult) {
-    return redirect(`/${locale}/admin`);
+    return redirect(`/admin/${locale}`);
   }
 
   const typeRow: TypeRow = typeRowResult;
@@ -225,12 +225,12 @@ export async function getContentPageData(params: {
 
     if (!post) {
       return redirect(
-        `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`
+        `/admin/${locale}/list?type=${postTypeSlug}&limit=10&page=1`
       );
     }
     if (authorIdRestrict != null && post.author_id !== authorIdRestrict) {
       return redirect(
-        `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`
+        `/admin/${locale}/list?type=${postTypeSlug}&limit=10&page=1`
       );
     }
 

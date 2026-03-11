@@ -19,7 +19,7 @@ export function buildAbsoluteUrl(request: Request, path: string): string {
  * @returns Caminho relativo da URL
  */
 export function buildListUrl(locale: string, type: string, limit: number = 10, page: number = 1): string {
-  return `/${locale}/admin/list?type=${type}&limit=${limit}&page=${page}`;
+  return `/admin/${locale}/list?type=${type}&limit=${limit}&page=${page}`;
 }
 
 /**
@@ -31,7 +31,7 @@ export function buildListUrl(locale: string, type: string, limit: number = 10, p
  * @returns Caminho relativo da URL
  */
 export function buildContentUrl(locale: string, postType: string, action: string, id?: string | number): string {
-  let url = `/${locale}/admin/content?post_type=${postType}&action=${action}`;
+  let url = `/admin/${locale}/content?post_type=${postType}&action=${action}`;
   if (id) {
     url += `&id=${id}`;
   }

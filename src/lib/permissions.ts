@@ -100,7 +100,27 @@ export async function canAccessRoute(
   roleId: number,
   pathname: string
 ): Promise<boolean> {
-  const normalized = pathname.replace(/^\/[^/]+/, ""); // remove locale
+  const segments = pathname.split("/").filter(Boolean);
+
+  let normalized = pathname;
+
+  if (segments.length > 0) {
+    const first = segments[0];
+    const second = segments[1];
+
+    const isLocale = (value: string | undefined) =>
+      value === "pt-br" || value === "en" || value === "es";
+
+    // Padrão antigo: /{locale}/admin/...
+    if (isLocale(first) && second === "admin") {
+      normalized = `/${segments.slice(1).join("/") || ""}`; // => /admin...
+    }
+    // Novo padrão: /admin/{locale}/...
+    else if (first === "admin" && isLocale(second)) {
+      normalized = `/${["admin", ...segments.slice(2)].join("/")}`; // /admin + resto (ou só /admin)
+    }
+  }
+
   if (normalized === "/admin" || normalized === "/admin/") {
     return can(db, roleId, CAPABILITY.DASHBOARD);
   }

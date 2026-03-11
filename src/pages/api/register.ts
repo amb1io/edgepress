@@ -52,21 +52,21 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
     locale = localeRaw === "" ? undefined : localeRaw;
   } else {
     return redirect(
-      `/${locale || "pt-br"}/admin/content?post_type=user&action=new&error=invalid_request`,
+      `/admin/${locale || "pt-br"}/content?post_type=user&action=new&error=invalid_request`,
       303,
     );
   }
 
   if (!name || !email || !password) {
     return redirect(
-      `/${locale || "pt-br"}/admin/content?post_type=user&action=new&error=missing_fields`,
+      `/admin/${locale || "pt-br"}/content?post_type=user&action=new&error=missing_fields`,
       303,
     );
   }
 
   if (password.length < 8) {
     return redirect(
-      `/${locale || "pt-br"}/admin/content?post_type=user&action=new&error=password_too_short`,
+      `/admin/${locale || "pt-br"}/content?post_type=user&action=new&error=password_too_short`,
       303,
     );
   }
@@ -92,7 +92,7 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
   const authPath = "/api/auth/sign-up/email";
 
   // Sanitizar e validar callbackURL para prevenir Open Redirect
-  const defaultCallback = `/${locale || "pt-br"}/admin/list?type=user&limit=10&page=1`;
+  const defaultCallback = `/admin/${locale || "pt-br"}/list?type=user&limit=10&page=1`;
   const safeCallbackURL = sanitizeCallbackURL(
     callbackURL,
     origin,
@@ -131,14 +131,14 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
       errData,
     });
     return redirect(
-      `/${locale || "pt-br"}/admin/content?post_type=user&action=new&error=${encodeURIComponent(code)}`,
+      `/admin/${locale || "pt-br"}/content?post_type=user&action=new&error=${encodeURIComponent(code)}`,
       303,
     );
   }
 
   const data = await authResponse.json().catch(() => ({}));
   const location =
-    data?.url ?? `/${locale || "pt-br"}/admin/list?type=user&limit=10&page=1`;
+    data?.url ?? `/admin/${locale || "pt-br"}/list?type=user&limit=10&page=1`;
 
   const responseHeaders = new Headers({ Location: location });
   // Só repassa Set-Cookie quando NÃO for admin criando usuário: assim a sessão atual

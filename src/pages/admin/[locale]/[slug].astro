@@ -18,9 +18,9 @@ const domain = Astro.url.searchParams.get("domain");
 const type = Astro.url.searchParams.get("type") ?? "";
 
 if (!locales.includes(locale as "en" | "es" | "pt-br")) {
-  return Astro.redirect(`/${defaultLocale}/admin`);
+  return Astro.redirect(`/admin/${defaultLocale}`);
 }
-if (!slug) return Astro.redirect(`/${locale}/admin`);
+if (!slug) return Astro.redirect(`/admin/${locale}`);
 
 // Pré-carregar traduções
 await ensureTranslationsLoaded(locale);
@@ -39,14 +39,14 @@ if (TemplateComponent) {
   // @ts-expect-error - Astro.locals.user está definido em env.d.ts
   user = Astro.locals.user;
   if (!user) {
-    return Astro.redirect("/login");
+    return new Response("Unauthorized", { status: 401 });
   }
   const { getRoleFromUser, canAccessRoute, filterMenuItemsByRole } = await import("../../../lib/permissions.ts");
   const roleId = getRoleFromUser(user);
   const pathname = Astro.url.pathname;
   const allowed = await canAccessRoute(db, roleId, pathname);
   if (!allowed) {
-    return Astro.redirect(`/${defaultLocale}/login`);
+    return new Response("Forbidden", { status: 403 });
   }
   const allMenuItems = await getMenuItems(db);
   menuItems = await filterMenuItemsByRole(db, allMenuItems, roleId);
@@ -55,15 +55,15 @@ if (TemplateComponent) {
   });
 } else {
   if (slug === "post" || slug === "page") {
-    return Astro.redirect(`/${locale}/admin/list?type=${slug}&limit=10&page=1`);
+    return Astro.redirect(`/admin/${locale}/list?type=${slug}&limit=10&page=1`);
   }
   if (slug === "dashboard") {
-    return Astro.redirect(`/${locale}/admin`);
+    return Astro.redirect(`/admin/${locale}`);
   }
   if (slug === "settings") {
-    return Astro.redirect(`/${locale}/admin/settings?page=general`);
+    return Astro.redirect(`/admin/${locale}/settings?page=general`);
   }
-  return Astro.redirect(`/${locale}/admin`);
+  return Astro.redirect(`/admin/${locale}`);
 }
 ---
 
@@ -80,3 +80,4 @@ if (TemplateComponent) {
     />
   )
 }
+

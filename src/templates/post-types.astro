@@ -116,7 +116,7 @@ const initialTranslations = postTypeTranslations ?? defaultTranslations;
 const META_TYPES = ["string", "number", "boolean", "array"];
 
 const formAction = isEdit ? `/api/post-types/${editRecord!.id}` : "/api/post-types";
-const listUrl = `/${locale}/admin/settings?page=post_types`;
+const listUrl = `/admin/${locale}/settings?page=post_types`;
 ---
 
 <AdminLayout
@@ -376,7 +376,7 @@ const listUrl = `/${locale}/admin/settings?page=post_types`;
                 </div>
                 <div class="flex gap-1">
                   <a
-                    href={`/${locale}/admin/settings?page=post_types&edit=${row.id}`}
+                    href={`/admin/${locale}/settings?page=post_types&edit=${row.id}`}
                     class="btn btn-ghost btn-sm"
                   >
                     {t(currentLocale, "admin.list.edit")}
