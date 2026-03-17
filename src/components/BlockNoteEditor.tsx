@@ -119,6 +119,9 @@ export function BlockNoteEditor({
         fd.set("meta_attachment_file", result.filename);
         fd.set("meta_attachment_path", result.path);
         fd.set("meta_attachment_alt", "");
+        if (result.cloudflareImageId) {
+          fd.set("meta_cloudflare_image_id", result.cloudflareImageId);
+        }
         
         const res = await fetch("/api/posts", {
           method: "POST",

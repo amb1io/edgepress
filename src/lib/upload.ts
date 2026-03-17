@@ -11,6 +11,7 @@ export interface UploadResult {
   key: string;
   filename: string;
   mimeType: string;
+  cloudflareImageId?: string;
 }
 
 export interface UploadError {
@@ -38,6 +39,7 @@ export async function uploadFileToR2(file: File): Promise<UploadResult> {
       path?: string;
       mimeType?: string;
       filename?: string;
+      cloudflareImageId?: string;
     };
 
     if (!data.path || !data.key) {
@@ -59,6 +61,7 @@ export async function uploadFileToR2(file: File): Promise<UploadResult> {
       key: data.key,
       filename: data.filename || file.name,
       mimeType: data.mimeType || file.type,
+      cloudflareImageId: data.cloudflareImageId,
     };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "Upload failed";
