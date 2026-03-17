@@ -1,0 +1,115 @@
+name: Deploy Edgepress App
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  repository_dispatch:
+    types: [edgepress_deploy]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch active theme package metadata
+        id: theme_meta
+        env:
+          METADATA_URL: ${{ secrets.THEME_PACKAGE_METADATA_URL }}
+          METADATA_SECRET: ${{ secrets.THEME_PACKAGE_METADATA_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${METADATA_URL}" || -z "${METADATA_SECRET}" ]]; then
+            echo "Missing THEME_PACKAGE_METADATA_URL or THEME_PACKAGE_METADATA_SECRET"
+            exit 1
+          fi
+
+          RESPONSE="$(curl -fsS "${METADATA_URL}" \
+            -H "x-theme-package-secret: ${METADATA_SECRET}" \
+            -H "Accept: application/json")"
+
+          HAS_PACKAGE="$(echo "${RESPONSE}" | jq -r '.has_active_theme_package // false')"
+          if [[ "${HAS_PACKAGE}" != "true" ]]; then
+            echo "No active theme package available to hydrate."
+            exit 1
+          fi
+
+          THEME_SLUG="$(echo "${RESPONSE}" | jq -r '.active_theme_slug // empty')"
+          R2_KEY="$(echo "${RESPONSE}" | jq -r '.r2_key // empty')"
+          CHECKSUM="$(echo "${RESPONSE}" | jq -r '.package_checksum // empty')"
+          VERSION="$(echo "${RESPONSE}" | jq -r '.package_version // empty')"
+
+          if [[ -z "${THEME_SLUG}" || -z "${R2_KEY}" || -z "${CHECKSUM}" || -z "${VERSION}" ]]; then
+            echo "Invalid theme package metadata payload."
+            echo "${RESPONSE}"
+            exit 1
+          fi
+
+          echo "theme_slug=${THEME_SLUG}" >> "$GITHUB_OUTPUT"
+          echo "r2_key=${R2_KEY}" >> "$GITHUB_OUTPUT"
+          echo "checksum=${CHECKSUM}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS CLI for R2
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          aws-region: auto
+
+      - name: Hydrate active theme from R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+          ZIP_PATH="__theme_pkg/theme.zip"
+          mkdir -p __theme_pkg
+          aws s3 cp "s3://${R2_BUCKET}/${{ steps.theme_meta.outputs.r2_key }}" "${ZIP_PATH}" --endpoint-url "${ENDPOINT}"
+
+          ACTUAL_SHA="$(sha256sum "${ZIP_PATH}" | awk '{print $1}')"
+          EXPECTED_SHA="${{ steps.theme_meta.outputs.checksum }}"
+          if [[ "${ACTUAL_SHA}" != "${EXPECTED_SHA}" ]]; then
+            echo "Theme package checksum mismatch"
+            echo "Expected: ${EXPECTED_SHA}"
+            echo "Actual:   ${ACTUAL_SHA}"
+            exit 1
+          fi
+
+          THEME_SLUG="${{ steps.theme_meta.outputs.theme_slug }}"
+          TARGET_DIR="src/themes/${THEME_SLUG}"
+          rm -rf "${TARGET_DIR}"
+          mkdir -p "${TARGET_DIR}"
+          unzip -q "${ZIP_PATH}" -d "${TARGET_DIR}"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PAGES_PROJECT_NAME: ${{ secrets.CLOUDFLARE_PAGES_PROJECT_NAME }}
+        run: |
+          if [[ -z "${CLOUDFLARE_API_TOKEN}" || -z "${CLOUDFLARE_ACCOUNT_ID}" || -z "${CLOUDFLARE_PAGES_PROJECT_NAME}" ]]; then
+            echo "Skipping deploy: Cloudflare deploy secrets are not configured."
+            exit 0
+          fi
+          npx wrangler pages deploy dist --project-name "${CLOUDFLARE_PAGES_PROJECT_NAME}"
