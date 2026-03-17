@@ -9,6 +9,8 @@ import { ensureTranslationsLoaded } from "./lib/i18n-helpers.ts";
 import { db } from "./db/index.ts";
 import { settings as settingsTable } from "./db/schema.ts";
 import { eq } from "drizzle-orm";
+import { getKvFromLocals } from "./lib/utils/runtime-locals.ts";
+import { getActiveThemeSlugFromSettings } from "./lib/services/settings-service.ts";
 
 // Endpoints sensíveis que requerem validação extra de CSRF
 const sensitiveAPIPaths = ["/api/posts", "/api/upload", "/api/media"];
@@ -57,12 +59,57 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const isAuthApi = pathname.startsWith("/api/auth");
   const isSetupApi = pathname === "/api/setup";
 
+  // URLs públicas não devem expor /themes/* (rota interna)
+  if (!isApi && pathname.startsWith("/themes/")) {
+    // Permite reescritas internas (middleware) para a árvore /themes.
+    if (context.request.headers.get("x-edgepress-internal-rewrite") === "1") {
+      return next();
+    }
+    return new Response("Not Found", {
+      status: 404,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+
   // Permitir APIs de auth e setup mesmo quando setup não está completo
   // Essas APIs são necessárias para completar o setup inicial
   // Chamar next() antes de verificar setup para garantir que a rota seja encontrada
   if (isAuthApi || isSetupApi) {
     const response = await next();
     return response;
+  }
+
+  // Reescreve / para o tema ativo mantendo a URL (/)
+  if (!isApi && pathname === "/") {
+    const locals = context.locals as App.Locals;
+    const kv = getKvFromLocals(locals);
+    const activeSlug = await getActiveThemeSlugFromSettings(db, {
+      kv,
+      isAuthenticated: Boolean(locals.user),
+    });
+
+    if (activeSlug) {
+      const url = new URL(context.request.url);
+      url.pathname = `/themes/${activeSlug}`;
+      const headers = new Headers(context.request.headers);
+      headers.set("x-edgepress-internal-rewrite", "1");
+      return context.rewrite(new Request(url, { headers }));
+    }
+  }
+
+  // Reescreve /{themeSlug}/... para /themes/{themeSlug}/...
+  // Mantém suporte a /{themeSlug} e /{themeSlug}/{locale}/...
+  if (!isApi) {
+    const m = pathname.match(/^\/([a-z0-9-]+)(\/.*)?$/i);
+    const themeSlug = m?.[1];
+    const rest = m?.[2] ?? "";
+    if (themeSlug && themeSlug !== "admin" && themeSlug !== "api" && themeSlug !== "login" && themeSlug !== "setup") {
+      const url = new URL(context.request.url);
+      url.pathname = `/themes/${themeSlug}${rest}`;
+      const headers = new Headers(context.request.headers);
+      headers.set("x-edgepress-internal-rewrite", "1");
+      return context.rewrite(new Request(url, { headers }));
+    }
   }
 
   const setupDone = await isSetupDone(context.request);

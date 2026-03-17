@@ -1,20 +1,52 @@
 ---
-/**
- * Raiz do site: carrega o tema default (2026) dentro desta página.
- * Exibe a home do tema 2026 em / em vez de redirecionar para o admin.
- */
-import Theme2026Layout from "../layouts/Theme2026Layout.astro";
+import { db } from "../db/index.ts";
+import { getKvFromLocals } from "../lib/utils/runtime-locals.ts";
+import { getActiveThemeSlugFromSettings } from "../lib/services/settings-service.ts";
+import {
+  getThemeSnapshotBySlug,
+  validateThemeCanonicalMeta,
+} from "../lib/services/theme-service.ts";
+import Notificacao from "../components/Notificacao.astro";
+
+const locals = Astro.locals as App.Locals;
+const kv = getKvFromLocals(locals);
+
+const activeSlug = await getActiveThemeSlugFromSettings(db, {
+  kv,
+  isAuthenticated: Boolean(locals.user),
+});
+
+if (activeSlug) {
+  const snapshot = await getThemeSnapshotBySlug(db, activeSlug);
+  if (snapshot) {
+    const validation = validateThemeCanonicalMeta(snapshot.canonical_meta);
+    if (validation.valid) {
+      Astro.response.headers.set("Cache-Control", "no-store");
+      return Astro.redirect(`/themes/${snapshot.slug}`, 302);
+    }
+  }
+}
+
+Astro.response.status = 500;
+Astro.response.headers.set("Cache-Control", "no-store");
 ---
 
-<Theme2026Layout title="Site 2026 — Home" basePath="/themes/2026">
-  <div class="max-w-3xl mx-auto">
-    <h1 class="text-4xl font-bold text-base-content mb-4">
-      Bem-vindo ao Site 2026
-    </h1>
-    <p class="text-lg text-base-content/80 mb-6">
-      Este é o tema padrão do repositório de temas. Acesse a listagem de posts
-      para ver o conteúdo do banco de dados.
-    </p>
-    <a href="/themes/2026/posts" class="btn btn-primary">Ver posts</a>
+<main class="min-h-screen flex items-center justify-center bg-base-200 px-4">
+  <div class="max-w-xl w-full">
+    <Notificacao
+      type="error"
+      title="Erro ao carregar tema"
+      message="Não foi possível localizar um tema ativo válido. Verifique a configuração do tema ativo em Settings e tente novamente."
+      dismissible={false}
+      className="mb-4"
+    />
+    <div class="mt-4 text-center text-sm text-base-content/70">
+      <p>
+        Se você é administrador, acesse o painel e configure um tema ativo com
+        um slug que corresponda a uma pasta em <code
+          >src/themes/&lt;slug&gt;</code
+        >.
+      </p>
+    </div>
   </div>
-</Theme2026Layout>
+</main>

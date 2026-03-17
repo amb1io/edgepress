@@ -25,6 +25,8 @@ export type SettingUpdatePayload = {
   autoload: boolean;
 };
 
+const ACTIVE_THEME_SETTING_KEY = "active_theme";
+
 /**
  * Busca settings no banco: por nomes específicos ou todas com autoload.
  */
@@ -68,7 +70,13 @@ export async function getSettingsWithCache(
     try {
       const cached = (await kv.get(cacheKey, "json")) as Record<string, string> | null;
       if (cached != null && typeof cached === "object") {
-        return cached;
+        // Para lookup por nomes específicos, não aceite cache parcial (ex.: record sem a chave pedida).
+        if (names && names.length > 0) {
+          const hasAll = names.every((k) => Object.prototype.hasOwnProperty.call(cached, k));
+          if (hasAll) return cached;
+        } else {
+          return cached;
+        }
       }
     } catch {
       // Ignora erro de KV e segue para o banco
@@ -86,6 +94,46 @@ export async function getSettingsWithCache(
   }
 
   return record;
+}
+
+export async function getActiveThemeSlugFromSettings(
+  db: Database,
+  options: { kv: KVLike | null; isAuthenticated: boolean }
+): Promise<string | null> {
+  const settings = await getSettingsWithCache(db, {
+    namesParam: ACTIVE_THEME_SETTING_KEY,
+    kv: options.kv,
+    isAuthenticated: options.isAuthenticated,
+  });
+  const raw = settings[ACTIVE_THEME_SETTING_KEY];
+  const slug = typeof raw === "string" ? raw.trim() : "";
+  return slug || null;
+}
+
+export async function upsertActiveThemeSetting(
+  db: Database,
+  slug: string
+): Promise<void> {
+  const value = slug.trim();
+  if (!value) return;
+
+  const [existing] = await db
+    .select({ id: settingsTable.id })
+    .from(settingsTable)
+    .where(eq(settingsTable.name, ACTIVE_THEME_SETTING_KEY))
+    .limit(1);
+
+  if (existing?.id) {
+    await db
+      .update(settingsTable)
+      .set({ value, autoload: true })
+      .where(eq(settingsTable.id, existing.id));
+    return;
+  }
+
+  await db
+    .insert(settingsTable)
+    .values({ name: ACTIVE_THEME_SETTING_KEY, value, autoload: true });
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   getThemeSnapshotById,
   parseThemeImportState,
 } from "./services/theme-service.ts";
+import { upsertActiveThemeSetting } from "./services/settings-service.ts";
 
 /** Deleta todas as chaves com o prefixo dado. Ignora erros de KV. */
 export async function deleteKvKeysByPrefix(kv: App.KVLike, prefix: string): Promise<void> {
@@ -183,6 +184,10 @@ export async function syncThemeCache(
         `${THEME_META_KV_PREFIX}${activeTheme.meta.theme_slug}`,
         JSON.stringify(activeTheme.meta),
       );
+    }
+
+    if (activeTheme.slug) {
+      await upsertActiveThemeSetting(db, activeTheme.slug);
     }
   } catch {
     // ignora falhas de sync de tema para não impactar fluxo principal

@@ -45,6 +45,7 @@
   "postType.attachment": "Media",
   "postType.translations": "Traducciones",
   "postType.translations_languages": "Traducciones de Idiomas",
+  "postType.themes": "Temas",
   "admin.content.newTitle": "Nuevo {type}",
   "admin.content.editTitle": "Editar {type}",
   "admin.content.slug": "Slug",

@@ -443,14 +443,19 @@ export async function introspectRecordWithRelations(params: {
     return loadUserNode(db, String(quotedId), depth, maxDepth);
   }
 
-  const rows = await db
+  const schema = await import("../../db/schema.ts");
+  const tableObj = (schema as unknown as Record<string, unknown>)[table];
+  if (!tableObj) return null;
+  const idColumn = (tableObj as { id?: unknown }).id;
+  if (!idColumn) return null;
+
+  const rows = (await db
     .select()
-    .from(
-      // @ts-ignore - tabela dinâmica tipada pelo Drizzle em runtime
-      { table: (await import("../../db/schema.ts"))[table as keyof typeof import("../../db/schema.ts")] },
-    )
-    .where(eq((posts as never)["id"], quotedId as never))
-    .limit(1) as unknown as Record<string, unknown>[];
+    // @ts-expect-error - tabela dinâmica resolvida em runtime
+    .from(tableObj)
+    // @ts-expect-error - coluna id dinâmica resolvida em runtime
+    .where(eq(idColumn, quotedId))
+    .limit(1)) as unknown as Record<string, unknown>[];
 
   const row = rows[0];
   if (!row) return null;
