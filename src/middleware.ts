@@ -132,6 +132,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
+  // Regra: ao acessar /admin (e subrotas), exigir usuário logado
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  if (!isApi && isAdminRoute && !context.locals.session) {
+    return context.redirect("/login", 303);
+  }
+
   // Pré-carregar traduções (DB + fallback JSON) para rotas com locale,
   // suportando tanto /{locale}/... (site público) quanto /admin/{locale}/... (admin).
   if (!isApi) {
