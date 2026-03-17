@@ -142,7 +142,10 @@ jobs:
           mkdir -p __theme_pkg
           ZIP_PATH="__theme_pkg/theme.zip"
           rm -f "${ZIP_PATH}"
-          (cd "${SRC_DIR}" && zip -r "../../${ZIP_PATH}" .)
+          # From SRC_DIR (__theme_src or __theme_src/subdir) back to workspace root: one or two ".."
+          UP_TO_ROOT=".."
+          [[ -n "${THEME_SUBDIR}" ]] && UP_TO_ROOT="../.."
+          (cd "${SRC_DIR}" && zip -r "${UP_TO_ROOT}/${ZIP_PATH}" .)
 
           CHECKSUM="$(sha256sum "${ZIP_PATH}" | awk '{print $1}')"
           MANIFEST_PATH="__theme_pkg/manifest.json"
