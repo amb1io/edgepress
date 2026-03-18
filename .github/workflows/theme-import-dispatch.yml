@@ -139,16 +139,16 @@ jobs:
             exit 1
           fi
 
-          mkdir -p __theme_pkg
-          ZIP_PATH="__theme_pkg/theme.zip"
+          PKG_DIR="${GITHUB_WORKSPACE}/__theme_pkg"
+          mkdir -p "${PKG_DIR}"
+          ZIP_PATH="${PKG_DIR}/theme.zip"
           rm -f "${ZIP_PATH}"
-          # From SRC_DIR (__theme_src or __theme_src/subdir) back to workspace root: one or two ".."
-          UP_TO_ROOT=".."
-          [[ -n "${THEME_SUBDIR}" ]] && UP_TO_ROOT="../.."
-          (cd "${SRC_DIR}" && zip -r "${UP_TO_ROOT}/${ZIP_PATH}" .)
+          # Use absolute output path to avoid fragile relative traversals.
+          # Exclude git metadata to keep packages small and deterministic.
+          (cd "${SRC_DIR}" && zip -r "${ZIP_PATH}" . -x ".git/*" ".git/**")
 
           CHECKSUM="$(sha256sum "${ZIP_PATH}" | awk '{print $1}')"
-          MANIFEST_PATH="__theme_pkg/manifest.json"
+          MANIFEST_PATH="${PKG_DIR}/manifest.json"
           cat > "${MANIFEST_PATH}" <<EOF
           {
             "theme_slug": "${THEME_SLUG}",
@@ -166,7 +166,8 @@ jobs:
           R2_MANIFEST_KEY="themes/${THEME_SLUG}/${THEME_VERSION}/manifest.json"
           R2_LATEST_KEY="themes/${THEME_SLUG}/latest.json"
 
-          cat > __theme_pkg/latest.json <<EOF
+          LATEST_PATH="${PKG_DIR}/latest.json"
+          cat > "${LATEST_PATH}" <<EOF
           {
             "theme_slug": "${THEME_SLUG}",
             "version": "${THEME_VERSION}",
@@ -180,7 +181,7 @@ jobs:
           echo "checksum=${CHECKSUM}" >> "$GITHUB_OUTPUT"
           echo "zip_path=${ZIP_PATH}" >> "$GITHUB_OUTPUT"
           echo "manifest_path=${MANIFEST_PATH}" >> "$GITHUB_OUTPUT"
-          echo "latest_path=__theme_pkg/latest.json" >> "$GITHUB_OUTPUT"
+          echo "latest_path=${LATEST_PATH}" >> "$GITHUB_OUTPUT"
           echo "r2_theme_zip_key=${R2_THEME_ZIP_KEY}" >> "$GITHUB_OUTPUT"
           echo "r2_manifest_key=${R2_MANIFEST_KEY}" >> "$GITHUB_OUTPUT"
           echo "r2_latest_key=${R2_LATEST_KEY}" >> "$GITHUB_OUTPUT"
@@ -213,25 +214,26 @@ jobs:
           CALLBACK_URL: ${{ secrets.THEME_IMPORT_CALLBACK_URL }}
           CALLBACK_SECRET: ${{ secrets.THEME_IMPORT_CALLBACK_SECRET }}
         run: |
+          set -euo pipefail
           if [[ -z "${CALLBACK_URL}" || -z "${CALLBACK_SECRET}" ]]; then
             echo "Callback success skipped: missing callback secrets."
             exit 0
           fi
+          BODY="$(jq -n \
+            --arg theme_post_id "${{ steps.payload.outputs.theme_post_id }}" \
+            --arg theme_slug "${{ steps.payload.outputs.theme_slug }}" \
+            --arg commit_sha "${{ steps.theme_sha.outputs.sha }}" \
+            --arg message "Theme packaged and uploaded to R2" \
+            --arg r2_key "${{ steps.package.outputs.r2_theme_zip_key }}" \
+            --arg manifest_key "${{ steps.package.outputs.r2_manifest_key }}" \
+            --arg version "${{ steps.theme_sha.outputs.version }}" \
+            --arg checksum "${{ steps.package.outputs.checksum }}" \
+            '{theme_post_id:$theme_post_id, theme_slug:$theme_slug, status:"success", success:true, commit_sha:$commit_sha, message:$message, r2_key:$r2_key, manifest_key:$manifest_key, version:$version, checksum:$checksum}' \
+          )"
           curl -fsS -X POST "${CALLBACK_URL}" \
             -H "Content-Type: application/json" \
             -H "x-theme-import-secret: ${CALLBACK_SECRET}" \
-            -d "{
-              \"theme_post_id\": ${{ steps.payload.outputs.theme_post_id }},
-              \"theme_slug\": \"${{ steps.payload.outputs.theme_slug }}\",
-              \"status\": \"success\",
-              \"success\": true,
-              \"commit_sha\": \"${{ steps.theme_sha.outputs.sha }}\",
-              \"message\": \"Theme packaged and uploaded to R2\",
-              \"r2_key\": \"${{ steps.package.outputs.r2_theme_zip_key }}\",
-              \"manifest_key\": \"${{ steps.package.outputs.r2_manifest_key }}\",
-              \"version\": \"${{ steps.theme_sha.outputs.version }}\",
-              \"checksum\": \"${{ steps.package.outputs.checksum }}\"
-            }"
+            -d "${BODY}"
 
       - name: Callback failure
         if: failure()
@@ -239,18 +241,19 @@ jobs:
           CALLBACK_URL: ${{ secrets.THEME_IMPORT_CALLBACK_URL }}
           CALLBACK_SECRET: ${{ secrets.THEME_IMPORT_CALLBACK_SECRET }}
         run: |
+          set -euo pipefail
           if [[ -z "${CALLBACK_URL}" || -z "${CALLBACK_SECRET}" ]]; then
             echo "Callback failure skipped: missing callback secrets."
             exit 0
           fi
+          BODY="$(jq -n \
+            --arg theme_post_id "${{ steps.payload.outputs.theme_post_id }}" \
+            --arg theme_slug "${{ steps.payload.outputs.theme_slug }}" \
+            --arg commit_sha "${{ steps.theme_sha.outputs.sha }}" \
+            --arg message "Theme package upload failed" \
+            '{theme_post_id:$theme_post_id, theme_slug:$theme_slug, status:"failed", success:false, commit_sha:$commit_sha, message:$message}' \
+          )"
           curl -sS -X POST "${CALLBACK_URL}" \
             -H "Content-Type: application/json" \
             -H "x-theme-import-secret: ${CALLBACK_SECRET}" \
-            -d "{
-              \"theme_post_id\": ${{ steps.payload.outputs.theme_post_id }},
-              \"theme_slug\": \"${{ steps.payload.outputs.theme_slug }}\",
-              \"status\": \"failed\",
-              \"success\": false,
-              \"commit_sha\": \"${{ steps.theme_sha.outputs.sha }}\",
-              \"message\": \"Theme package upload failed\"
-            }" || true
+            -d "${BODY}" || true
