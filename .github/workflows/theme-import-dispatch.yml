@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       theme_post_id:
-        description: "Theme post id (callback correlation)"
+        description: "Theme post ids (callback correlation)"
         required: true
       theme_slug:
         description: "Theme slug"
