@@ -101,6 +101,24 @@ jobs:
           ref: ${{ steps.payload.outputs.theme_ref }}
           path: __theme_src
 
+      - name: Install theme dependencies
+        shell: bash
+        working-directory: __theme_src
+        run: |
+          set -euo pipefail
+          if [[ -f package-lock.json ]]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build theme
+        shell: bash
+        working-directory: __theme_src
+        run: |
+          set -euo pipefail
+          npm run build
+
       - name: Read theme commit sha
         id: theme_sha
         shell: bash
@@ -133,16 +151,23 @@ jobs:
             exit 1
           fi
 
-          BUILD_DIR="${SRC_DIR}/dist"
+          # Directory to package:
+          # - if subdir was provided, treat it as the built folder
+          # - otherwise, default to the standard Astro build output: "dist"
+          if [[ -n "${THEME_SUBDIR}" ]]; then
+            BUILD_DIR="__theme_src/${THEME_SUBDIR}"
+          else
+            BUILD_DIR="__theme_src/dist"
+          fi
           if [[ ! -d "${BUILD_DIR}" ]]; then
             echo "Theme build directory not found: ${BUILD_DIR}"
-            echo "Ensure the theme repository has a built 'dist' folder before importing."
+            echo "Ensure the theme repository has been built and the expected output folder exists."
             exit 1
           fi
 
-          ASTRO_COUNT="$(find "${BUILD_DIR}" -type f -name '*.astro' | wc -l | tr -d ' ')"
+          ASTRO_COUNT="$(find "__theme_src" -type f -name '*.astro' | wc -l | tr -d ' ')"
           if [[ "${ASTRO_COUNT}" -eq 0 ]]; then
-            echo "No .astro files found in theme build (dist)"
+            echo "No .astro files found in theme source"
             exit 1
           fi
 
