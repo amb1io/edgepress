@@ -249,6 +249,14 @@ jobs:
           fi
           ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
+          echo "R2 endpoint: ${ENDPOINT}"
+          echo "R2 bucket:   ${R2_BUCKET}"
+          echo "Account id (last 6): ${R2_ACCOUNT_ID: -6}"
+          echo "Access key (last 6): ${AWS_ACCESS_KEY_ID: -6}"
+
+          echo "Head bucket..."
+          aws s3api head-bucket --bucket "${R2_BUCKET}" --endpoint-url "${ENDPOINT}"
+
           echo "R2 upload sanity check..."
           echo "ok" > __theme_pkg/_r2_sanity.txt
           aws s3api put-object --bucket "${R2_BUCKET}" --key "themes/__debug__/r2-sanity.txt" --body "__theme_pkg/_r2_sanity.txt" --endpoint-url "${ENDPOINT}"
