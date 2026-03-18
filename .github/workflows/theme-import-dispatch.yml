@@ -101,6 +101,13 @@ jobs:
           ref: ${{ steps.payload.outputs.theme_ref }}
           path: __theme_src
 
+      - name: Use Node 22 for theme build
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: 'npm'
+          cache-dependency-path: __theme_src/package-lock.json
+
       - name: Install theme dependencies
         shell: bash
         working-directory: __theme_src
