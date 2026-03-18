@@ -248,9 +248,9 @@ jobs:
             exit 1
           fi
           ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          aws s3 cp "${{ steps.package.outputs.zip_path }}" "s3://${R2_BUCKET}/${{ steps.package.outputs.r2_theme_zip_key }}" --endpoint-url "${ENDPOINT}"
-          aws s3 cp "${{ steps.package.outputs.manifest_path }}" "s3://${R2_BUCKET}/${{ steps.package.outputs.r2_manifest_key }}" --endpoint-url "${ENDPOINT}"
-          aws s3 cp "${{ steps.package.outputs.latest_path }}" "s3://${R2_BUCKET}/${{ steps.package.outputs.r2_latest_key }}" --endpoint-url "${ENDPOINT}"
+          aws s3 cp "${{ steps.package.outputs.zip_path }}" "s3://${R2_BUCKET}/${{ steps.package.outputs.r2_theme_zip_key }}" --endpoint-url "${ENDPOINT}" --no-multipart
+          aws s3 cp "${{ steps.package.outputs.manifest_path }}" "s3://${R2_BUCKET}/${{ steps.package.outputs.r2_manifest_key }}" --endpoint-url "${ENDPOINT}" --no-multipart
+          aws s3 cp "${{ steps.package.outputs.latest_path }}" "s3://${R2_BUCKET}/${{ steps.package.outputs.r2_latest_key }}" --endpoint-url "${ENDPOINT}" --no-multipart
 
       - name: Callback success
         if: success()
