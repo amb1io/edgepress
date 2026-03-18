@@ -133,9 +133,16 @@ jobs:
             exit 1
           fi
 
-          ASTRO_COUNT="$(find "${SRC_DIR}" -type f -name '*.astro' | wc -l | tr -d ' ')"
+          BUILD_DIR="${SRC_DIR}/dist"
+          if [[ ! -d "${BUILD_DIR}" ]]; then
+            echo "Theme build directory not found: ${BUILD_DIR}"
+            echo "Ensure the theme repository has a built 'dist' folder before importing."
+            exit 1
+          fi
+
+          ASTRO_COUNT="$(find "${BUILD_DIR}" -type f -name '*.astro' | wc -l | tr -d ' ')"
           if [[ "${ASTRO_COUNT}" -eq 0 ]]; then
-            echo "No .astro files found in theme source"
+            echo "No .astro files found in theme build (dist)"
             exit 1
           fi
 
@@ -145,7 +152,7 @@ jobs:
           rm -f "${ZIP_PATH}"
           # Use absolute output path to avoid fragile relative traversals.
           # Exclude git metadata to keep packages small and deterministic.
-          (cd "${SRC_DIR}" && zip -r "${ZIP_PATH}" . -x ".git/*" ".git/**")
+          (cd "${BUILD_DIR}" && zip -r "${ZIP_PATH}" . -x ".git/*" ".git/**")
 
           CHECKSUM="$(sha256sum "${ZIP_PATH}" | awk '{print $1}')"
           MANIFEST_PATH="${PKG_DIR}/manifest.json"
@@ -186,12 +193,19 @@ jobs:
           echo "r2_manifest_key=${R2_MANIFEST_KEY}" >> "$GITHUB_OUTPUT"
           echo "r2_latest_key=${R2_LATEST_KEY}" >> "$GITHUB_OUTPUT"
 
-      - name: Configure AWS CLI for R2
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+      - name: Set AWS env for R2
+        run: |
+          set -euo pipefail
+          if [[ -z "${{ secrets.R2_ACCESS_KEY_ID }}" || -z "${{ secrets.R2_SECRET_ACCESS_KEY }}" ]]; then
+            echo "Missing R2_ACCESS_KEY_ID or R2_SECRET_ACCESS_KEY secret"
+            exit 1
+          fi
+          {
+            echo "AWS_ACCESS_KEY_ID=${{ secrets.R2_ACCESS_KEY_ID }}"
+            echo "AWS_SECRET_ACCESS_KEY=${{ secrets.R2_SECRET_ACCESS_KEY }}"
+            echo "AWS_REGION=us-east-1"
+            echo "AWS_DEFAULT_REGION=us-east-1"
+          } >> "$GITHUB_ENV"
 
       - name: Upload theme package to R2
         env:
