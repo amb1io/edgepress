@@ -248,9 +248,17 @@ jobs:
             exit 1
           fi
           ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          aws s3api put-object --bucket "${R2_BUCKET}" --key "${{ steps.package.outputs.r2_theme_zip_key }}" --body "${{ steps.package.outputs.zip_path }}" --endpoint-url "${ENDPOINT}"
+
+          echo "R2 upload sanity check..."
+          echo "ok" > __theme_pkg/_r2_sanity.txt
+          aws s3api put-object --bucket "${R2_BUCKET}" --key "themes/__debug__/r2-sanity.txt" --body "__theme_pkg/_r2_sanity.txt" --endpoint-url "${ENDPOINT}"
+
+          # Upload small JSON first (helps isolate multipart/size-related failures)
           aws s3api put-object --bucket "${R2_BUCKET}" --key "${{ steps.package.outputs.r2_manifest_key }}" --body "${{ steps.package.outputs.manifest_path }}" --endpoint-url "${ENDPOINT}"
           aws s3api put-object --bucket "${R2_BUCKET}" --key "${{ steps.package.outputs.r2_latest_key }}" --body "${{ steps.package.outputs.latest_path }}" --endpoint-url "${ENDPOINT}"
+
+          # Upload zip last
+          aws s3api put-object --bucket "${R2_BUCKET}" --key "${{ steps.package.outputs.r2_theme_zip_key }}" --body "${{ steps.package.outputs.zip_path }}" --endpoint-url "${ENDPOINT}"
 
       - name: Callback success
         if: success()
