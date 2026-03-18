@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       theme_post_id:
-        description: "Theme post ids (callback correlation)"
+        description: "Theme post id (callback correlation)"
         required: true
       theme_slug:
         description: "Theme slug"
@@ -191,7 +191,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          aws-region: auto
+          aws-region: us-east-1
 
       - name: Upload theme package to R2
         env:
