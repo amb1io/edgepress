@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { defineConfig } from "astro/config";
+import { defineConfig, sessionDrivers } from "astro/config";
 import tailwindcss from "@tailwindcss/vite";
 
 import alpinejs from "@astrojs/alpinejs";
@@ -21,6 +21,13 @@ export default defineConfig({
       configPath: "wrangler.jsonc",
     },
   }),
+  /**
+   * Autenticação usa better-auth; não usamos a API de sessão do Astro.
+   * Sem driver explícito, o adapter Cloudflare injeta KV SESSION sem id (quebra o deploy no Pages).
+   */
+  session: {
+    driver: sessionDrivers.memory(),
+  },
   srcDir: "./src",
   output: "server",
 
