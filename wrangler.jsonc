@@ -43,9 +43,6 @@
       "binding": "MEDIA_BUCKET",
       "bucket_name": "edgepress-media"
     }
-  ],
-  "assets": {
-    "binding": "STATIC_ASSETS",
-    "directory": "./dist/client"
-  }
+  ]
 }
+
