@@ -1,0 +1,64 @@
+---
+import TeamMember from "../components/teamitem.astro";
+import { getLanguageFromUrl } from "../i18n/utils";
+import { GetContent } from "../helpers/helpers";
+const lang = getLanguageFromUrl(Astro.url);
+const posts = await GetContent(lang, "equipe", {});
+const members = posts.filter((post: any) => {
+  const { language, socialMedia } = post;
+  if (language.includes(lang) && !socialMedia) {
+    return post;
+  }
+});
+---
+
+<style>
+  .team-members {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0 auto 3.5rem;
+    justify-content: space-between;
+  }
+  .edgtf-st-title {
+    margin-bottom: 20px;
+    margin-top: 20px;
+    text-align: center;
+  }
+  #intro .edgtf-page-subtitle {
+    color: #ffffff;
+    padding: 0 17%;
+    margin-top: 45%;
+    font-size: 12px;
+    line-height: 1.5em;
+    letter-spacing: 0.13em;
+    text-transform: none;
+  }
+  @media screen and (max-width: 499px) {
+    #founders {
+      margin-top: 20px;
+    }
+  }
+  @media screen and (min-width: 1025px) {
+    #founders {
+      margin-top: -50px;
+      z-index: 2;
+      position: relative;
+    }
+  }
+</style>
+<section id="team">
+  <section id="team-members">
+    <div class="team-members">
+      {
+        members.map((member: any) => (
+          <TeamMember
+            founder={false}
+            imagepr={member.image}
+            name={member.title}
+            job={member.body}
+          />
+        ))
+      }
+    </div>
+  </section>
+</section>

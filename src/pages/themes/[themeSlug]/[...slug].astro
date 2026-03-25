@@ -1,0 +1,70 @@
+---
+export const prerender = false;
+
+const themeSlug = Astro.params["themeSlug"];
+const slugParam = Astro.params["slug"];
+const slugSegments = typeof slugParam === "string" ? slugParam.split("/").filter(Boolean) : [];
+
+if (!themeSlug || slugSegments.length === 0) {
+  return new Response("Theme page not found", { status: 404 });
+}
+
+const themePages = {
+  ...import.meta.glob("../*/pages/**/*.astro"),
+  ...import.meta.glob("../*/__theme__/pages/**/*.astro"),
+};
+
+const flatBase = `../${themeSlug}/pages/`;
+const packagedBase = `../${themeSlug}/__theme__/pages/`;
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+let loadThemePage: (() => Promise<unknown>) | undefined;
+let routeProps: Record<string, string> = {};
+
+const staticRel = `${slugSegments.join("/")}.astro`;
+const indexRel = `${slugSegments.join("/")}/index.astro`;
+loadThemePage =
+  (themePages[flatBase + staticRel] ?? themePages[packagedBase + staticRel]) ||
+  (themePages[flatBase + indexRel] ?? themePages[packagedBase + indexRel]);
+
+if (!loadThemePage && slugSegments.length >= 2) {
+  const tail = slugSegments[slugSegments.length - 1]!;
+  const prefixPath = slugSegments.slice(0, -1).join("/");
+  const prefixRe = escapeRegExp(prefixPath);
+  const dynamicRe = new RegExp(`^${prefixRe}/\\[([^\\]]+)\\]\\.astro$`);
+
+  const candidates: { key: string; load: () => Promise<unknown>; param: string }[] = [];
+  for (const key of Object.keys(themePages)) {
+    let rel = "";
+    if (key.startsWith(flatBase)) rel = key.slice(flatBase.length);
+    else if (key.startsWith(packagedBase)) rel = key.slice(packagedBase.length);
+    else continue;
+    const m = rel.match(dynamicRe);
+    if (m) {
+      candidates.push({ key, load: themePages[key] as () => Promise<unknown>, param: m[1]! });
+    }
+  }
+  candidates.sort((a, b) => a.key.localeCompare(b.key));
+  const pick = candidates[0];
+  if (pick) {
+    loadThemePage = pick.load;
+    routeProps = { [pick.param]: tail };
+  }
+}
+
+if (!loadThemePage) {
+  return new Response("Theme page not found", { status: 404 });
+}
+
+const themeModule = (await loadThemePage()) as { default?: unknown };
+const ThemePage = themeModule.default as any;
+
+if (!ThemePage) {
+  return new Response("Invalid theme page module", { status: 500 });
+}
+---
+
+<ThemePage {...Astro.props} {...routeProps} />

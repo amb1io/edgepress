@@ -1,0 +1,31 @@
+---
+export const prerender = false;
+
+const themeSlug = Astro.params["themeSlug"];
+
+if (!themeSlug) {
+  return new Response("Theme not found", { status: 404 });
+}
+
+const modulePathPackaged = `../${themeSlug}/__theme__/pages/index.astro`;
+const modulePathFlat = `../${themeSlug}/pages/index.astro`;
+const themePages = {
+  ...import.meta.glob("../*/pages/**/*.astro"),
+  ...import.meta.glob("../*/__theme__/pages/**/*.astro"),
+};
+const loadThemePage =
+  themePages[modulePathFlat] ?? themePages[modulePathPackaged];
+
+if (!loadThemePage) {
+  return new Response("Theme page not found", { status: 404 });
+}
+
+const themeModule = (await loadThemePage()) as { default?: unknown };
+const ThemePage = themeModule.default as any;
+
+if (!ThemePage) {
+  return new Response("Invalid theme page module", { status: 500 });
+}
+---
+
+<ThemePage {...Astro.props} />

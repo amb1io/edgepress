@@ -1,0 +1,14 @@
+---
+import Layout from "../../layouts/default.astro";
+import JobList from "../../partials/job-list.astro";
+import { getLanguageFromUrl } from "../../i18n/utils";
+
+const slug = Astro.props.slug ?? Astro.params.slug;
+let { page } = Astro.props;
+const lang = getLanguageFromUrl(Astro.url);
+if (!page) page = "trabalhos";
+---
+
+<Layout page={page}>
+  <JobList slug={slug} lang={lang} />
+</Layout>

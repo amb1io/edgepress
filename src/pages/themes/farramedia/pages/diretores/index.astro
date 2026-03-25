@@ -1,0 +1,44 @@
+---
+import Layout from "../../layouts/default.astro";
+import WorkItem from "../../components/workitem.astro";
+import { getLanguageFromUrl, useTranslations } from "../../i18n/utils";
+import { GetContent } from "../../helpers/helpers";
+
+const lang = getLanguageFromUrl(Astro.url);
+const t = useTranslations(lang);
+let posts = await GetContent(lang, "diretores", {});
+posts = posts.sort((a: any, b: any) => b.order - a.order);
+
+let { page } = Astro.props;
+
+if (!page) {
+  page = "trabalhos";
+}
+---
+
+<style>
+  #jobs {
+    display: flex;
+    flex-wrap: wrap;
+    background: #000;
+    width: 100%;
+  }
+</style>
+<style is:global>
+  .diretores--list .work--figure {
+    align-items: baseline;
+  }
+</style>
+<Layout page={page}>
+  <section id="jobs" class="diretores--list">
+    {
+      posts.map((posts: any) => (
+        <WorkItem
+          label={posts.title}
+          url={`${lang != "br" ? `/${lang}` : ""}/${t("pageDiretor")}/${posts.slug}`}
+          imagepr={posts.image}
+        />
+      ))
+    }
+  </section>
+</Layout>

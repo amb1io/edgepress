@@ -1,0 +1,459 @@
+---
+import { slugify } from "../helpers/helpers";
+import { Image } from "astro:assets";
+import Pagebanner from "../partials/pagebanner.astro";
+import Layout from "../layouts/default.astro";
+import { getLanguageFromUrl } from "../i18n/utils";
+import { createEdgepressContent } from "../utils/api";
+import TeamFounders from "../partials/team-founders.astro";
+
+const content = createEdgepressContent(Astro.locals, {
+  baseUrl: Astro.url.origin,
+});
+
+type CustomField = {
+  slug?: string;
+  fields?: { type?: string; name?: string; value?: string | number }[];
+};
+
+const lang = getLanguageFromUrl(Astro.url);
+const {
+  body,
+  custom_fields,
+  media,
+} = (await content.getItem("posts", "a-farra")) as {
+  body?: string | unknown;
+  custom_fields?: CustomField[] | unknown;
+  media?: unknown;
+};
+/**
+ * INFORMACOES DA PAGINA A FARRA
+ */
+const [title] = body?.toString().split("<hr>") || [];
+let bannerDesktop = "";
+const mediaList = Array.isArray(media) ? (media as { id?: number }[]) : [];
+if (
+  mediaList.length > 0 &&
+  mediaList[0] &&
+  typeof mediaList[0] === "object" &&
+  "id" in mediaList[0]
+) {
+  bannerDesktop = content.getMediaUrl(
+    (mediaList[0] as { id: number }).id,
+  );
+}
+const customFieldsList: CustomField[] = Array.isArray(custom_fields)
+  ? (custom_fields as CustomField[])
+  : [];
+const mobileBlock = customFieldsList.find((item) =>
+  item.slug?.includes("mobile"),
+);
+const mobileFields = Array.isArray(mobileBlock?.fields)
+  ? mobileBlock?.fields
+  : [];
+const mobileBgField = mobileFields?.find((item) =>
+  item.name?.includes("bg"),
+);
+const mobileBanner =
+  mobileBgField != null &&
+  (mobileBgField as { value?: string | number }).value != null
+    ? content.getMediaUrl(
+        (mobileBgField as { value: string | number }).value,
+      )
+    : "";
+/**
+ * INFORMACOES DO O QUE FAZEMOS
+ */
+const oqueFazemosSlug =
+  lang === "en" ? "entertainment-for-all-media" : "o-que-fazemos";
+const {
+  title: titleOqueFazemos,
+  body: bodyOqueFazemos,
+  custom_fields: customFieldsOqueFazemos,
+} = (await content.getItem("posts", oqueFazemosSlug)) as {
+  title?: string;
+  body?: { body?: string } | string;
+  custom_fields?: CustomField[] | unknown;
+};
+let tipoOqueFazemos: CustomField[] = Array.isArray(customFieldsOqueFazemos)
+  ? (customFieldsOqueFazemos as CustomField[]).filter((item) =>
+      item.slug?.includes("tipos-de-quem-somos"),
+    )
+  : [];
+const fieldsDoTipo = tipoOqueFazemos[0]?.fields;
+tipoOqueFazemos = Array.isArray(fieldsDoTipo)
+  ? fieldsDoTipo.map((field: Record<string, unknown>) => {
+      const f = field as { type?: string; value?: string | number };
+      if (f.type === "file" && f.value != null) {
+        f.value = content.getMediaUrl(f.value);
+      }
+      return field;
+    })
+  : [];
+/**
+ * INFORMACOES DO QUEM SOMOS
+ */
+const quemSomosSlug = lang === "en" ? "quem-somos-en" : "quem-somos";
+const { body: bodyQuemSomos } = await content.getItem(
+  "posts",
+  quemSomosSlug,
+);
+/**
+ * INFORMACOES DO SERVIÇOS
+ */
+const servicosSlug = lang === "en" ? "services" : "servicos";
+const {
+  title: titleServicos,
+  body: bodyServicos,
+  custom_fields: customFieldsServicos,
+} = (await content.getItem("posts", servicosSlug)) as {
+  title?: string;
+  body?: string;
+  custom_fields?: CustomField[] | unknown;
+};
+const customFieldsServicosList: CustomField[] = Array.isArray(
+  customFieldsServicos,
+)
+  ? (customFieldsServicos as CustomField[])
+  : [];
+const tipoServicos =
+  customFieldsServicosList.find((item) =>
+    item.slug?.includes("tipo-de-servicos"),
+  )?.fields ?? [];
+/**
+ * ASTRO PROPS
+ */
+let { page } = Astro.props;
+if (!page) {
+  page = "quem-somos";
+}
+---
+
+<style lang="scss">
+  .quem-somos-inner {
+    @media screen and (min-width: 0) {
+      margin: 2.5rem auto 4.5rem;
+
+      color: #fff;
+      text-align: center;
+    }
+    @media screen and (min-width: 1025px) {
+      padding-left: 1em;
+      padding-right: 1em;
+      max-width: 782px;
+    }
+  }
+</style>
+<Layout page={page}>
+  <Pagebanner
+    pagename={title}
+    deskimage={bannerDesktop}
+    mobimage={mobileBanner}
+  />
+  <div class="o-que-fazemos">
+    <section class="section--wrapper2">
+      <article>
+        <h3 id="tit1">{titleOqueFazemos}</h3>
+        {
+          (() => {
+            const text =
+              typeof bodyOqueFazemos === "object" &&
+              bodyOqueFazemos &&
+              "body" in bodyOqueFazemos
+                ? (bodyOqueFazemos as { body?: string }).body ?? ""
+                : typeof bodyOqueFazemos === "string"
+                  ? bodyOqueFazemos
+                  : "";
+            return text ? <p class="intro">{text}</p> : "";
+          })()
+        }
+        <ul>
+          {
+            tipoOqueFazemos.map((item: any) => (
+              <li>
+                <Image
+                  class="logoCats"
+                  src={item.value}
+                  width={100}
+                  height={100}
+                  alt=""
+                />
+                <span>{item.name}</span>
+              </li>
+            ))
+          }
+        </ul>
+      </article>
+    </section>
+  </div>
+  <div>
+    <TeamFounders />
+    <div class="edgtf-container-inner">
+      <article class="edgtf-grid">
+        <div class="edgtf-row-grid-section">
+          <div class="edgtf-grid-col-12">
+            <div class="quem-somos-inner" set:html={bodyQuemSomos} />
+          </div>
+        </div>
+      </article>
+    </div>
+  </div>
+  <div>
+    <section class="section--wrapper2">
+      <article>
+        <h3>{titleServicos}</h3>
+        <div class="intro" set:html={bodyServicos} />
+        <div class="service--wrapper">
+          {
+            tipoServicos.map((job: any) => (
+              <div class={"service--item " + slugify(job.name)}>
+                <h2 set:html={job.name} />
+                <p>{job.value}</p>
+              </div>
+            ))
+          }
+        </div>
+      </article>
+    </section>
+  </div>
+</Layout>
+
+<style lang="scss" is:global>
+  // O que Fazemos
+  .o-que-fazemos {
+    .section--wrapper2 {
+      @media screen and (min-width: 0) {
+        margin-top: -15vw;
+      }
+      @media screen and (min-width: 700px) {
+        margin-top: -220px;
+      }
+      @media screen and (min-width: 1025px) {
+        margin-top: -150px;
+      }
+    }
+  }
+  .what-we-do {
+    .section--wrapper2 {
+      @media screen and (min-width: 0) {
+        margin-top: -220px;
+      }
+      @media screen and (min-width: 1024px) {
+        margin-top: -190px;
+      }
+    }
+    .pagebanner--image {
+      display: none;
+    }
+  }
+  ////////////////////////////////
+  .section--wrapper2 {
+    padding-bottom: 2rem;
+    position: relative;
+
+    color: #fff;
+    text-align: center;
+
+    @media screen and (min-width: 0) {
+      // margin-top: -10rem;
+    }
+
+    @media screen and (min-width: 1024px) {
+      // margin-top: -20rem;
+    }
+
+    h3 {
+      @media screen and (min-width: 0) {
+        margin: 0 auto;
+        max-width: 800px;
+
+        color: #fff;
+        &#tit1 {
+          margin-bottom: 5.5rem;
+        }
+      }
+      @media screen and (min-width: 600px) {
+        font-size: 50px;
+      }
+    }
+
+    ul {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-left: auto;
+      margin-right: auto;
+      max-width: 1000px;
+      list-style-type: none;
+      flex-wrap: wrap;
+      flex: 1 1 auto;
+
+      li {
+        @media screen and (min-width: 0) {
+          margin-bottom: 6rem;
+          flex-basis: 50%;
+        }
+        @media screen and (min-width: 600px) {
+          flex-basis: 25%;
+        }
+        &.tv::before {
+          background-image: url("/servicos/televisao.png");
+        }
+        &.ent::before {
+          background-image: url("/servicos/filme.png");
+        }
+        &.pub::before {
+          background-image: url("/servicos/publicidade.png");
+        }
+        &.pod::before {
+          background-image: url("/servicos/podcast.png");
+        }
+        &.cin::before {
+          background-image: url("/servicos/cinema.png");
+        }
+        &.soc::before {
+          background-image: url("/servicos/midia-social.png");
+        }
+        &.liv::before {
+          background-image: url("/servicos/instagram-ao-vivo.png");
+        }
+        &.corp::before {
+          background-image: url("/servicos/corporativo.png");
+        }
+        span {
+          display: inline-block;
+          line-height: 1;
+          max-width: 200px;
+
+          font-weight: bold;
+          text-transform: uppercase;
+        }
+      }
+    }
+
+    .intro {
+      @media screen and (min-width: 0) {
+        max-width: 800px;
+        margin: 1rem auto 4rem;
+      }
+      @media screen and (max-width: 1023px) {
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+    }
+
+    .service--wrapper {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-around;
+      margin-left: auto;
+      margin-right: auto;
+      margin-bottom: 4rem;
+    }
+
+    .service--item {
+      @media screen and (max-width: 500px) {
+        width: 100%;
+      }
+      @media screen and (min-width: 0) {
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        margin: 1rem;
+        padding: 2rem;
+
+        border: solid 1px #fff;
+        border-radius: 50px;
+      }
+      @media screen and (max-width: 1024px) {
+        flex-wrap: wrap;
+        br {
+          display: none;
+        }
+      }
+      @media screen and (min-width: 1025px) {
+        margin: 2em 0;
+        justify-content: space-between;
+        height: 250px;
+      }
+      @media screen and (min-width: 1500px) {
+        max-width: 800px;
+        width: 50%;
+        &.producao {
+          h2 {
+            max-width: 87px;
+          }
+        }
+        &.roteiro {
+          h2 {
+            width: 223px;
+          }
+        }
+        &.estrategia {
+          h2 {
+            max-width: 150px;
+          }
+          p {
+            max-width: 350px;
+          }
+        }
+        &.posproducao {
+          p {
+            max-width: 360px;
+          }
+        }
+        &.social {
+          h2 {
+            max-width: 240px;
+          }
+          p {
+            max-width: 315px;
+          }
+        }
+        &.artistico {
+          h2 {
+            max-width: 290px;
+          }
+        }
+      }
+
+      h2 {
+        color: #fff;
+        text-align: left;
+        width: 100%;
+        @media screen and (max-width: 1024px) {
+          text-align: center;
+        }
+        @media screen and (min-width: 0) {
+          font-size: 1.5rem;
+        }
+        @media screen and (min-width: 1025px) {
+          font-size: 2rem;
+          max-width: 255px;
+        }
+      }
+      p {
+        @media screen and (min-width: 0) {
+          letter-spacing: 1px;
+        }
+        @media screen and (min-width: 1025px) {
+          width: 450px;
+
+          text-align: right;
+        }
+      }
+    }
+  }
+  .servicos--wrapper {
+    background-image: url("/optimized/static-bg.webp");
+  }
+  .edgtf-st-title {
+    margin-bottom: 20px;
+
+    text-align: center;
+  }
+  .logoCats {
+    display: block;
+    margin: 0 auto 1rem;
+  }
+</style>

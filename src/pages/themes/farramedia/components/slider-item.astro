@@ -1,0 +1,29 @@
+---
+import { Vimeo } from "@astro-community/astro-embed-vimeo";
+interface Props {
+  image?: any;
+  link?: string;
+  modal?: string;
+  options?: {};
+}
+const { image, modal } = Astro.props;
+---
+
+<style lang="scss">
+  .modal--inner {
+    position: relative;
+
+    iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 100%;
+    }
+  }
+</style>
+<script src="https://player.vimeo.com/api/player.js"></script>
+
+<div class="swiper-slide">
+  {modal?.includes("vimeo") ? <Vimeo id={modal} poster={image} /> : ""}
+</div>

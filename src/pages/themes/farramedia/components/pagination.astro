@@ -1,0 +1,161 @@
+---
+import { getLanguageFromUrl, useTranslations } from "../i18n/utils";
+import { createEdgepressContent } from "../utils/api";
+
+const content = createEdgepressContent(Astro.locals, {
+  baseUrl: Astro.url.origin,
+});
+
+const lang = getLanguageFromUrl(Astro.url);
+const t = useTranslations(lang);
+const { slug } = Astro.params;
+
+const locale = lang === "br" ? 9 : 7;
+
+const { items: jobs } = await content.getListWithDetails("posts", {
+  query: {
+    filter_post_type: "post",
+    page: 1,
+    limit: 500,
+    order: "meta_order",
+    orderDir: "desc",
+    id_locale_code: locale,
+  },
+});
+
+const currentIndex = jobs.findIndex((job: any) => job.slug === slug);
+
+let prevPost;
+let nextPost;
+let prevPostUrl;
+let prevPostLabel;
+let prevImage;
+let nextPostUrl;
+let nextPostLabel;
+let nextImage;
+
+if (currentIndex > 0) {
+  prevPost = jobs[currentIndex - 1];
+  nextPost = jobs[currentIndex + 1];
+
+  if (prevPost) {
+    prevPostUrl = prevPost.slug;
+    prevPostLabel = prevPost.title;
+    const prevThumbId = Number(
+      (prevPost.meta_values as { post_thumbnail_id?: string | number })
+        ?.post_thumbnail_id ?? 0,
+    );
+    prevImage = prevThumbId
+      ? `url(${content.getMediaUrl(prevThumbId)})`
+      : "";
+  }
+
+  if (nextPost) {
+    nextPostUrl = nextPost.slug;
+    nextPostLabel = nextPost.title;
+    const nextThumbId = Number(
+      (nextPost.meta_values as { post_thumbnail_id?: string | number })
+        ?.post_thumbnail_id ?? 0,
+    );
+    nextImage = nextThumbId
+      ? `url(${content.getMediaUrl(nextThumbId)})`
+      : "";
+  }
+}
+---
+
+<style lang="scss" define:vars={{ prevImage, nextImage }}>
+  @media screen and (max-width: 1024px) {
+    .pagination--wrapper {
+      justify-content: space-evenly;
+    }
+    .pagination--wrapper a {
+      margin-bottom: 3em;
+      width: 100%;
+    }
+  }
+  @media screen and (min-width: 1024px) {
+    .pagination--wrapper {
+      justify-content: space-between;
+    }
+  }
+  .pagination--wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    padding: 5rem 0;
+    /* padding-bottom: 50px;
+    padding-top: 100px;
+    margin-top: 100px; */
+    border-top: 1px solid rgba(170, 170, 170, 0.8);
+  }
+  .pagination--wrapper a {
+    display: flex;
+    align-items: flex-end;
+
+    font-weight: bold;
+  }
+  .pagination--wrapper a.pagination--next::before {
+    order: 2;
+    margin-left: 1em;
+    background-image: var(--nextImage);
+  }
+  .pagination--wrapper a.pagination--prev::before {
+    margin-right: 1em;
+    background-image: var(--prevImage);
+  }
+  .pagination--wrapper a.pagination--next {
+    order: 1;
+  }
+  .pagination--wrapper a::before {
+    content: "";
+    display: block;
+    height: 50px;
+    width: 80px;
+    background-color: #000;
+    background-size: contain;
+  }
+  .pagination {
+    &--wrapper {
+      a {
+        position: relative;
+        small {
+          position: absolute;
+          top: -30px;
+          font-weight: 300;
+          text-transform: capitalize;
+        }
+      }
+    }
+    &--next {
+      small {
+        right: 0;
+      }
+    }
+  }
+</style>
+<section id="slider" class="pagination--wrapper">
+  {
+    prevPostUrl ? (
+      <a href={`/portfolio/${prevPostUrl}`} class="pagination--prev">
+        <small>{t("anterior")}</small>
+        <div>{prevPostLabel}</div>
+      </a>
+    ) : (
+      ""
+    )
+  }
+  {
+    nextPostUrl ? (
+      <a
+        href={`${lang != "br" ? `/${lang}` : ""}/portfolio/${nextPostUrl}`}
+        class="pagination--next"
+      >
+        <small>{t("proximo")}</small>
+        {nextPostLabel}
+      </a>
+    ) : (
+      ""
+    )
+  }
+</section>

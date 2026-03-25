@@ -1,0 +1,95 @@
+---
+interface Props {
+  label?: any;
+  url: any;
+  active?: boolean;
+  flag?: string;
+  classList?: string;
+}
+const { label, url, active, flag, classList } = Astro.props;
+let css =
+  "menu-item menu-item-type-post_type menu-item-object-page menu-item-home page_item page-item-3708 narrow";
+if (active) {
+  css = css + " edgtf-active-item";
+}
+if (classList) {
+  css = css + " " + classList;
+}
+---
+
+<style lang="scss">
+  .has-submenu {
+    position: relative;
+    & > a {
+      &::before {
+        content: "";
+        position: absolute;
+        right: 10px;
+        margin-top: 2px;
+        height: 20px;
+        width: 20px;
+
+        background-image: url("data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/Pjxzdmcgdmlld0JveD0iMCAwIDMyIDMyIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxkZWZzPjxzdHlsZT4uY2xzLTF7ZmlsbDpub25lO3N0cm9rZTojMDAwO3N0cm9rZS1saW5lY2FwOnJvdW5kO3N0cm9rZS1saW5lam9pbjpyb3VuZDtzdHJva2Utd2lkdGg6MnB4O308L3N0eWxlPjwvZGVmcz48dGl0bGUvPjxnIGlkPSJjaGV2cm9uLWJvdHRvbSI+PGxpbmUgY2xhc3M9ImNscy0xIiB4MT0iMTYiIHgyPSI3IiB5MT0iMjAuNSIgeTI9IjExLjUiLz48bGluZSBjbGFzcz0iY2xzLTEiIHgxPSIyNSIgeDI9IjE2IiB5MT0iMTEuNSIgeTI9IjIwLjUiLz48L2c+PC9zdmc+");
+        background-repeat: no-repeat;
+        transform: rotate(0);
+        transition: all 0.5s ease-in-out;
+      }
+      &.active::before {
+        transform: rotate(180deg);
+      }
+    }
+  }
+</style>
+
+<style is:global lang="scss">
+  .home-en,
+  .what-we-do,
+  .who-we-are,
+  .trabalhos,
+  .diretores,
+  .jobs-en {
+    .edgtf-main-menu {
+      .submenu {
+        ul {
+          // overflow-x: scroll;
+          li {
+            max-width: 150px;
+            a {
+              // outline: solid 2px red;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              height: 100%;
+              min-height: 32px;
+              line-height: 1.5;
+            }
+          }
+        }
+      }
+    }
+  }
+</style>
+
+<li class={css}>
+  <a href={url}>
+    <span class="item_outer">
+      <span class="item_text">
+        {
+          flag ? (
+            <img
+              src={flag}
+              alt="English version"
+              width="16"
+              height="11"
+              style="width: 16px; height: 11px;"
+            />
+          ) : (
+            ""
+          )
+        }
+        {label ? label : ""}
+      </span>
+    </span>
+  </a>
+  <slot id="submenu" />
+</li>

@@ -1,0 +1,62 @@
+---
+import logoAzul from "../images/logo/farra-azul.png";
+interface Props {
+  intro?: boolean;
+  body?: string;
+}
+const bgImage = `url(${logoAzul.src})`;
+const { body } = Astro.props as Props;
+---
+
+<style define:vars={{ bgImage }} lang="scss" is:global>
+  *[data-value="blue"] {
+    color: #01c3cc !important;
+  }
+  .firstfold-body {
+    @media screen and (min-width: 1024px) {
+      display: flex;
+      max-width: 1300px;
+      padding: 5rem 2rem;
+      margin: 5rem auto;
+    }
+    .logo {
+      display: block;
+      max-width: 300px;
+      height: 125px;
+      overflow: hidden;
+      text-indent: -100vw;
+      width: 100%;
+
+      background-image: var(--bgImage);
+      background-size: cover;
+      background-repeat: no-repeat;
+    }
+    small {
+      font-size: 1rem;
+    }
+    p {
+      color: #fff;
+    }
+  }
+
+  .body-content h2 {
+    @media screen and (min-width: 0) {
+      color: #fff;
+      line-height: 1;
+      font-size: 60px;
+      text-align: right;
+      letter-spacing: normal;
+    }
+    @media screen and (min-width: 1024px) {
+      margin-right: 80px;
+      font-size: 47px;
+
+      span:first-child {
+        font-size: 61px;
+      }
+    }
+  }
+</style>
+<section class="firstfold-body">
+  {body ? <div class="body-content" set:html={body} /> : null}
+</section>

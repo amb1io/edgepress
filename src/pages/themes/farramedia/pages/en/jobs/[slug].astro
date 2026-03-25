@@ -1,0 +1,55 @@
+---
+import Layout from "../../../layouts/default.astro";
+import WorkItem from "../../../components/workitem.astro";
+import { getLanguageFromUrl } from "../../../i18n/utils";
+import { GetJobs, TagsFormat } from "../../../helpers/helpers";
+let { page } = Astro.props;
+let slug = Astro.props.slug ?? Astro.params.slug;
+const lang = getLanguageFromUrl(Astro.url);
+interface Teste {
+  "television-and-streaming": string;
+  advertising: string;
+  "livestreams-and-events": string;
+  corporate: string;
+  "music-video": string;
+}
+const menus = {
+  "television-and-streaming": "televisao-e-streaming",
+  advertising: "publicidade",
+  "livestreams-and-events": "lives-e-eventos",
+  corporate: "corporativo",
+  "music-video": "clipe",
+};
+slug = menus[slug as keyof Teste] ? menus[slug as keyof Teste] : slug;
+if (!page) {
+  page = "trabalhos";
+}
+const posts = await GetJobs({ slug });
+const jobs = posts
+  .map((post: any) => TagsFormat(post))
+  .filter((post: any) => post.language.includes(lang))
+  .sort((a: any, b: any) => b.createdOn - a.createdOn)
+  .sort((a: any, b: any) => b.order - a.order);
+---
+
+<style>
+  #jobs {
+    display: flex;
+    flex-wrap: wrap;
+    background: #000;
+    width: 100%;
+  }
+</style>
+<Layout page={page}>
+  <section id="jobs">
+    {
+      jobs.map((job: any) => (
+        <WorkItem
+          label={job.title}
+          url={`${lang != "br" ? `/${lang}` : ""}/portfolio/${job.slug}`}
+          imagepr={job.image}
+        />
+      ))
+    }
+  </section>
+</Layout>

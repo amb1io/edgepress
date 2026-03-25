@@ -1,0 +1,273 @@
+---
+interface Props {
+  /** Slug da taxonomia para filtrar os trabalhos. Quando omitido, lista todos. */
+  slug?: string;
+  /** Código do idioma (ex: "br", "en"). Se omitido, usa getLanguageFromUrl(Astro.url). */
+  lang?: string;
+}
+
+import WorkItem from "../components/workitem.astro";
+import { createEdgepressContent } from "../utils/api";
+
+const content = createEdgepressContent(Astro.locals, {
+  baseUrl: Astro.url.origin,
+});
+import { getLanguageFromUrl } from "../i18n/utils";
+
+const { slug: taxonomySlug } = Astro.props;
+const lang = Astro.props.lang ?? getLanguageFromUrl(Astro.url);
+
+const JOBS_PER_PAGE = 24;
+const locale = lang === "br" ? 9 : 7;
+
+const query: Record<string, string | number> = {
+  filter_post_type: "post",
+  page: 1,
+  limit: JOBS_PER_PAGE,
+  order: "meta_order",
+  orderDir: "desc",
+  id_locale_code: locale,
+};
+if (taxonomySlug) {
+  query.filter_taxonomy_slug = taxonomySlug;
+}
+
+const firstPage = await content.getListWithDetails("posts", {
+  query,
+});
+
+let jobs = firstPage.items.map((job: any) => ({
+  title: job.title,
+  slug: job.slug,
+  image: content.getMediaUrl(job.meta_values?.post_thumbnail_id),
+  order: job.meta_values?.order,
+}));
+const hasMore = firstPage.totalPages > 1;
+---
+
+<style>
+  #jobs {
+    display: flex;
+    flex-wrap: wrap;
+    background: #000;
+    width: 100%;
+  }
+  .jobs-sentinel {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    min-height: 0;
+    flex-basis: auto;
+    pointer-events: none;
+  }
+  /* Estilos unificados para .work--* (originais e itens carregados no scroll) */
+  #jobs .work--wrapper {
+    overflow: hidden;
+    flex: 1 1 100%;
+  }
+  #jobs .work--wrapper:hover .work--image {
+    transform: scale(1);
+  }
+  #jobs .work--wrapper:hover .work--figure::before {
+    animation: move-right 0.5s ease 1;
+  }
+  #jobs .work--figure {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    position: relative;
+    max-height: 384px;
+    max-width: 640px;
+    height: 100%;
+  }
+  #jobs .work--image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    vertical-align: middle;
+    transition: transform 1s ease;
+    transform: scale(1.03);
+  }
+  #jobs .work--figcaption {
+    position: absolute;
+    display: block;
+    bottom: 0;
+    left: 0;
+    z-index: 10;
+  }
+  #jobs .work--figcaption h5 {
+    color: #fff;
+  }
+  @media (min-width: 700px) and (max-width: 1023px) {
+    #jobs .work--wrapper {
+      max-width: 50%;
+    }
+  }
+  @media (max-width: 1023px) {
+    #jobs .work--figcaption {
+      padding: 1rem;
+      width: 100%;
+      background-color: rgba(0, 0, 0, 0.65);
+    }
+  }
+  @media (min-width: 1024px) {
+    #jobs .work--figure {
+      position: relative;
+    }
+    #jobs .work--figure::before {
+      transition: all 0.5s linear;
+    }
+    #jobs .work--wrapper:hover .work--figcaption {
+      opacity: 1;
+    }
+    #jobs .work--figure::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 100%;
+      z-index: 9;
+      background-color: transparent;
+      transition: background-color 0.2s linear;
+    }
+    #jobs .work--wrapper:hover .work--figure::before {
+      background-color: rgba(0, 0, 0, 0.7);
+    }
+    #jobs .work--wrapper {
+      max-width: 33.3%;
+    }
+    #jobs .work--figcaption {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 100%;
+      opacity: 0;
+      transition: all 0.2s linear;
+    }
+  }
+</style>
+
+<section id="jobs">
+  {
+    jobs.map((job: any) => (
+      <WorkItem
+        label={job.title}
+        url={`${lang !== "br" ? `/${lang}` : ""}/portfolio/${job.slug}`}
+        imagepr={job.image}
+      />
+    ))
+  }
+  <div
+    id="jobs-sentinel"
+    class="jobs-sentinel"
+    data-lang={lang}
+    data-has-more={String(hasMore)}
+    data-slug={taxonomySlug ?? ""}
+    data-locale={locale}
+    aria-hidden="true"
+  >
+  </div>
+</section>
+
+<script is:inline define:vars={{ lang, hasMore, taxonomySlug, locale }}>
+  function initJobsInfiniteScroll() {
+    const sentinel = document.getElementById("jobs-sentinel");
+    const container = document.getElementById("jobs");
+    if (!sentinel || !container) return;
+    if (sentinel.dataset.hasMore !== "true") return;
+
+    const lang = sentinel.dataset.lang || "br";
+    const slug = (sentinel.dataset.slug || "").trim();
+    const localeId = Number(sentinel.dataset.locale) || (lang === "br" ? 3 : 1);
+    const locale = lang === "br" ? "pt-br" : lang;
+    const basePath = lang !== "br" ? `/${lang}` : "";
+
+    function buildJobUrl(jobSlug) {
+      return `${basePath}/portfolio/${jobSlug}`;
+    }
+
+    function createJobElement(job) {
+      const a = document.createElement("a");
+      a.href = buildJobUrl(job.slug);
+      a.className = "work--wrapper";
+      a.innerHTML = `
+        <figure class="work--figure">
+          <img
+            class="work--image"
+            src="${job.image || "https://placehold.it/100x100"}"
+            alt="Foto da campanha ${job.title.replace(/"/g, "&quot;")}"
+            loading="lazy"
+            width="640"
+            height="640"
+          />
+          <figcaption class="work--figcaption">
+            <h5>${job.title.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</h5>
+          </figcaption>
+        </figure>
+      `;
+      return a;
+    }
+
+    let loading = false;
+    let nextPage = 2;
+
+    async function loadMore() {
+      if (loading) return;
+      loading = true;
+      try {
+        const params = new URLSearchParams({
+          page: String(nextPage),
+          limit: "24",
+          lang,
+          locale,
+          order: "meta_order",
+          orderDir: "desc",
+          filter_post_type: "post",
+          id_locale_code: String(localeId),
+        });
+        if (slug) params.set("slug", slug);
+        const res = await fetch(`/api/jobs?${params.toString()}`);
+        if (!res.ok) throw new Error("Falha ao carregar");
+        const data = await res.json();
+        for (const job of data.jobs) {
+          container.insertBefore(createJobElement(job), sentinel);
+        }
+        nextPage++;
+        if (!data.hasMore) {
+          sentinel.dataset.hasMore = "false";
+          observer.disconnect();
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        loading = false;
+      }
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry?.isIntersecting && sentinel.dataset.hasMore === "true") {
+          loadMore();
+        }
+      },
+      { root: null, rootMargin: "-50% 0px -49% 0px", threshold: 0 },
+    );
+    observer.observe(sentinel);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initJobsInfiniteScroll);
+  } else {
+    initJobsInfiniteScroll();
+  }
+</script>

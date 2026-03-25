@@ -1,0 +1,88 @@
+---
+import Layout from "../layouts/default.astro";
+import FirstFold from "../partials/firstfold.astro";
+import Clients from "../partials/clients.astro";
+import { getLanguageFromUrl } from "../i18n/utils";
+import { createEdgepressContent } from "../utils/api";
+
+const content = createEdgepressContent(Astro.locals, {
+  baseUrl: Astro.url.origin,
+});
+
+interface Props {
+  intro: boolean;
+  page?: string;
+}
+
+type CustomField = {
+  slug?: string;
+  fields?: { name?: string; value?: string }[];
+};
+
+const { intro, page: bodyPageClass = "home" } = Astro.props as Props;
+const lang = getLanguageFromUrl(Astro.url);
+const homepageSlug = lang === "en" ? "homepage-en" : "homepage";
+const homepageData = (await content.getItem("posts", homepageSlug).catch(() => null)) as {
+  custom_fields?: CustomField[] | unknown;
+  body?: string;
+} | null;
+const custom_fields = Array.isArray(homepageData?.custom_fields)
+  ? (homepageData.custom_fields as CustomField[])
+  : [];
+const body = homepageData?.body;
+
+const videos = custom_fields.filter((item) => item.slug?.includes("videos"));
+
+const videoFields = Array.isArray(videos[0]?.fields) ? videos[0].fields : [];
+
+const videoDeskField = videoFields.find((item) =>
+  (item.name ?? "").includes("desktop"),
+);
+const videoMobField = videoFields.find((item) =>
+  (item.name ?? "").includes("mobile"),
+);
+
+const videoDeskId = videoDeskField?.value ?? "";
+const videoMobId = videoMobField?.value ?? "";
+---
+
+<Layout page={bodyPageClass}>
+  <div class="edgtf-grid-row">
+    <div class="edgtf-page-content-holder edgtf-grid-col-12">
+      <div id="video" style="position:relative;"></div>
+      <FirstFold intro={intro === false ? intro : true} body={body} />
+    </div>
+    <Clients />
+  </div>
+</Layout>
+
+<script is:inline defer define:vars={{ videoDeskId, videoMobId }}>
+  function videoIn() {
+    const desk = String(videoDeskId ?? "").trim();
+    const mob = String(videoMobId ?? "").trim();
+    if (!desk && !mob) return;
+    const video = document.querySelector("#video");
+    if (!video) return;
+    const frameVideo = document.createElement("iframe");
+    frameVideo.id = "frameVideo";
+    frameVideo.loading = "lazy";
+    frameVideo.style =
+      "border:0;position:absolute;top:0;height:100%;width:100%;";
+    frameVideo.allow =
+      "accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;";
+    frameVideo.allowfullscreen = "false";
+    if (window.innerWidth >= 1024) {
+      if (!desk) return;
+      video.style.paddingTop = "56.25%";
+      frameVideo.src = `https://iframe.mediadelivery.net/embed/203455/${desk}?autoplay=true&autopause=false&loop=true&muted=true&preload=true&responsive=true`;
+    } else {
+      if (!mob) return;
+      video.style.paddingTop = "180%";
+      frameVideo.src = `https://iframe.mediadelivery.net/embed/203455/${mob}?autoplay=true&loop=true&muted=true&preload=true&responsive=true`;
+    }
+    video.appendChild(frameVideo);
+  }
+  window.addEventListener("load", () => {
+    videoIn();
+  });
+</script>

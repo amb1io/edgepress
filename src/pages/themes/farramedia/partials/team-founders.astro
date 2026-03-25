@@ -1,0 +1,120 @@
+---
+import TeamMember from "../components/teamitem.astro";
+import { getLanguageFromUrl } from "../i18n/utils";
+import { createEdgepressContent } from "../utils/api";
+
+const content = createEdgepressContent(Astro.locals, {
+  baseUrl: Astro.url.origin,
+});
+const lang = getLanguageFromUrl(Astro.url);
+const cargoFieldName = lang === "en" ? "cargo_en" : "cargo";
+const { items } = await content.getListWithDetails("posts", {
+  query: {
+    filter_post_type: "equipe",
+    page: 1,
+    limit: 100,
+  },
+});
+/**
+ * Filtra os donos
+ */
+const diretoria = items.filter((item: any) => {
+  const customFields = Array.isArray(item.custom_fields)
+    ? item.custom_fields
+    : [];
+  return customFields.some((field: Record<string, unknown>) => {
+    const slug = (field as { slug?: string }).slug ?? "";
+    if (!slug.includes("controle-layout")) return false;
+    const fields = Array.isArray((field as { fields?: unknown[] }).fields)
+      ? (field as { fields: unknown[] }).fields
+      : [];
+    return fields.some((f) => {
+      const field = f as Record<string, unknown>;
+      return (
+        (field as { name?: string }).name === "fundador" &&
+        (field as { value?: string }).value === "S"
+      );
+    });
+  });
+});
+/**
+ * Filtra as imagens dos donos
+ */
+const members = await Promise.all(
+  diretoria.map(async (item: any) => {
+    const socials = item.custom_fields
+      .find((field: Record<string, unknown>) => {
+        return (field as { slug?: string }).slug?.includes("social-media");
+      })
+      ?.fields.map((f: { value: string }) => f.value);
+    const jobs = item.custom_fields
+      .find((field: Record<string, unknown>) => {
+        return (field as { slug?: string }).slug?.includes("diretoria");
+      })
+      ?.fields.find(
+        (f: { name: string }) => f.name == cargoFieldName,
+      ) as { value?: string } | undefined;
+    const post_thumbnail_id = item.meta_values?.post_thumbnail_id;
+    const media = content.getMediaUrl(Number(post_thumbnail_id));
+    return {
+      name: item.title,
+      body: jobs?.value,
+      image: media,
+      socialMedia: socials,
+    };
+  }),
+);
+---
+
+<style>
+  .team-members {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0 auto;
+    justify-content: space-between;
+  }
+  .edgtf-st-title {
+    margin-bottom: 20px;
+    margin-top: 20px;
+    text-align: center;
+  }
+  #intro .edgtf-page-subtitle {
+    color: #ffffff;
+    padding: 0 17%;
+    margin-top: 45%;
+    font-size: 12px;
+    line-height: 1.5em;
+    letter-spacing: 0.13em;
+    text-transform: none;
+  }
+  @media screen and (max-width: 499px) {
+    #founders {
+      margin-top: 20px;
+    }
+  }
+  @media screen and (min-width: 1025px) {
+    #founders {
+      margin-top: -50px;
+      z-index: 2;
+      position: relative;
+    }
+  }
+  @media screen and (min-width: 1440px) {
+    #founders {
+      /* margin-top: -100px; */
+    }
+  }
+</style>
+<section id="founders" class="edgtf-grid">
+  {
+    members.map((member: any) => (
+      <TeamMember
+        founder={true}
+        socials={member.socialMedia}
+        imagepr={member.image}
+        name={member.name}
+        job={member.body}
+      />
+    ))
+  }
+</section>
