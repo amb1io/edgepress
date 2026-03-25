@@ -1,7 +1,14 @@
 /**
- * Cloudflare Pages não aceita a chave `assets` no wrangler raiz nem declaração
- * do binding ASSETS no wrangler gerado — a plataforma injeta `env.ASSETS` sozinha.
- * O adapter Astro adiciona `assets` ao dist/server/wrangler.json; removemos após o build.
+ * O build Astro + @cloudflare/vite-plugin gera dist/server/wrangler.json com campos de
+ * Worker (`main`, `rules`, `no_bundle`, etc.) e faz merge do wrangler raiz, onde entra
+ * `pages_build_output_dir`. O validador do Cloudflare Pages exige:
+ * - não misturar `main` (Worker) com `pages_build_output_dir` (Pages);
+ * - não aceitar `main`, `rules`, `no_bundle` neste ficheiro usado no deploy de Pages.
+ *
+ * O `pages_build_output_dir` continua só no wrangler.jsonc da raiz; aqui ficam bindings
+ * e flags compatíveis com Pages Functions.
+ *
+ * Referência: https://developers.cloudflare.com/pages/functions/wrangler-configuration/
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -16,12 +23,32 @@ if (!fs.existsSync(wranglerPath)) {
 }
 
 const raw = fs.readFileSync(wranglerPath, "utf8");
-const obj = JSON.parse(raw);
-if (!("assets" in obj)) {
-  console.log("[patch-pages-wrangler] no assets key, skip");
-  process.exit(0);
+const src = JSON.parse(raw);
+
+/** Chaves permitidas no wrangler usado pelo Pages (além de bindings). */
+const allowed = [
+  "name",
+  "compatibility_date",
+  "compatibility_flags",
+  "vars",
+  "d1_databases",
+  "kv_namespaces",
+  "r2_buckets",
+  "triggers",
+];
+
+const out = {};
+for (const key of allowed) {
+  if (!(key in src)) continue;
+  if (key === "triggers") {
+    const crons = Array.isArray(src.triggers?.crons) ? src.triggers.crons : [];
+    out.triggers = { crons };
+    continue;
+  }
+  out[key] = src[key];
 }
 
-delete obj.assets;
-fs.writeFileSync(wranglerPath, JSON.stringify(obj));
-console.log("[patch-pages-wrangler] removed assets from dist/server/wrangler.json");
+fs.writeFileSync(wranglerPath, JSON.stringify(out));
+console.log(
+  "[patch-pages-wrangler] dist/server/wrangler.json reduzido para formato Pages (sem main/rules/no_bundle/pages_build_output_dir)",
+);
