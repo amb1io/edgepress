@@ -1,0 +1,257 @@
+---
+import { Vimeo } from "astro-embed";
+import "@fontsource/roboto";
+import Layout from "../layouts/default.astro";
+import Pagination from "../components/pagination.astro";
+const { id, title, body, images, videos, fichaTecnica, categories } =
+  Astro.props.post;
+const { page } = Astro.props;
+
+function getVideoID(vimeoUrl: string) {
+  if (vimeoUrl) return vimeoUrl.split("https://vimeo.com/")[1];
+}
+---
+
+<style lang="scss">
+  .job-content-sticky {
+    transition: all 0.24s ease-in-out;
+  }
+  .job--header {
+    flex-wrap: wrap;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+  .job--header h2 {
+    font-size: 29px;
+    line-height: 1.310344827586207em;
+    letter-spacing: 0.13em;
+    order: 2;
+  }
+  .job--header h3 {
+    font-size: 12px;
+    line-height: 1.5em;
+    letter-spacing: 0.13em;
+    order: 1;
+  }
+  .ficha-tecnica {
+    padding: 65px 0 35px;
+
+    border-top: 1px solid rgba(170, 170, 170, 0.8);
+  }
+
+  .ficha-tecnica li {
+    display: flex;
+    list-style-type: none;
+    align-items: center;
+    margin: 0 0 1rem 0;
+    padding: 0;
+
+    line-height: 1.2em;
+  }
+  .ficha-tecnica li b {
+    margin-right: 0.5em;
+
+    color: #000;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+  }
+  @media only screen and (min-width: 0) {
+    .edgtf-st-title,
+    .edgtf-st-text {
+      flex: 1;
+      flex-basis: 100%;
+    }
+    .edgtf-st-title {
+      margin-top: 1rem;
+    }
+    .amb1--container {
+      display: flex;
+      flex: 1;
+      padding-top: 5em;
+    }
+    .edgtf-grid-row {
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+    .elementor-widget-container {
+      margin-bottom: 87px;
+      margin-top: 40px;
+
+      color: rgb(122, 122, 122);
+      font-family: "Roboto";
+    }
+    .ficha-tecnica li b,
+    .ficha-tecnica li span {
+      flex-basis: 50%;
+    }
+    .video--frame {
+      display: block;
+      margin-bottom: 30px;
+    }
+  }
+  @media only screen and (min-width: 1024px) {
+    .edgtf-grid-row {
+      margin-left: auto;
+      margin-right: auto;
+      max-width: 1300px;
+    }
+    .elementor-widget-container {
+      margin-top: 30px;
+    }
+    .ficha-tecnica li b {
+      flex-basis: 35%;
+    }
+    .ficha-tecnica li span {
+      flex-basis: 65%;
+    }
+  }
+  @media only screen and (min-width: 1300px) {
+    .amb1--container {
+      // padding-top: 10em;
+    }
+    .video--frame {
+      display: block;
+    }
+  }
+
+  .video {
+    &--frame {
+      iframe {
+        display: block;
+        height: 100%;
+        width: 100%;
+      }
+    }
+    &--vertical {
+      margin-left: auto;
+      margin-right: auto;
+      max-width: 360px;
+      width: 100%;
+      height: 640px;
+    }
+    &--horizontal {
+      aspect-ratio: 16/9;
+    }
+  }
+</style>
+
+<script>
+  window.addEventListener("scroll", () => {
+    const jobDescription = document.querySelector(
+      ".job-content-sticky"
+    ) as HTMLElement;
+    const jobContainer = document.querySelector(
+      ".trabalhos .edgtf-grid-col-8"
+    ) as HTMLElement;
+    if (jobDescription != null && jobContainer != null) {
+      setTimeout(() => {
+        if (jobContainer.childNodes.length > 1) {
+          if (jobDescription.getBoundingClientRect().top <= 0) {
+            let marginTop = window.scrollY - 100;
+            const threshold =
+              jobContainer.getBoundingClientRect().height -
+              jobDescription.getBoundingClientRect().height;
+            if (marginTop > threshold) {
+              marginTop = threshold;
+            }
+            jobDescription.style.position = "relative";
+            jobDescription.style.marginTop = marginTop + "px";
+          } else if (
+            jobDescription.getBoundingClientRect().top >=
+            jobDescription.getBoundingClientRect().height
+          ) {
+            let marginTop =
+              window.scrollY -
+              jobDescription.getBoundingClientRect().height / 4;
+            jobDescription.style.marginTop = marginTop + "px";
+          } else if (scrollY === 0) {
+            jobDescription.style.marginTop = "0px";
+          }
+        }
+      }, 800);
+    }
+  });
+</script>
+
+<Layout footerStyle="negative" page={page} isFixed={true}>
+  <section
+    class="amb1--container edgtf-content"
+    style="background-color: #fff;"
+  >
+    <div class="edgtf-container">
+      <div class="edgtf-grid-row">
+        <article class="edgtf-grid-col-8">
+          {
+            Array.isArray(videos) ? (
+              videos.map((video: any) =>
+                video ? (
+                  <span
+                    class={`video--frame video--${video.ori ? video.ori : "horizontal"}`}
+                  >
+                    <Vimeo id={video} />
+                  </span>
+                ) : (
+                  ""
+                )
+              )
+            ) : (
+              <span class="video--frame video--horizontal">
+                <iframe
+                  src={`https://player.vimeo.com/video/${getVideoID(videos)}?title=0&byline=0&portrait=0`}
+                />
+              </span>
+            )
+          }
+
+          {
+            images
+              ? images.map((image: HTMLImageElement) => (
+                  <span class="video--frame">
+                    <img src={image as any} />
+                  </span>
+                ))
+              : ""
+          }
+        </article>
+        <article class="edgtf-grid-col-4">
+          <div class="job-content-sticky">
+            <header class="job--header">
+              <h2 class="edgtf-st-title">{title}</h2>
+              <h3 class="edgtf-st-text">
+                {
+                  categories
+                    ? categories.map((cat: any) => cat.title).join(" | ")
+                    : ""
+                }
+              </h3>
+            </header>
+            <div class="elementor-widget-container">
+              <p>
+                {body}
+              </p>
+            </div>
+            <ul class="ficha-tecnica">
+              {
+                fichaTecnica
+                  ? fichaTecnica.map((item: any) => (
+                      <li>
+                        <b>{item.title} </b>
+                        <span>{item.content}</span>
+                      </li>
+                    ))
+                  : ""
+              }
+            </ul>
+          </div>
+        </article>
+
+        <div class="edgtf-grid-row">
+          {id ? <Pagination postId={id} /> : ""}
+        </div>
+      </div>
+    </div>
+  </section>
+</Layout>

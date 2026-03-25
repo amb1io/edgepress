@@ -1,0 +1,36 @@
+---
+import Nav from "./nav.astro";
+import Logo from "../components/logo.astro";
+import SocialMedia from "../partials/socialmedia.astro";
+import Langs from "../partials/langs.astro";
+const { isFixed } = Astro.props;
+let cssClass = "";
+if (isFixed) {
+  cssClass = "fixed";
+}
+---
+
+<header class="edgtf-page-header">
+  <div class={`edgtf-fixed-wrapper ${cssClass}`}>
+    <div class="edgtf-menu-area edgtf-menu-center">
+      <div class="edgtf-vertical-align-containers">
+        <div class="edgtf-position-left">
+          <div class="edgtf-position-left-inner">
+            <Logo />
+          </div>
+        </div>
+        <div class="edgtf-position-center">
+          <div class="edgtf-position-center-inner">
+            <Nav />
+          </div>
+        </div>
+        <div class="edgtf-position-right">
+          <div class="edgtf-position-right-inner">
+            <SocialMedia />
+            <Langs />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>

@@ -1,0 +1,237 @@
+---
+import Layout from "../../layouts/default.astro";
+import { getLanguageFromUrl, useTranslations } from "../../i18n/utils";
+import { TagsFormat, GetPosts } from "../../helpers/helpers";
+import { Image, Picture } from "astro:assets";
+import Icons from "../../components/icons.astro";
+import { Vimeo } from "astro-embed";
+const { name } = Astro.params;
+const lang = getLanguageFromUrl(Astro.url);
+const t = useTranslations(lang);
+let posts = await GetPosts(`filters[slug][$eq]=${name}`);
+posts = await Promise.all(posts
+.filter((post: any) => post.tags.includes("diretores") && post.slug == name)
+.map(async (post: any) => await TagsFormat(post))
+)
+const post = posts.find((post: any) => post.language.includes(lang))
+const page = "diretores";
+let bannerVimeo;
+if(post.videos && Array.isArray(post.videos)) bannerVimeo = post.videos[0]
+if(post.videos && !Array.isArray(post.videos)) bannerVimeo = post.videos
+// console.log("post", post)
+const linkVimeo = post?.socialMedia ? post.socialMedia.find((p: any) => p.includes("vimeo")) : "#";
+---
+
+<style is:global>
+  .diretores .edgtf-page-header .edgtf-menu-area {
+    background-color: transparent;
+  }
+  .reel-wrapper lite-vimeo {
+    height: 100%;
+  }
+  #video > img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100%;
+    z-index: 0;
+  }
+  .diretor-social-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff; 
+    text-transform: uppercase; 
+    width: 50px; 
+    height: 50px;
+
+    border: solid 1px #fff;
+    border-radius: 50%;
+    
+    svg {
+      height: 40px;
+      width: 50px;
+    }
+  }
+</style>
+
+<style lang="scss">
+  .firstfold {
+    @media screen and (min-width: 0) {
+      padding: 5rem 2rem;
+      h3 {
+        max-width: 650px;
+
+        color: #fff;
+        font-size: 180%;
+        line-height: 1.2;
+        letter-spacing: normal;
+        word-wrap: break-word;
+      }
+      span {
+        color: #01c3cc;
+      }
+      article {
+        margin-top: 3rem;
+      }
+    }
+    @media screen and (min-width: 1024px) {
+      display: flex;
+      max-width: 1080px;
+      padding: 0;
+      margin: 3rem auto;
+
+      h3,
+      article {
+        flex-basis: 50%;
+      }
+
+      h3 {
+        font-size: 60px;
+        text-align: right;
+      }
+
+      article {
+        margin-left: 80px;
+        margin-top: 0;
+        // font-size: 19px;
+      }
+    }
+    .logo {
+      display: block;
+      max-width: 300px;
+      height: 125px;
+      overflow: hidden;
+      text-indent: -100vw;
+      width: 100%;
+
+      background-image: var(--bgImage);
+      background-size: cover;
+      background-repeat: no-repeat;
+    }
+    small {
+      font-size: 1rem;
+    }
+    article {
+      color: #fff;
+    }
+  }
+  .reel-wrapper {
+    position: relative;
+    width: 100%;
+
+    background-color: #01c3cc;
+    color: #fff;
+    text-align: center;
+
+    h1 {
+      display: none;
+      color: inherit;
+    }
+
+    iframe {
+      position: absolute;
+      width: 100%;
+      max-width: none;
+      height: 100%;
+      left: 0;
+      top: 0;
+    }
+  }
+  .sm-wrapper {
+    display: flex;
+    list-style-type: none;
+    li:not(:last-child) {
+      padding-right: 1rem;
+    }
+  }
+  .xs1 {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .image--cover {
+    display: block;
+    width: 100%;
+  }
+  .image--wrapper {
+    height: 100%;
+    max-height: 520px;
+    overflow: hidden;
+  }
+  .text-justify {
+    text-align: justify;
+  }
+</style>
+
+<Layout page={page}>
+  <section class="reel-wrapper">
+    <h1>{post.title}</h1>
+      {
+        bannerVimeo && bannerVimeo.length == 36 ? (
+          <div id="video" style="position: relative; padding-top: 56.25%;">
+            <a href={linkVimeo} target={linkVimeo ? "_blank" : ""}>
+            <iframe
+              src=`https://iframe.mediadelivery.net/embed/203455/${bannerVimeo}?autoplay=true&loop=true&muted=true&preload=true&responsive=true`
+              loading="lazy"
+              style="border:0;top:0;height:100%;width:100%;"
+              allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;"
+              allowfullscreen="true"
+            />
+            </a>
+          </div>
+        ) : (
+          ""
+        )
+      }{
+        bannerVimeo && bannerVimeo.includes("vimeo") ? (
+          <Vimeo id={bannerVimeo} params="autoplay=true&loop=true&muted=false&preload=true&responsive=true" />
+        ) : (
+          ""
+        )
+      }
+      {
+        !post.videos && post?.images && post.images.length > 0 ? (
+          <a href={linkVimeo} target={linkVimeo ? "_blank" : ""}>
+            <Picture
+              class="image--cover"
+              src={post.images[0]}
+              alt=""
+              width={1280}
+              height={768}
+            />
+          </a>
+        ) : (
+          ""
+        )
+      }
+  </section>
+  <section class="firstfold">
+    <h3 class="image--wrapper">
+      <Image src={post.image} alt={post.title} width="500" height="300" />
+    </h3>
+    <article class="xs1">
+      <div class="text-justify">
+        {post?.body}
+      </div>
+      <ul class="sm-wrapper">
+        {
+          post.socialMedia ? post.socialMedia.map((sm: any) => (
+            <li>
+              <a href={sm} class="diretor-social-link" style="">
+                <Icons
+                  color="#fff"
+                  social={sm
+                    .match(/^(?:https?:\/\/)?(?:www\.)?([^\/]+)/)[1]
+                    .split(".")[0]
+                    .toLowerCase()}
+                />
+              </a>
+            </li>
+          )) : ""
+        }
+      </ul>
+    </article>
+  </section>
+</Layout>

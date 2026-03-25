@@ -1,0 +1,44 @@
+---
+import Layout from "../../layouts/default.astro";
+import WorkItem from "../../components/workitem.astro";
+import { getLanguageFromUrl } from "../../i18n/utils";
+import { GetJobs, TagsFormat, slugify } from "../../helpers/helpers";
+let { page } = Astro.props;
+const { slug } = Astro.params;
+const lang = getLanguageFromUrl(Astro.url);
+const posts = await GetJobs({ slug });
+const jobs = posts
+  .map((post: any) => TagsFormat(post))
+  .filter((post: any) => post.language.includes(lang))
+  .sort((a: any, b: any) => b.createdOn - a.createdOn)
+  .sort((a: any, b: any) => b.order - a.order);
+if (!page) {
+  page = "trabalhos";
+}
+// console.log("posts", posts);
+// console.log("jobs", jobs);
+---
+
+<style>
+  #jobs {
+    display: flex;
+    flex-wrap: wrap;
+    background: #000;
+    width: 100%;
+  }
+</style>
+<Layout page={page}>
+  <p>
+    <section id="jobs">
+      {
+        jobs.map((job: any) => (
+          <WorkItem
+            label={job.title}
+            url={`${lang != "br" ? `/${lang}` : ""}/portfolio/${slugify(job.title)}`}
+            imagepr={job.image}
+          />
+        ))
+      }
+    </section>
+  </p>
+</Layout>

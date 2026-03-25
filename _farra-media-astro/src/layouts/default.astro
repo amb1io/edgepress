@@ -1,0 +1,122 @@
+---
+// import "@fontsource-variable/josefin-sans";
+import "@fontsource-variable/montserrat";
+import Header from "../partials/header.astro";
+import Footer from "../partials/footer.astro";
+import HeaderMobile from "../partials/headermobile.astro";
+import "../hummingbird/63079d99e9879542ce19a76281c87570.css";
+import "../hummingbird/7f1f6b7a9da76e8640ee8a310a283b73.css";
+import "../hummingbird/amb1.css";
+const { slug } = Astro.params;
+const { isFixed, page, footerStyle } = Astro.props;
+let url = Astro.request.url;
+if (slug) {
+  url = url.replace(`/${slug}`, "");
+}
+---
+
+<html lang="pt-BR">
+  <head>
+    <meta
+      name="description"
+      content="A Farra é uma empresa de produção audiovisual, pós-produção, criação e desenvolvimento de roteiros 100% focada no ENTRETENIMENTO."
+    />
+    <meta property="og:url" content="https://farra.media" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Farra" />
+    <meta property="og:description" content="" />
+    <meta charset="UTF-8" />
+    <meta name="robots" content="max-image-preview:large" />
+    <meta
+      name="msapplication-TileImage"
+      content="/favicons/cropped-f-270x270.png"
+    />
+    <meta
+      name="facebook-domain-verification"
+      content="9vccp8h9vl7zcb1jcrflnb56lkk73x"
+    />
+    <meta property="og:image" content="/open_graph.png" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,user-scalable=yes"
+    />
+    <title>Farra</title>
+    <link rel="alternate" href="/" hreflang="pt-br" />
+    <link rel="alternate" href="en/" hreflang="en" />
+    <link rel="dns-prefetch" href="https://ajax.googleapis.com" />
+    <link rel="dns-prefetch" href="https://apis.google.com" />
+    <link rel="dns-prefetch" href="https://google-analytics.com" />
+    <link rel="dns-prefetch" href="https://www.google-analytics.com" />
+    <link rel="dns-prefetch" href="https://ssl.google-analytics.com" />
+    <link rel="dns-prefetch" href="https://youtube.com" />
+    <link rel="dns-prefetch" href="https://s.gravatar.com" />
+    <link href="https://f.vimeocdn.com" rel="preconnect" />
+    <link rel="canonical" href={Astro.request.url} />
+    <link rel="icon" href="/favicons/cropped-f-32x32.png" sizes="32x32" />
+    <link rel="icon" href="/favicons/cropped-f-192x192.png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/favicons/cropped-f-180x180.png" />
+    <link rel="stylesheet" href="/hummingbird/amb1.css" />
+    <link
+      rel="stylesheet"
+      href="/hummingbird/63079d99e9879542ce19a76281c87570.css"
+    />
+    <link
+      rel="stylesheet"
+      href="/hummingbird/7f1f6b7a9da76e8640ee8a310a283b73.css"
+    />
+  </head>
+  <body
+    class={`edgtf-light-header edgtf-dropdown-animate-height edgtf-header-standard edgtf-menu-area-shadow-disable edgtf-menu-area-in-grid-shadow-disable edgtf-menu-area-border-disable edgtf-menu-area-in-grid-border-disable edgtf-logo-area-border-disable edgtf-default-mobile-header ${page}`}
+    itemscope
+    itemtype="http://schema.org/WebPage"
+  >
+    <div class="edgtf-wrapper">
+      <div class="edgtf-wrapper-inner">
+        <Header isFixed={isFixed} />
+        <HeaderMobile />
+        <a id="edgtf-back-to-top" href="#">
+          <span class="edgtf-icon-stack"></span>
+        </a>
+        <div class="edgtf-content-inner">
+          <div class="edgtf-content">
+            <div class="edgtf-full-width">
+              <div class="edgtf-full-width-inner">
+                <slot />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <Footer footerStyle={footerStyle} />
+    </div>
+    <script>
+      //
+      document.querySelector(".btn-mob")?.addEventListener("click", () => {
+        const nav = document.querySelector(".edgtf-mobile-nav") as HTMLElement;
+        if (nav) {
+          if (nav.style.maxHeight && nav.style.maxHeight != "0px") {
+            nav.style.maxHeight = "0px";
+          } else {
+            nav.style.maxHeight = "50vh";
+          }
+        }
+      });
+      //
+      window.addEventListener("scroll", () => {
+        const container = document.querySelector(
+          ".edgtf-page-header .edgtf-fixed-wrapper"
+        );
+        const headerOffset = document
+          .querySelector(".edgtf-page-header")
+          ?.getBoundingClientRect();
+        if (headerOffset && headerOffset.top * -1 > headerOffset.height / 3) {
+          container?.classList.add("fixed");
+        } else {
+          if (!document.body.classList.contains("portfolio")) {
+            container?.classList.remove("fixed");
+          }
+        }
+      });
+    </script>
+  </body>
+</html>

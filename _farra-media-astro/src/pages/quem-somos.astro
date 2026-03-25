@@ -1,0 +1,47 @@
+---
+import Layout from "../layouts/default.astro";
+import Pagebanner from "../partials/pagebanner.astro";
+import Team from "../partials/team.astro";
+import TeamFounders from "../partials/team-founders.astro";
+import { getLanguageFromUrl } from "../i18n/utils";
+import { GetPage } from "../helpers/helpers";
+const lang = getLanguageFromUrl(Astro.url);
+const post = await GetPage(lang, "quemsomos", "");
+// console.log(post);
+let { page } = Astro.props;
+if (!page) {
+  page = "quem-somos";
+}
+---
+
+<style lang="scss">
+  .quem-somos-inner {
+    @media screen and (min-width: 0) {
+      margin: 2.5rem auto 4.5rem;
+
+      color: #fff;
+      text-align: center;
+    }
+    @media screen and (min-width: 1025px) {
+      max-width: 782px;
+    }
+  }
+</style>
+<Layout page={page}>
+  <Pagebanner
+    pagename={post.title}
+    deskimage={post.image}
+    mobimage={post.images[0]}
+  />
+  <TeamFounders />
+  <div class="edgtf-container-inner">
+    <article class="edgtf-grid">
+      <div class="edgtf-row-grid-section">
+        <div class="edgtf-grid-col-12">
+          <p class="quem-somos-inner">{post.body}</p>
+          <Team />
+        </div>
+      </div>
+    </article>
+  </div>
+</Layout>

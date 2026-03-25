@@ -1,0 +1,50 @@
+---
+import Client from "../components/clientlogo.astro";
+import { getLanguageFromUrl, useTranslations } from "../i18n/utils";
+import { GetContent } from "../helpers/helpers";
+const lang = getLanguageFromUrl(Astro.url);
+const t = useTranslations(lang);
+let posts = await GetContent("", "clientes", { limit: 1000 });
+posts = posts.sort((a: any, b: any) => b.order - a.order);
+---
+
+<style>
+  @media screen and (min-width: 0) {
+    .edgtf-st-title {
+      margin-bottom: 3rem;
+      color: #fff;
+      text-align: center;
+    }
+    .clients--wrapper {
+      margin: 5rem 2rem;
+    }
+    .clients--list {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: stretch;
+      justify-content: space-around;
+      max-width: 1300px;
+    }
+  }
+  @media screen and (min-width: 1024px) {
+    .clients--wrapper {
+      margin-bottom: 6rem;
+      margin-top: 0;
+    }
+    .clients--list {
+      margin-left: auto;
+      margin-right: auto;
+    }
+  }
+</style>
+
+<section class="clients--wrapper">
+  <h2 class="edgtf-st-title">{t("clientTitle")}</h2>
+  <div class="clients--list">
+    {
+      posts.map((post: any) =>
+        post.image ? <Client name={post.title} image={post.image} /> : "",
+      )
+    }
+  </div>
+</section>

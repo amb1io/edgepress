@@ -1,0 +1,85 @@
+---
+import Layout from "../layouts/default.astro";
+import FirstFold from "../partials/firstfold.astro";
+import Slider from "../components/slider.astro";
+import SliderItem from "../components/slider-item.astro";
+import Clients from "../partials/clients.astro";
+import { GetContent } from "../helpers/helpers";
+import { getLanguageFromUrl } from "../i18n/utils";
+// import.meta.env;
+interface Props {
+  intro: boolean;
+  page?: string;
+}
+const { intro, page } = Astro.props;
+const videoMobId = "9a43f43a-8725-430a-9a2b-94ec9ed75a8d";
+const videoDeskId = "cf148090-71cf-4dc4-932c-f837225ad378";
+const lang = getLanguageFromUrl(Astro.url);
+const posts = await GetContent(lang, "jobs", {});
+let postsSliderHome = posts.filter(
+  (post: any) => post.videosHome && post.image
+);
+postsSliderHome = postsSliderHome.sort(
+  (a: any, b: any) => a?.videosHomeOrder - b?.videosHomeOrder
+);
+//console.log("postsSliderHome", postsSliderHome);
+---
+
+<style lang="scss">
+  #video {
+    &::before {
+      content: "";
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      background: transparent;
+      z-index: 1;
+    }
+  }
+</style>
+<script is:inline defer define:vars={{ videoDeskId, videoMobId }}>
+  function videoIn() {
+    const video = document.querySelector("#video");
+    const frameVideo = document.createElement("iframe");
+    // setting up
+    frameVideo.id = "frameVideo";
+    frameVideo.loading = "lazy";
+    frameVideo.style =
+      "border:0;position:absolute;top:0;height:100%;width:100%;";
+    frameVideo.allow =
+      "accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;";
+    frameVideo.allowfullscreen = "false";
+    // dynamic src
+    if (window.innerWidth >= 1024) {
+      if (video) {
+        video.style.paddingTop = "56.25%";
+        frameVideo.src = `https://iframe.mediadelivery.net/embed/203455/${videoDeskId}?autoplay=true&autopause=false&loop=true&muted=true&preload=true&responsive=true`;
+      }
+    } else {
+      video.style.paddingTop = "180%";
+      frameVideo.src = `https://iframe.mediadelivery.net/embed/203455/${videoMobId}?autoplay=true&loop=true&muted=true&preload=true&responsive=true`;
+    }
+    video.appendChild(frameVideo);
+  }
+  window.addEventListener("load", () => {
+    videoIn();
+  });
+</script>
+<Layout page={page ? page : "home home-br"}>
+  <div class="edgtf-grid-row">
+    <div class="edgtf-page-content-holder edgtf-grid-col-12">
+      <div id="video" style="position:relative;"></div>
+      <FirstFold intro={intro === false ? intro : true} />
+    </div>
+    <!-- <Slider type="coverflow">
+      {
+        postsSliderHome.map((post: any) => (
+          <SliderItem modal={post.videosHome[0]} image={post.image} />
+        ))
+      }
+    </Slider> -->
+    <Clients />
+  </div>
+</Layout>

@@ -1,0 +1,126 @@
+---
+interface Props {
+  url: string;
+  label: string;
+  image?: string;
+  imagepr?: any;
+}
+import { Image } from "astro:assets";
+const { url, label, imagepr } = Astro.props;
+---
+
+<style lang="scss">
+  @media all and (min-width: 0) {
+    .work--wrapper {
+      overflow: hidden;
+    }
+    .work--wrapper:hover .work--image {
+      transform: scale(1);
+    }
+    .work--wrapper:hover .work--figure::before {
+      animation: move-right 0.5s ease 1;
+    }
+    .work--figure {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 0;
+      position: relative;
+      max-height: 384px;
+      max-width: 640px;
+      height: 100%;
+    }
+    .work--image {
+      display: block;
+      transition: transform 1s ease;
+      transform: scale(1.03);
+    }
+    .work--figcaption {
+      position: absolute;
+      display: block;
+      bottom: 0;
+      left: 0;
+      z-index: 10;
+    }
+    .work--figcaption h5 {
+      color: #fff;
+    }
+    .work--wrapper {
+      flex: 1 1 100%;
+    }
+  }
+  @media all and (min-width: 700px) and (max-width: 1023px) {
+    .work--wrapper {
+      max-width: 50%;
+    }
+  }
+  @media all and (max-width: 1023px) {
+    .work {
+      &--figcaption {
+        padding: 1rem;
+        width: 100%;
+
+        background-color: rgba(0, 0, 0, 0.65);
+      }
+    }
+  }
+  @media all and (min-width: 1024px) {
+    .work {
+      &--figure {
+        position: relative;
+        &::before {
+          transition: all 0.5 linear;
+        }
+        &:hover {
+          .work--figcaption {
+            opacity: 1;
+          }
+          &::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 100%;
+            z-index: 9;
+            background-color: rgba(0, 0, 0, 0.7);
+          }
+        }
+      }
+      &--wrapper {
+        max-width: 33.3%;
+      }
+      &--figcaption {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 100%;
+        opacity: 0;
+        transition: all 0.2s linear;
+      }
+    }
+  }
+</style>
+
+<a href={url} class="work--wrapper">
+  <figure class="work--figure">
+    <Image
+      src={imagepr ? imagepr : "https://placehold.it/100x100"}
+      format="avif"
+      class="work--image"
+      widths={[300, 768, 1200, 1024]}
+      sizes={`"(max-width: 300w) 300px,(max-width: 768w) 768px,(max-width: 1200w) 1200px,(max-width: 1024w) 1024px" `}
+      alt={`Foto da campanha ${label}`}
+      width="640"
+      height="640"
+    />
+    <figcaption class="work--figcaption">
+      <h5>{label}</h5>
+    </figcaption>
+  </figure>
+</a>

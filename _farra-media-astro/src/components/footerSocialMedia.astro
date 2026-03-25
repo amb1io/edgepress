@@ -1,0 +1,80 @@
+---
+import threads from "../images/icons/threads.svg?raw";
+import linkedin from "../images/icons/linkedin.svg?raw";
+import instagram from "../images/icons/instagram.svg?raw";
+import tiktok from "../images/icons/tiktok.svg?raw";
+import vimeo from "../images/icons/vimeo.svg?raw";
+
+const socialDict = {
+  threads,
+  linkedin,
+  instagram,
+  vimeo,
+  tiktok,
+};
+
+const socials = [
+  {
+    href: "https://www.instagram.com/farra.media/",
+    image: "instagram",
+  },
+  {
+    href: "https://br.linkedin.com/company/farramedia",
+    image: "linkedin",
+  },
+  {
+    href: "https://www.tiktok.com/@farra.media",
+    image: "tiktok",
+  },
+  {
+    href: "https://vimeo.com/farra",
+    image: "vimeo",
+  },
+];
+
+function getSocial(social: string) {
+  const a = socialDict as any;
+  return a[social] as string;
+}
+---
+
+<style lang="scss" is:global>
+  .socialmedia-wrapper {
+    @media screen and (min-width: 0) {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 300px;
+      margin: 110px auto 0;
+      width: 100%;
+    }
+  }
+  .social {
+    &--item {
+      svg {
+        height: 38px;
+        width: 38px;
+        fill: #08bdc7;
+      }
+      &.tiktok {
+        svg {
+          height: 35px;
+          width: 35px;
+        }
+      }
+    }
+  }
+</style>
+<div class="socialmedia-wrapper">
+  {
+    socials.map((social) => (
+      <a
+        href={social.href}
+        class={`social--item ${social.image}`}
+        target="_blank"
+      >
+        <Fragment set:html={getSocial(social.image)} />
+      </a>
+    ))
+  }
+</div>
