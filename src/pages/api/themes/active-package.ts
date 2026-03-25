@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { db } from "../../../db/index.ts";
 import { getActiveThemeFromDb, hasValidThemePackageMeta } from "../../../lib/services/theme-service.ts";
 import { jsonResponse } from "../../../lib/utils/http-responses.ts";
+import { env as cfEnv } from "cloudflare:workers";
 
 export const prerender = false;
 
@@ -17,9 +18,8 @@ function isAuthorized(request: Request, expectedSecret: string): boolean {
   );
 }
 
-export const GET: APIRoute = async ({ request, locals }) => {
-  const env = (locals.runtime?.env ?? {}) as Record<string, unknown>;
-  const secret = String(env["THEME_PACKAGE_METADATA_SECRET"] ?? "").trim();
+export const GET: APIRoute = async ({ request }) => {
+  const secret = String(cfEnv.THEME_PACKAGE_METADATA_SECRET ?? "").trim();
   if (!secret) {
     return new Response(
       JSON.stringify({ ok: false, error: "THEME_PACKAGE_METADATA_SECRET is not configured" }),

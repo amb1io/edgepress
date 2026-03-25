@@ -10,15 +10,12 @@ import { getString } from "../../lib/utils/form-data.ts";
 import { applyRateLimit, getRateLimits } from "../../lib/utils/rate-limiter.ts";
 import { sanitizeCallbackURL } from "../../lib/utils/url-validator.ts";
 import { getSession } from "../../lib/api-auth.ts";
+import { env as cfEnv } from "cloudflare:workers";
 
 export const prerender = false;
 
-export const POST: APIRoute = async ({ request, redirect, locals }) => {
-  // Obter rate limits do ambiente (locals pode ser undefined em testes ou SSR)
-  const env = (
-    locals as { runtime?: { env?: Record<string, string> } } | undefined
-  )?.runtime?.env;
-  const rateLimits = getRateLimits(env);
+export const POST: APIRoute = async ({ request, redirect }) => {
+  const rateLimits = getRateLimits(cfEnv as Record<string, string | undefined>);
 
   // Aplicar rate limiting: configurável via env (padrão: 3 registros / hora)
   const rateLimitResponse = applyRateLimit(request, rateLimits.REGISTER);

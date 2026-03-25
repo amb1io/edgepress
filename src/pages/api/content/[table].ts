@@ -13,13 +13,14 @@
  */
 import type { APIRoute } from "astro";
 import { db } from "../../../db/index.ts";
-import { getTableContentWithCache } from "../../../lib/content-cache.ts";
-import { getTableNames, getContentApiRuntime, getSafeTableName, VALID_TABLE_IDENTIFIER } from "../../../lib/db-utils.ts";
-import { posts, locales } from "../../../db/schema.ts";
-import { and, eq, inArray } from "drizzle-orm";
+import {
+  ContentBadRequestError,
+  ContentNotFoundError,
+  getPostBySlugFromUrl,
+  getTableContentListFromUrl,
+} from "../../../lib/services/edgepress-content.ts";
+import { getTableNames, getSafeTableName, VALID_TABLE_IDENTIFIER } from "../../../lib/db-utils.ts";
 import { isValidSlug } from "../../../lib/utils/validation.ts";
-import { parseMetaValues } from "../../../lib/utils/meta-parser.ts";
-import { buildContentPostPayload } from "../../../lib/content-post-payload.ts";
 import {
   badRequestResponse,
   errorResponse,
@@ -37,7 +38,6 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
     return badRequestResponse("Path segment is required");
   }
 
-  const { kv } = getContentApiRuntime(locals);
   const allowedTables = await getTableNames(db);
   const safeTable = getSafeTableName(segment, allowedTables);
 
@@ -45,67 +45,9 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
     return notFoundResponse("Table not found or not allowed");
   }
 
-  // 1) Tratar como nome de tabela quando for identificador permitido
   if (safeTable !== null) {
-    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") ?? "10", 10) || 10));
-    const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10) || 1);
-    const order = url.searchParams.get("order") ?? undefined;
-    const orderDir = (url.searchParams.get("orderDir") === "asc" ? "asc" : "desc") as "asc" | "desc";
-    const filter: Record<string, string> = {};
-    for (const [key, value] of url.searchParams) {
-      if (!key.startsWith("filter_") || !value) continue;
-      const filterKey = key.replace(/^filter_/, "");
-      if (filterKey === "post_type") {
-        if (/^\d+$/.test(value)) {
-          filter["post_type_id"] = value;
-        } else {
-          filter["post_types_slug"] = value;
-        }
-      } else {
-        filter[filterKey] = value;
-      }
-    }
-
-    // Filtro por idioma: locale (código, ex. pt-br) ou locale_id / id_locale_code (id numérico)
-    const localeParam = url.searchParams.get("locale");
-    const localeIdParam = url.searchParams.get("locale_id") ?? url.searchParams.get("id_locale_code");
-    if (safeTable === "posts" && (localeParam != null || localeIdParam != null)) {
-      if (localeIdParam != null && /^\d+$/.test(localeIdParam)) {
-        filter["id_locale_code"] = localeIdParam;
-      } else if (localeParam != null && localeParam.trim() !== "") {
-        const localeCode = localeParam.trim().toLowerCase().replace(/-/g, "_");
-        const [row] = await db.select({ id: locales.id }).from(locales).where(eq(locales.locale_code, localeCode)).limit(1);
-        if (row != null) {
-          filter["id_locale_code"] = String(row.id);
-        }
-      }
-    }
-
     try {
-      const filterParam = Object.keys(filter).length ? filter : undefined;
-      const result = await getTableContentWithCache({
-        kv,
-        db,
-        table: safeTable,
-        params: {
-          ...(order != null && order !== "" && { order }),
-          orderDir,
-          limit,
-          page,
-          ...(filterParam != null && { filter: filterParam }),
-        },
-      });
-
-      if (result.columns.includes("meta_values")) {
-        result.items = result.items.map((item) => ({
-          ...item,
-          meta_values:
-            item["meta_values"] != null
-              ? parseMetaValues(String(item["meta_values"]))
-              : ({} as Record<string, string>),
-        }));
-      }
-
+      const result = await getTableContentListFromUrl(locals, safeTable, url);
       return jsonResponse(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Internal server error";
@@ -113,100 +55,21 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
     }
   }
 
-  // 2) Caso não seja tabela conhecida, tratar como slug de post
   const slug = segment;
   if (!isValidSlug(slug)) {
     return badRequestResponse("Slug inválido");
   }
 
-  // Filtro de status: por padrão apenas 'published'
-  const rawStatus = url.searchParams.get("status");
-  const allowedStatus = new Set(["published", "draft", "archived"]);
-  let statusList: string[];
-  if (!rawStatus) {
-    statusList = ["published"];
-  } else {
-    statusList = rawStatus
-      .split(",")
-      .map((s) => s.trim())
-      .filter((s) => allowedStatus.has(s));
-    if (statusList.length === 0) {
-      statusList = ["published"];
-    }
-  }
-
-  const statusKey = statusList.join(",");
-  const postCacheKey = `post:${slug}:status=${statusKey}`;
-
-  // Autenticado: bypass KV e vai direto ao DB. Não autenticado: tenta KV primeiro.
-  if (kv) {
-    try {
-      const cached = (await kv.get(postCacheKey, "json")) as Record<string, unknown> | null;
-      if (cached && typeof cached === "object") {
-        return jsonResponse(cached);
-      }
-    } catch {
-      // Se o KV falhar, segue para o banco
-    }
-  }
-
   try {
-    const rows = await db
-      .select({
-        id: posts.id,
-        post_type_id: posts.post_type_id,
-        author_id: posts.author_id,
-        title: posts.title,
-        slug: posts.slug,
-        excerpt: posts.excerpt,
-        body: posts.body,
-        status: posts.status,
-        meta_values: posts.meta_values,
-        published_at: posts.published_at,
-        created_at: posts.created_at,
-        updated_at: posts.updated_at,
-      })
-      .from(posts)
-      .where(
-        statusList.length === 1
-          ? and(eq(posts.slug, slug), eq(posts.status, statusList[0] as typeof posts.$inferSelect.status))
-          : and(
-              eq(posts.slug, slug),
-              inArray(posts.status, statusList as typeof posts.$inferSelect.status[])
-            )
-      )
-      .limit(1);
-
-    const post = rows[0] as {
-      id: number;
-      post_type_id: number;
-      author_id: string | null;
-      title: string;
-      slug: string;
-      excerpt: string | null;
-      body: string | null;
-      status: string;
-      meta_values: string | null;
-      published_at: number | null;
-      created_at: number | null;
-      updated_at: number | null;
-    } | undefined;
-    if (!post) {
-      return errorResponse("Post not found", HTTP_STATUS_CODES.NOT_FOUND, { slug });
-    }
-
-    const payload = await buildContentPostPayload(db, post);
-
-    if (kv) {
-      try {
-        await kv.put(postCacheKey, JSON.stringify(payload));
-      } catch {
-        // Ignora erro de gravação no KV
-      }
-    }
-
+    const payload = await getPostBySlugFromUrl(locals, slug, url);
     return jsonResponse(payload);
   } catch (err) {
+    if (err instanceof ContentNotFoundError) {
+      return errorResponse(err.message, HTTP_STATUS_CODES.NOT_FOUND, err.detail);
+    }
+    if (err instanceof ContentBadRequestError) {
+      return badRequestResponse(err.message);
+    }
     const message = err instanceof Error ? err.message : "Internal server error";
     return internalServerErrorResponse(message);
   }

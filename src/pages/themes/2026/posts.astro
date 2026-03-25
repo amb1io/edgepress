@@ -1,5 +1,8 @@
 ---
 import Theme2026Layout from "./Theme2026Layout.astro";
+import { db } from "../../../db/index.ts";
+import { getKvFromLocals } from "../../../lib/utils/runtime-locals.ts";
+import { getTableContentWithCache } from "../../../lib/content-cache.ts";
 
 const page = Math.max(
   1,
@@ -12,13 +15,6 @@ const limit = Math.min(
 const order = "created_at";
 const orderDir = "desc";
 
-const apiUrl = new URL("/api/content/posts", Astro.url.origin);
-apiUrl.searchParams.set("page", String(page));
-apiUrl.searchParams.set("limit", String(limit));
-apiUrl.searchParams.set("order", order);
-apiUrl.searchParams.set("orderDir", orderDir);
-apiUrl.searchParams.set("filter_status", "published");
-
 let result: {
   items: Record<string, unknown>[];
   total: number;
@@ -28,23 +24,23 @@ let result: {
   columns: string[];
 };
 try {
-  const res = await fetch(apiUrl.toString());
-  if (!res.ok) {
-    result = {
-      items: [],
-      total: 0,
-      page: 1,
+  const locals = Astro.locals as App.Locals;
+  const kv = getKvFromLocals(locals);
+  result = await getTableContentWithCache({
+    db,
+    kv,
+    table: "posts",
+    params: {
+      page,
       limit,
-      totalPages: 0,
-      columns: [],
-    };
-  } else {
-    result = await res.json();
-  }
+      order,
+      orderDir,
+      filter: { status: "published" },
+    },
+  });
 } catch {
   result = { items: [], total: 0, page: 1, limit, totalPages: 0, columns: [] };
 }
-console.log(result);
 
 const { items, total, totalPages } = result;
 const isHtmx = Astro.request.headers.get("HX-Request") === "true";

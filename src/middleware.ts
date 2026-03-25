@@ -9,6 +9,7 @@ import { ensureTranslationsLoaded } from "./lib/i18n-helpers.ts";
 import { db } from "./db/index.ts";
 import { settings as settingsTable } from "./db/schema.ts";
 import { eq } from "drizzle-orm";
+import { env as cfEnv } from "cloudflare:workers";
 import { getKvFromLocals } from "./lib/utils/runtime-locals.ts";
 import { getActiveThemeSlugFromSettings } from "./lib/services/settings-service.ts";
 
@@ -59,16 +60,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const isAuthApi = pathname.startsWith("/api/auth");
   const isSetupApi = pathname === "/api/setup";
 
-  // URLs públicas não devem expor /themes/* (rota interna)
+  // URLs públicas não devem expor /themes/* (rota interna).
+  // Quando acessado publicamente, reescrevemos internamente a mesma URL
+  // adicionando `x-edgepress-internal-rewrite: 1` para evitar loops.
   if (!isApi && pathname.startsWith("/themes/")) {
-    // Permite reescritas internas (middleware) para a árvore /themes.
     if (context.request.headers.get("x-edgepress-internal-rewrite") === "1") {
       return next();
     }
-    return new Response("Not Found", {
-      status: 404,
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-    });
+
+    const url = new URL(context.request.url);
+    const headers = new Headers(context.request.headers);
+    headers.set("x-edgepress-internal-rewrite", "1");
+    return context.rewrite(new Request(url, { headers }));
   }
 
   // Permitir APIs de auth e setup mesmo quando setup não está completo
@@ -79,8 +82,24 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return response;
   }
 
-  // Reescreve / para o tema ativo mantendo a URL (/)
-  if (!isApi && pathname === "/") {
+  // Site público: tudo que não é admin, login, setup ou API reescreve internamente
+  // para /themes/{active_theme}/... usando o setting `active_theme` no banco.
+  // Ex.: /quem-somos → /themes/farramedia/quem-somos (mantém a URL no browser).
+  const skipActiveThemeRewrite =
+    isApi ||
+    pathname.startsWith("/themes/") ||
+    pathname === "/admin" ||
+    pathname.startsWith("/admin/") ||
+    pathname === "/login" ||
+    pathname.startsWith("/login/") ||
+    pathname === "/setup" ||
+    pathname.startsWith("/setup/") ||
+    pathname.startsWith("/.well-known/") ||
+    pathname === "/.well-known" ||
+    pathname.startsWith("/@") ||
+    pathname.startsWith("/_");
+
+  if (!skipActiveThemeRewrite) {
     const locals = context.locals as App.Locals;
     const kv = getKvFromLocals(locals);
     const activeSlug = await getActiveThemeSlugFromSettings(db, {
@@ -90,22 +109,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
     if (activeSlug) {
       const url = new URL(context.request.url);
-      url.pathname = `/themes/${activeSlug}`;
-      const headers = new Headers(context.request.headers);
-      headers.set("x-edgepress-internal-rewrite", "1");
-      return context.rewrite(new Request(url, { headers }));
-    }
-  }
-
-  // Reescreve /{themeSlug}/... para /themes/{themeSlug}/...
-  // Mantém suporte a /{themeSlug} e /{themeSlug}/{locale}/...
-  if (!isApi) {
-    const m = pathname.match(/^\/([a-z0-9-]+)(\/.*)?$/i);
-    const themeSlug = m?.[1];
-    const rest = m?.[2] ?? "";
-    if (themeSlug && themeSlug !== "admin" && themeSlug !== "api" && themeSlug !== "login" && themeSlug !== "setup") {
-      const url = new URL(context.request.url);
-      url.pathname = `/themes/${themeSlug}${rest}`;
+      let outPath = pathname;
+      if (outPath.length > 1 && outPath.endsWith("/")) {
+        outPath = outPath.replace(/\/+$/, "");
+      }
+      url.pathname =
+        outPath === "/" ? `/themes/${activeSlug}` : `/themes/${activeSlug}${outPath}`;
       const headers = new Headers(context.request.headers);
       headers.set("x-edgepress-internal-rewrite", "1");
       return context.rewrite(new Request(url, { headers }));
@@ -137,16 +146,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const isWriteMethod = ["POST", "PUT", "DELETE", "PATCH"].includes(method);
 
   if (isSensitiveAPI && isWriteMethod) {
-    // Obter origens confiáveis do ambiente
-    const env = (
-      context.locals as { runtime?: { env?: Record<string, unknown> } }
-    ).runtime?.env as
-      | { BETTER_AUTH_URL?: string; BETTER_AUTH_TRUSTED_ORIGINS?: string }
-      | undefined;
-
-    const trustedOrigins = env
-      ? getTrustedOrigins(env)
-      : ["http://localhost:8788"];
+    const trustedOrigins = getTrustedOrigins({
+      BETTER_AUTH_URL: cfEnv.BETTER_AUTH_URL,
+      BETTER_AUTH_TRUSTED_ORIGINS: cfEnv.BETTER_AUTH_TRUSTED_ORIGINS,
+    });
 
     // Validar origem
     if (!isValidOrigin(context.request, trustedOrigins)) {

@@ -1,3 +1,5 @@
+import { env as cfEnv } from "cloudflare:workers";
+
 type TriggerPayload = {
   theme_post_id: number;
   theme_slug: string;
@@ -8,13 +10,12 @@ type TriggerPayload = {
 };
 
 export async function triggerThemeImportFromRuntime(
-  locals: App.Locals,
+  _locals: App.Locals,
   payload: TriggerPayload
 ): Promise<void> {
-  const runtimeEnv = (locals.runtime?.env ?? {}) as Record<string, unknown>;
-  const dispatchRepo = String(runtimeEnv["THEME_IMPORT_DISPATCH_REPO"] ?? "").trim();
-  const token = String(runtimeEnv["THEME_IMPORT_GITHUB_TOKEN"] ?? "").trim();
-  const eventType = String(runtimeEnv["THEME_IMPORT_EVENT_TYPE"] ?? "theme_import_requested").trim();
+  const dispatchRepo = String(cfEnv.THEME_IMPORT_DISPATCH_REPO ?? "").trim();
+  const token = String(cfEnv.THEME_IMPORT_GITHUB_TOKEN ?? "").trim();
+  const eventType = String(cfEnv.THEME_IMPORT_EVENT_TYPE ?? "theme_import_requested").trim();
 
   if (!dispatchRepo || !token) {
     console.warn(

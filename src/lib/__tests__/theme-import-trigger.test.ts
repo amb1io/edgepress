@@ -1,11 +1,22 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { env } from "cloudflare:workers";
 import { triggerThemeImportFromRuntime } from "../services/theme-import-trigger.ts";
 
+function clearTestEnv() {
+  for (const k of Object.keys(env)) {
+    delete env[k];
+  }
+}
+
 describe("theme-import-trigger", () => {
+  beforeEach(() => {
+    clearTestEnv();
+  });
+
   it("does not throw when dispatch config is missing", async () => {
     await expect(
       triggerThemeImportFromRuntime(
-        { runtime: { env: {} } } as App.Locals,
+        {} as App.Locals,
         {
           theme_post_id: 1,
           theme_slug: "theme-a",
@@ -25,16 +36,12 @@ describe("theme-import-trigger", () => {
         new Response("forbidden", { status: 403 })
       );
 
+    env.THEME_IMPORT_DISPATCH_REPO = "acme/edgepress-deploy";
+    env.THEME_IMPORT_GITHUB_TOKEN = "token";
+
     await expect(
       triggerThemeImportFromRuntime(
-        {
-          runtime: {
-            env: {
-              THEME_IMPORT_DISPATCH_REPO: "acme/edgepress-deploy",
-              THEME_IMPORT_GITHUB_TOKEN: "token",
-            },
-          },
-        } as unknown as App.Locals,
+        {} as App.Locals,
         {
           theme_post_id: 1,
           theme_slug: "theme-a",

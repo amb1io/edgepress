@@ -17,6 +17,7 @@ import {
   badRequestResponse,
   jsonResponse,
 } from "../../../lib/utils/http-responses.ts";
+import { env as cfEnv } from "cloudflare:workers";
 
 export const prerender = false;
 
@@ -33,8 +34,7 @@ function isAuthorized(request: Request, expectedSecret: string): boolean {
 }
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = (locals.runtime?.env ?? {}) as Record<string, unknown>;
-  const callbackSecret = String(env["THEME_IMPORT_CALLBACK_SECRET"] ?? "").trim();
+  const callbackSecret = String(cfEnv.THEME_IMPORT_CALLBACK_SECRET ?? "").trim();
   if (!callbackSecret) {
     return new Response(
       JSON.stringify({ ok: false, error: "Theme callback secret not configured" }),

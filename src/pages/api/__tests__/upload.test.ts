@@ -3,15 +3,23 @@
  * Autenticação é mockada: requireMinRole retorna usuário autor.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { env } from "cloudflare:workers";
 
 const mockAuthUser = { user: { id: "test-user", role: 2 }, session: { id: "s1", userId: "test-user" } };
 vi.mock("../../../lib/api-auth.ts", () => ({
   requireMinRole: vi.fn().mockResolvedValue(mockAuthUser),
 }));
 
+function clearTestEnv() {
+  for (const k of Object.keys(env)) {
+    delete env[k];
+  }
+}
+
 describe("upload API", () => {
   beforeEach(() => {
-    vi.resetModules();
+    clearTestEnv();
+    vi.clearAllMocks();
   });
 
   it("returns 503 when R2 bucket is not configured", async () => {
@@ -27,7 +35,7 @@ describe("upload API", () => {
 
     const result = await POST({
       request,
-      locals: { runtime: { env: {} } },
+      locals: {} as Parameters<typeof POST>[0]["locals"],
     } as Parameters<typeof POST>[0]);
 
     expect(result.status).toBe(503);
@@ -36,6 +44,7 @@ describe("upload API", () => {
   });
 
   it("returns 400 when content-type is not multipart", async () => {
+    env.MEDIA_BUCKET = { put: vi.fn().mockResolvedValue(undefined) };
     const { POST } = await import("../upload.ts");
     const request = new Request("http://localhost/api/upload", {
       method: "POST",
@@ -45,7 +54,7 @@ describe("upload API", () => {
 
     const result = await POST({
       request,
-      locals: { runtime: { env: { MEDIA_BUCKET: { put: vi.fn().mockResolvedValue(undefined) } } } },
+      locals: {} as Parameters<typeof POST>[0]["locals"],
     } as Parameters<typeof POST>[0]);
 
     expect(result.status).toBe(400);
@@ -54,7 +63,6 @@ describe("upload API", () => {
   });
 
   it("returns 400 when no file in request", async () => {
-    const { POST } = await import("../upload.ts");
     const formData = new FormData();
     formData.set("other", "value");
 
@@ -65,9 +73,11 @@ describe("upload API", () => {
     });
 
     const putMock = vi.fn().mockResolvedValue(undefined);
+    env.MEDIA_BUCKET = { put: putMock };
+    const { POST } = await import("../upload.ts");
     const result = await POST({
       request,
-      locals: { runtime: { env: { MEDIA_BUCKET: { put: putMock } } } },
+      locals: {} as Parameters<typeof POST>[0]["locals"],
     } as Parameters<typeof POST>[0]);
 
     expect(result.status).toBe(400);
@@ -79,6 +89,7 @@ describe("upload API", () => {
 
   it("uploads file to R2 and returns key, path, mimeType, filename", async () => {
     const putMock = vi.fn().mockResolvedValue(undefined);
+    env.MEDIA_BUCKET = { put: putMock };
     const formData = new FormData();
     const blob = new Blob(["image content"], { type: "image/jpeg" });
     formData.set("file", blob, "photo.jpg");
@@ -91,7 +102,7 @@ describe("upload API", () => {
     const { POST } = await import("../upload.ts");
     const result = await POST({
       request,
-      locals: { runtime: { env: { MEDIA_BUCKET: { put: putMock } } } },
+      locals: {} as Parameters<typeof POST>[0]["locals"],
     } as Parameters<typeof POST>[0]);
 
     expect(result.status).toBe(200);
@@ -111,6 +122,7 @@ describe("upload API", () => {
 
   it("returns 413 when file exceeds max size", async () => {
     const putMock = vi.fn().mockResolvedValue(undefined);
+    env.MEDIA_BUCKET = { put: putMock };
     const largeBlob = new Blob([new ArrayBuffer(21 * 1024 * 1024)]); // 21 MB
     const formData = new FormData();
     formData.set("file", largeBlob, "large.jpg");
@@ -123,7 +135,7 @@ describe("upload API", () => {
     const { POST } = await import("../upload.ts");
     const result = await POST({
       request,
-      locals: { runtime: { env: { MEDIA_BUCKET: { put: putMock } } } },
+      locals: {} as Parameters<typeof POST>[0]["locals"],
     } as Parameters<typeof POST>[0]);
 
     expect(result.status).toBe(413);
@@ -134,6 +146,7 @@ describe("upload API", () => {
 
   it("returns 400 for rejected programming file extension (.js)", async () => {
     const putMock = vi.fn().mockResolvedValue(undefined);
+    env.MEDIA_BUCKET = { put: putMock };
     const formData = new FormData();
     formData.set("file", new Blob(["console.log(1)"], { type: "application/javascript" }), "script.js");
 
@@ -145,7 +158,7 @@ describe("upload API", () => {
     const { POST } = await import("../upload.ts");
     const result = await POST({
       request,
-      locals: { runtime: { env: { MEDIA_BUCKET: { put: putMock } } } },
+      locals: {} as Parameters<typeof POST>[0]["locals"],
     } as Parameters<typeof POST>[0]);
 
     expect(result.status).toBe(400);
@@ -156,6 +169,7 @@ describe("upload API", () => {
 
   it("returns 400 for disallowed MIME type (e.g. text/plain)", async () => {
     const putMock = vi.fn().mockResolvedValue(undefined);
+    env.MEDIA_BUCKET = { put: putMock };
     const formData = new FormData();
     formData.set("file", new Blob(["plain"], { type: "text/plain" }), "readme.txt");
 
@@ -167,7 +181,7 @@ describe("upload API", () => {
     const { POST } = await import("../upload.ts");
     const result = await POST({
       request,
-      locals: { runtime: { env: { MEDIA_BUCKET: { put: putMock } } } },
+      locals: {} as Parameters<typeof POST>[0]["locals"],
     } as Parameters<typeof POST>[0]);
 
     expect(result.status).toBe(400);
@@ -178,6 +192,7 @@ describe("upload API", () => {
 
   it("accepts PDF file", async () => {
     const putMock = vi.fn().mockResolvedValue(undefined);
+    env.MEDIA_BUCKET = { put: putMock };
     const formData = new FormData();
     formData.set("file", new Blob(["%PDF-1.4"], { type: "application/pdf" }), "doc.pdf");
 
@@ -189,7 +204,7 @@ describe("upload API", () => {
     const { POST } = await import("../upload.ts");
     const result = await POST({
       request,
-      locals: { runtime: { env: { MEDIA_BUCKET: { put: putMock } } } },
+      locals: {} as Parameters<typeof POST>[0]["locals"],
     } as Parameters<typeof POST>[0]);
 
     expect(result.status).toBe(200);
@@ -201,6 +216,7 @@ describe("upload API", () => {
 
   it("accepts audio file", async () => {
     const putMock = vi.fn().mockResolvedValue(undefined);
+    env.MEDIA_BUCKET = { put: putMock };
     const formData = new FormData();
     formData.set("file", new Blob(["audio"], { type: "audio/mpeg" }), "track.mp3");
 
@@ -212,7 +228,7 @@ describe("upload API", () => {
     const { POST } = await import("../upload.ts");
     const result = await POST({
       request,
-      locals: { runtime: { env: { MEDIA_BUCKET: { put: putMock } } } },
+      locals: {} as Parameters<typeof POST>[0]["locals"],
     } as Parameters<typeof POST>[0]);
 
     expect(result.status).toBe(200);
@@ -223,6 +239,7 @@ describe("upload API", () => {
 
   it("accepts file from first form entry when not named 'file'", async () => {
     const putMock = vi.fn().mockResolvedValue(undefined);
+    env.MEDIA_BUCKET = { put: putMock };
     const formData = new FormData();
     formData.set("upload", new Blob(["x"], { type: "image/png" }), "pic.png");
 
@@ -234,7 +251,7 @@ describe("upload API", () => {
     const { POST } = await import("../upload.ts");
     const result = await POST({
       request,
-      locals: { runtime: { env: { MEDIA_BUCKET: { put: putMock } } } },
+      locals: {} as Parameters<typeof POST>[0]["locals"],
     } as Parameters<typeof POST>[0]);
 
     expect(result.status).toBe(200);
