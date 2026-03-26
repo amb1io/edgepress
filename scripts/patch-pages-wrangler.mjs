@@ -7,6 +7,10 @@
  * - `wrangler deploy` (CLI): **precisa** de `main` (ex.: entry.mjs) — não pode ser removido.
  *
  * Removemos só o que quebra Pages ou é redundante; mantemos `main` e `images` do merge.
+ *
+ * `assets` (binding ASSETS): o runtime do adapter chama `env.ASSETS.fetch` (ex.: fallback de
+ * ficheiros estáticos). O `wrangler dev` precisa disto; no **Cloudflare Pages** (`CF_PAGES=1`)
+ * o ASSETS é reservado no merge — removemos só nesse ambiente.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -47,12 +51,19 @@ for (const key of allowed) {
   out[key] = src[key];
 }
 
-// Nunca declarar assets no merge: Pages reserva ASSETS; o runtime injeta.
-// `pages_build_output_dir` fica só no wrangler.toml da raiz.
-delete out.assets;
+// `pages_build_output_dir` no dist conflita com o modelo Worker+Pages; fica no wrangler.toml.
 delete out.pages_build_output_dir;
+
+const isCloudflarePagesBuild = process.env.CF_PAGES === "1";
+if (isCloudflarePagesBuild) {
+  delete out.assets;
+} else if (src.assets) {
+  out.assets = src.assets;
+}
 
 fs.writeFileSync(wranglerPath, JSON.stringify(out));
 console.log(
-  "[patch-pages-wrangler] dist/server/wrangler.json: sem assets ASSETS; mantém main para wrangler deploy",
+  isCloudflarePagesBuild
+    ? "[patch-pages-wrangler] CF_PAGES=1: sem assets ASSETS (Pages); mantém main"
+    : "[patch-pages-wrangler] local/CLI: mantém assets ASSETS para wrangler dev; main para deploy",
 );
