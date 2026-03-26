@@ -111,7 +111,7 @@ wrangler secret put RATE_LIMIT_LOGIN_WINDOW_MIN
 # Repetir para outras variáveis...
 ```
 
-**Opção C: Via wrangler.jsonc**
+**Opção C: Via wrangler.toml**
 ```jsonc
 {
   "vars": {
@@ -364,7 +364,7 @@ RATE_LIMIT_LOGIN_WINDOW_MIN=5  # Reduzir janela
 
 **Solução:**
 1. Verificar Cloudflare Dashboard → Variables
-2. Ou adicionar ao `wrangler.jsonc`
+2. Ou adicionar ao `wrangler.toml`
 3. Redeploy: `wrangler deploy`
 
 ---

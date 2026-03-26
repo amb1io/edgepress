@@ -5,7 +5,7 @@
  * - não misturar `main` (Worker) com `pages_build_output_dir` (Pages);
  * - não aceitar `main`, `rules`, `no_bundle` neste ficheiro usado no deploy de Pages.
  *
- * O `pages_build_output_dir` continua só no wrangler.jsonc da raiz; aqui ficam bindings
+ * O `pages_build_output_dir` continua só no wrangler.toml da raiz; aqui ficam bindings
  * e flags compatíveis com Pages Functions.
  *
  * Referência: https://developers.cloudflare.com/pages/functions/wrangler-configuration/

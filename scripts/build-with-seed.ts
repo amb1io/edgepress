@@ -20,19 +20,19 @@ function run(cmd: string, description: string): void {
 try {
   if (isCI) {
     run(
-      "npx wrangler d1 migrations apply edgepress --remote -c wrangler.jsonc",
+      "npx wrangler d1 migrations apply edgepress --remote -c wrangler.toml",
       "Migrating remote D1"
     );
     run("npm run db:seed:generate-sql", "Generating seed SQL from seed-data");
     if (existsSync(seedRemoteFile)) {
       run(
-        "npx wrangler d1 execute edgepress --remote --file=./drizzle/seed/seed-remote.sql -c wrangler.jsonc",
+        "npx wrangler d1 execute edgepress --remote --file=./drizzle/seed/seed-remote.sql -c wrangler.toml",
         "Seeding remote D1"
       );
     }
   } else {
     run(
-      "npx wrangler d1 migrations apply edgepress --local -c wrangler.jsonc",
+      "npx wrangler d1 migrations apply edgepress --local -c wrangler.toml",
       "Migrating local D1"
     );
     run("npm run db:seed", "Seeding local D1");

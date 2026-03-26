@@ -47,13 +47,13 @@ Consulte `.env.example` para todas as opções (rate limits, Resend, etc.).
 
 ### Cloudflare (D1, KV, R2)
 
-O projeto usa **`wrangler.jsonc`** com:
+O projeto usa **`wrangler.toml`** com:
 
 - **D1**: bancos `edgepress` (produção) e opcionais `edgepress-dev` / `edgepress-dev-1` (desenvolvimento).
 - **KV**: namespace `edgepress_cache`.
 - **R2**: bucket `edgepress-media`.
 
-Crie os recursos no [Cloudflare Dashboard](https://dash.cloudflare.com/) (D1, KV, R2) e preencha os `database_id` e `id` no `wrangler.jsonc` conforme sua conta. O arquivo pode ser versionado; segredos ficam em `.dev.vars` ou em Secrets.
+Crie os recursos no [Cloudflare Dashboard](https://dash.cloudflare.com/) (D1, KV, R2) e preencha os `database_id` e `id` no `wrangler.toml` conforme sua conta. O arquivo pode ser versionado; segredos ficam em `.dev.vars` ou em Secrets.
 
 ## Desenvolvimento
 
@@ -129,7 +129,7 @@ Para CI ou deploy com migrações e seed no D1 remoto:
 npm run build:seed
 ```
 
-O output vai para `./dist` (configurado em `wrangler.jsonc` como `pages_build_output_dir`). Conecte o repositório ao **Cloudflare Pages** e use o comando de build `npm run build` (ou `build:seed` se quiser rodar migrações/seed no pipeline). Configure as variáveis de ambiente e secrets no dashboard.
+O output vai para `./dist` (configurado em `wrangler.toml` como `pages_build_output_dir`). Conecte o repositório ao **Cloudflare Pages** e use o comando de build `npm run build` (ou `build:seed` se quiser rodar migrações/seed no pipeline). Configure as variáveis de ambiente e secrets no dashboard.
 
 ### Importação de tema via GitHub + R2
 
@@ -184,7 +184,7 @@ Variáveis esperadas no runtime do Edgepress:
 ├── drizzle/            # Migrações D1 e seed SQL
 ├── docs/
 │   └── API_DOC.md      # Documentação das APIs
-├── wrangler.jsonc     # Config Cloudflare (D1, KV, R2)
+├── wrangler.toml     # Config Cloudflare (D1, KV, R2)
 ├── .env.example        # Exemplo de variáveis
 └── .dev.vars           # Segredos locais (não versionado)
 ```
