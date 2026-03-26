@@ -18,6 +18,7 @@ const shimAsyncHooks = path.resolve(root, "src/lib/shim-node-async-hooks.ts");
 
 export default defineConfig({
   adapter: cloudflare({
+    sessionKVBindingName: "edgepress_cache",
     platformProxy: {
       enabled: true,
       configPath: "wrangler.toml",
