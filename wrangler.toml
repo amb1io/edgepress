@@ -4,8 +4,17 @@ compatibility_date = "2024-09-23"
 compatibility_flags = [ "nodejs_compat" ]
 
 [env.production.vars]
-BETTER_AUTH_URL = "https://teu-dominio.com"
-
+BETTER_AUTH_URL = "https://edgepress-farra.rhamses.workers.dev"
+BETTER_AUTH_TRUSTED_ORIGINS = "https://edgepress-farra.rhamses.workers.dev,https://feature-theme-support-edgepress-farra.rhamses.workers.dev"
+RATE_LIMIT_LOGIN_MAX = "10"
+RATE_LIMIT_LOGIN_WINDOW_MIN = "5"
+RATE_LIMIT_REGISTER_MAX = "10"
+RATE_LIMIT_REGISTER_WINDOW_MIN = "10"
+RATE_LIMIT_UPLOAD_MAX = "100"
+RATE_LIMIT_UPLOAD_WINDOW_MIN = "10"
+RESEND_FROM = "contato@amb1.io"
+# Opcional se o teu código ler estes nomes (senão remove):
+# CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_DATABASE_ID — preferir só bindings D1 no Worker.
 # Preview: NÃO coloques tokens ou passwords aqui (vão parar ao Git).
 # Definir em Cloudflare → Pages → Settings → Environment variables (Preview) e/ou Secrets,
 # ou em .dev.vars local (já está no .gitignore).
