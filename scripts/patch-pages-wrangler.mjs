@@ -1,14 +1,12 @@
 /**
- * O build Astro + @cloudflare/vite-plugin gera dist/server/wrangler.json com campos de
- * Worker (`main`, `rules`, `no_bundle`, etc.) e faz merge do wrangler raiz, onde entra
- * `pages_build_output_dir`. O validador do Cloudflare Pages exige:
- * - não misturar `main` (Worker) com `pages_build_output_dir` (Pages);
- * - não aceitar `main`, `rules`, `no_bundle` neste ficheiro usado no deploy de Pages.
+ * O build Astro + @cloudflare/vite-plugin gera dist/server/wrangler.json com merge do
+ * wrangler.toml + defaults do adapter (`assets` com ASSETS, `pages_build_output_dir`, etc.).
  *
- * O `pages_build_output_dir` continua só no wrangler.toml da raiz; aqui ficam bindings
- * e flags compatíveis com Pages Functions.
+ * - Cloudflare **Pages**: não declarar `assets` com binding ASSETS (reservado); o ficheiro
+ *   em dist não deve misturar `pages_build_output_dir` com o mesmo conteúdo que o Worker.
+ * - `wrangler deploy` (CLI): **precisa** de `main` (ex.: entry.mjs) — não pode ser removido.
  *
- * Referência: https://developers.cloudflare.com/pages/functions/wrangler-configuration/
+ * Removemos só o que quebra Pages ou é redundante; mantemos `main` e `images` do merge.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -25,9 +23,9 @@ if (!fs.existsSync(wranglerPath)) {
 const raw = fs.readFileSync(wranglerPath, "utf8");
 const src = JSON.parse(raw);
 
-/** Chaves permitidas no wrangler usado pelo Pages (além de bindings). */
 const allowed = [
   "name",
+  "main",
   "compatibility_date",
   "compatibility_flags",
   "vars",
@@ -35,6 +33,7 @@ const allowed = [
   "kv_namespaces",
   "r2_buckets",
   "triggers",
+  "images",
 ];
 
 const out = {};
@@ -48,7 +47,12 @@ for (const key of allowed) {
   out[key] = src[key];
 }
 
+// Nunca declarar assets no merge: Pages reserva ASSETS; o runtime injeta.
+// `pages_build_output_dir` fica só no wrangler.toml da raiz.
+delete out.assets;
+delete out.pages_build_output_dir;
+
 fs.writeFileSync(wranglerPath, JSON.stringify(out));
 console.log(
-  "[patch-pages-wrangler] dist/server/wrangler.json reduzido para formato Pages (sem main/rules/no_bundle/pages_build_output_dir)",
+  "[patch-pages-wrangler] dist/server/wrangler.json: sem assets ASSETS; mantém main para wrangler deploy",
 );

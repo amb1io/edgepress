@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,6 +12,7 @@ import react from "@astrojs/react";
 import icon from "astro-icon";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
+const patchPagesWrangler = path.join(root, "scripts/patch-pages-wrangler.mjs");
 const shimDebug = path.resolve(root, "src/lib/shim-debug.ts");
 const shimAsyncHooks = path.resolve(root, "src/lib/shim-node-async-hooks.ts");
 
@@ -40,7 +42,30 @@ export default defineConfig({
   },
 
   vite: {
-    plugins: [tailwindcss()],
+    plugins: [
+      tailwindcss(),
+      /**
+       * O adapter Cloudflare escreve `assets.binding: ASSETS` em dist/server/wrangler.json;
+       * o Pages rejeita esse binding. O npm `postbuild` não corre com `npx astro build` só.
+       * Repetimos o patch aqui no fim do bundle do servidor para `wrangler deploy` estar sempre seguro.
+       */
+      {
+        name: "edgepress-patch-pages-wrangler",
+        apply: "build",
+        enforce: "post",
+        /** Uma vez por invocação `vite build` (cliente + servidor = pode correr 2x; o script é idempotente). */
+        buildEnd() {
+          try {
+            execFileSync(process.execPath, [patchPagesWrangler], {
+              cwd: root,
+              stdio: "inherit",
+            });
+          } catch {
+            /* dist/server/wrangler.json ainda não existe nesta fase */
+          }
+        },
+      },
+    ],
     // Astro 6 + @cloudflare/vite-plugin: otimização incremental de deps no workerd pode
     // invalidar chunks em node_modules/.vite/deps_ssr durante reload ("file does not exist"
     // / "Module is undefined"). Mantém drizzle/auth/libsql fora do dep optimizer.
