@@ -34,3 +34,8 @@ id = "eb122e65276746228228af8b69d244fa"
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "edgepress-media"
+
+[observability]
+[observability.logs]
+enabled = false
+invocation_logs = true
