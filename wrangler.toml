@@ -5,21 +5,22 @@ compatibility_flags = [ "nodejs_compat" ]
 
 [env.production.vars]
 BETTER_AUTH_URL = "https://teu-dominio.com"
+
+# Preview: NÃO coloques tokens ou passwords aqui (vão parar ao Git).
+# Definir em Cloudflare → Pages → Settings → Environment variables (Preview) e/ou Secrets,
+# ou em .dev.vars local (já está no .gitignore).
 [env.preview.vars]
-CLOUDFLARE_ACCOUNT_ID=182788b23836a15ba32a69d616ba1db1
-CLOUDFLARE_DATABASE_ID=adf7f002-517e-4e53-8a3f-c870226ad418
-CLOUDFLARE_D1_TOKEN=7HXoiNyYmMDSw5XzayrXVZ_wE6cBiETkvQXOzYJc
-BETTER_AUTH_SECRET=VyJConVvOEi1ORKCSShqQ8Ez58lzCh7q
-BETTER_AUTH_URL = https://feature-theme-support-edgepress-farra.rhamses.workers.dev
-BETTER_AUTH_TRUSTED_ORIGINS=https://feature-theme-support-edgepress-farra.rhamses.workers.dev
-RATE_LIMIT_LOGIN_MAX=10
-RATE_LIMIT_LOGIN_WINDOW_MIN=5
-RATE_LIMIT_REGISTER_MAX=10
-RATE_LIMIT_REGISTER_WINDOW_MIN=10
-RATE_LIMIT_UPLOAD_MAX=100
-RATE_LIMIT_UPLOAD_WINDOW_MIN=10
-RESEND_API_KEY=re_bPxRc9St_N347MnMfb9ALXkkVmpq5gSEv      # API key em https://resend.com/api-keys
-RESEND_FROM=contato@amb1.io         # Remetente verificado no Resend, ex: "Edgepress <noreply@seudominio.com>"
+BETTER_AUTH_URL = "https://feature-theme-support-edgepress-farra.rhamses.workers.dev"
+BETTER_AUTH_TRUSTED_ORIGINS = "https://feature-theme-support-edgepress-farra.rhamses.workers.dev"
+RATE_LIMIT_LOGIN_MAX = "10"
+RATE_LIMIT_LOGIN_WINDOW_MIN = "5"
+RATE_LIMIT_REGISTER_MAX = "10"
+RATE_LIMIT_REGISTER_WINDOW_MIN = "10"
+RATE_LIMIT_UPLOAD_MAX = "100"
+RATE_LIMIT_UPLOAD_WINDOW_MIN = "10"
+RESEND_FROM = "contato@amb1.io"
+# Opcional se o teu código ler estes nomes (senão remove):
+# CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_DATABASE_ID — preferir só bindings D1 no Worker.
 
 [[d1_databases]]
 binding = "DB"
@@ -31,7 +32,6 @@ migrations_dir = "./drizzle"
 [[kv_namespaces]]
 binding = "edgepress_cache"
 id = "eb122e65276746228228af8b69d244fa"
-preview_id = ""
 
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
