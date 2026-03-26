@@ -13,7 +13,7 @@ binding = "DB"
 database_name = "edgepress-dev"
 database_id = "fbe4ede5-a168-4a33-8570-4c62be8b1c94"
 preview_database_id = "378b10ee-5ed7-4c3f-b2f4-66103b74bd9c"
-migrations_dir = "drizzle"
+migrations_dir = "./drizzle"
 
 [[kv_namespaces]]
 binding = "edgepress_cache"
