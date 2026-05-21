@@ -56,7 +56,25 @@ import { slugify } from "../../lib/slugify.ts";
 import { getErrorMessage } from "../../lib/constants/error-messages.ts";
 
 // KV cache sync
-import { syncPostCache } from "../../lib/kv-cache-sync.ts";
+import {
+  syncPostCache,
+  syncThemeCache,
+  syncThemeStatusCacheByPostId,
+} from "../../lib/kv-cache-sync.ts";
+import {
+  type ThemeCanonicalMeta,
+  buildThemePathFromSlug,
+  normalizeGitHubRef,
+  normalizeSupports,
+  normalizeThemeSubdir,
+  normalizeThemeSlug,
+  parseThemeImportState,
+  isThemeActiveFlag,
+  withThemeImportState,
+  getThemeSnapshotById,
+  validateThemeCanonicalMeta,
+} from "../../lib/services/theme-service.ts";
+import { triggerThemeImportFromRuntime } from "../../lib/services/theme-import-trigger.ts";
 
 // Auth
 import { requireMinRole, resolveAuthorIdForRole } from "../../lib/api-auth.ts";
@@ -147,6 +165,72 @@ export async function POST({
 
     // Extrair meta_values customizados
     const metaValues = getFieldsWithPrefix(formData, "meta_", true);
+    const customFieldsDataRaw = getString(formData, "custom_fields_data");
+    const customFieldsToDeleteRaw = getString(formData, "custom_fields_to_delete");
+    let themeCanonicalMeta: ThemeCanonicalMeta | null = null;
+    let shouldQueueThemeImport = false;
+
+    if (post_type === "themes") {
+      const requestedActive = isThemeActiveFlag(metaValues["is_active"]);
+      const existingThemeState =
+        action === "edit" && postIdParam && parseNumericId(postIdParam)
+          ? await getThemeSnapshotById(db, parseInt(postIdParam, 10))
+          : null;
+      const existingImportState = parseThemeImportState(
+        existingThemeState?.meta_values ?? null
+      );
+
+      const canonicalMeta: ThemeCanonicalMeta = {
+        theme_slug: normalizeThemeSlug(slug),
+        theme_path: buildThemePathFromSlug(slug),
+        supports: normalizeSupports(metaValues["supports"] ?? ""),
+        ...(metaValues["github_repo_url"]?.trim()
+          ? { github_repo_url: metaValues["github_repo_url"].trim() }
+          : {}),
+        ...(metaValues["github_ref"]?.trim()
+          ? { github_ref: normalizeGitHubRef(metaValues["github_ref"]) }
+          : {}),
+        ...(metaValues["theme_subdir"]?.trim()
+          ? { theme_subdir: normalizeThemeSubdir(metaValues["theme_subdir"]) }
+          : {}),
+        ...(metaValues["version"]?.trim()
+          ? { version: metaValues["version"].trim() }
+          : {}),
+        ...(metaValues["author"]?.trim()
+          ? { author: metaValues["author"].trim() }
+          : {}),
+        ...(metaValues["preview_image"]?.trim()
+          ? { preview_image: metaValues["preview_image"].trim() }
+          : {}),
+      };
+      const validation = validateThemeCanonicalMeta(canonicalMeta, {
+        requireGithubRepoUrl: requestedActive,
+      });
+      if (!validation.valid) {
+        const message = `Tema invalido: ${validation.errors.join("; ")}`;
+        if (isHtmx) return badRequestHtmlResponse(message);
+        return badRequestResponse(message, { theme: validation.errors });
+      }
+
+      themeCanonicalMeta = canonicalMeta;
+      const isAlreadyActive =
+        action === "edit" && existingImportState.is_active === true;
+      shouldQueueThemeImport = requestedActive && !isAlreadyActive;
+
+      delete metaValues["is_active"];
+      metaValues["requested_active"] = requestedActive ? "1" : "0";
+      if (shouldQueueThemeImport) {
+        metaValues["is_active"] = "0";
+        metaValues["import_status"] = "importing";
+        delete metaValues["import_error"];
+      } else if (!requestedActive) {
+        metaValues["is_active"] = "0";
+        metaValues["import_status"] = "idle";
+      } else {
+        metaValues["is_active"] = "1";
+        metaValues["import_status"] = "ready";
+      }
+    }
 
     // Extrair id_locale_code do formulário (se selecionado no dropdown)
     let localeId: number | null = getNumber(formData, "id_locale_code", null);
@@ -381,8 +465,6 @@ export async function POST({
     }
 
     // Processar custom fields: deletar os marcados e criar/atualizar os restantes
-    const customFieldsToDeleteRaw = getString(formData, "custom_fields_to_delete");
-    const customFieldsDataRaw = getString(formData, "custom_fields_data");
 
     if (postId) {
       const customFieldsTypeId = await getPostTypeId(db, "custom_fields");
@@ -487,6 +569,52 @@ export async function POST({
 
     // Atualizar cache KV com o post atual (create ou update)
     await syncPostCache(locals, db, postId);
+    if (post_type === "themes") {
+      await syncThemeStatusCacheByPostId(locals, db, postId);
+      await syncThemeCache(locals, db);
+    }
+
+    if (
+      post_type === "themes" &&
+      shouldQueueThemeImport &&
+      postId &&
+      themeCanonicalMeta?.github_repo_url
+    ) {
+      const triggerPayload = {
+        theme_post_id: postId,
+        theme_slug: slug,
+        repo_url: themeCanonicalMeta.github_repo_url,
+        ref: themeCanonicalMeta.github_ref ?? "main",
+        subdir: themeCanonicalMeta.theme_subdir ?? "",
+        requested_by: currentUser.id,
+      };
+
+      // Trigger assíncrono: não bloqueia o response de save do admin.
+      void triggerThemeImportFromRuntime(locals, triggerPayload).catch(
+        async (err) => {
+          console.error("[themes] import trigger failed", err);
+          try {
+            const snapshot = await getThemeSnapshotById(db, postId);
+            if (!snapshot) return;
+            const failedMeta = withThemeImportState(snapshot.meta_values, {
+              requested_active: false,
+              is_active: false,
+              import_status: "failed",
+              import_error:
+                err instanceof Error ? err.message : "Erro ao disparar importação",
+            });
+            await updatePost(db, postId, postTypeId, {
+              meta_values: failedMeta,
+              updated_at: Date.now(),
+            });
+            await syncThemeStatusCacheByPostId(locals, db, postId);
+            await syncThemeCache(locals, db);
+          } catch {
+            // ignora erros do fallback async de import trigger
+          }
+        }
+      );
+    }
 
     // Retornar resposta
     const listUrl = buildAbsoluteUrl(request, buildListUrl(locale, post_type));

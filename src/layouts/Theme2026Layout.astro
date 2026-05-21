@@ -1,0 +1,48 @@
+---
+import "../assets/app.css";
+import HtmxLoader from "../components/HtmxLoader.astro";
+import htmxScript from "htmx.org/dist/htmx.min.js?url";
+
+interface Props {
+  title: string;
+  /** Base path for nav links (e.g. /themes/2026 or / for root) */
+  basePath?: string;
+}
+
+const { title, basePath = "/themes/2026" } = Astro.props;
+---
+
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <script is:inline src={htmxScript}></script>
+  </head>
+  <body class="min-h-screen bg-base-200">
+    <HtmxLoader />
+    <div class="min-h-screen flex flex-col">
+      <header class="navbar bg-base-100 shadow-sm border-b border-base-300">
+        <div class="flex-1 container mx-auto px-4">
+          <a href={basePath} class="btn btn-ghost text-xl font-semibold">Site 2026</a>
+          <nav class="flex gap-2 ml-4">
+            <a href={basePath} class="btn btn-ghost btn-sm">Home</a>
+            <a href={`${basePath}/posts`} class="btn btn-ghost btn-sm">Posts</a>
+            {basePath !== "/themes/2026" && (
+              <a href={basePath} class="btn btn-ghost btn-sm">Tabelas</a>
+            )}
+          </nav>
+        </div>
+      </header>
+      <main class="flex-1 container mx-auto px-4 py-8">
+        <slot />
+      </main>
+      <footer class="border-t border-base-300 bg-base-100 py-4">
+        <div class="container mx-auto px-4 text-center text-sm text-base-content/70">
+          Tema 2026 — Edgepress
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

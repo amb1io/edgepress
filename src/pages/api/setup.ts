@@ -12,31 +12,36 @@ import { eq } from "drizzle-orm";
 import { getString } from "../../lib/utils/form-data.ts";
 
 /** Garante que a opção exista: atualiza se já existir, insere se não existir. */
-async function upsertSetting(
-  name: string,
-  value: string,
-): Promise<void> {
+async function upsertSetting(name: string, value: string): Promise<void> {
   const existing = await db
     .select({ id: settingsTable.id })
     .from(settingsTable)
     .where(eq(settingsTable.name, name))
     .limit(1);
   if (existing.length > 0) {
-    await db.update(settingsTable).set({ value }).where(eq(settingsTable.name, name));
+    await db
+      .update(settingsTable)
+      .set({ value })
+      .where(eq(settingsTable.name, name));
   } else {
     await db.insert(settingsTable).values({ name, value, autoload: true });
   }
 }
 import { sanitizeCallbackURL } from "../../lib/utils/url-validator.ts";
-import { badRequestHtmlResponse, htmxRedirectResponse } from "../../lib/utils/http-responses.ts";
+import {
+  badRequestHtmlResponse,
+  htmxRedirectResponse,
+} from "../../lib/utils/http-responses.ts";
 
 export const prerender = false;
 
 const SETUP_ERROR_MESSAGES: Record<string, string> = {
-  invalid_request: "Requisição inválida. Use o formulário para enviar os dados.",
+  invalid_request:
+    "Requisição inválida. Use o formulário para enviar os dados.",
   missing_fields: "Preencha todos os campos obrigatórios: nome, email e senha.",
   password_too_short: "A senha deve ter no mínimo 8 caracteres.",
-  signup_failed: "Não foi possível criar o usuário. Tente novamente ou use outro email.",
+  signup_failed:
+    "Não foi possível criar o usuário. Tente novamente ou use outro email.",
   email_already_exists: "Este email já está em uso.",
 };
 
@@ -47,7 +52,8 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     !contentType.includes("application/x-www-form-urlencoded") &&
     !contentType.includes("multipart/form-data")
   ) {
-    if (isHtmx) return badRequestHtmlResponse(SETUP_ERROR_MESSAGES.invalid_request);
+    if (isHtmx)
+      return badRequestHtmlResponse(SETUP_ERROR_MESSAGES.invalid_request);
     return redirect("/setup?error=invalid_request", 303);
   }
 
@@ -59,18 +65,20 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   const siteDescription = getString(formData, "site_description");
 
   if (!name || !email || !password) {
-    if (isHtmx) return badRequestHtmlResponse(SETUP_ERROR_MESSAGES.missing_fields);
+    if (isHtmx)
+      return badRequestHtmlResponse(SETUP_ERROR_MESSAGES.missing_fields);
     return redirect("/setup?error=missing_fields", 303);
   }
   if (password.length < 8) {
-    if (isHtmx) return badRequestHtmlResponse(SETUP_ERROR_MESSAGES.password_too_short);
+    if (isHtmx)
+      return badRequestHtmlResponse(SETUP_ERROR_MESSAGES.password_too_short);
     return redirect("/setup?error=password_too_short", 303);
   }
 
   const url = new URL(request.url);
   const origin = url.origin;
   const locale = "pt-br";
-  const defaultCallback = `/${locale}/admin`;
+  const defaultCallback = `/admin/${locale}`;
   const safeCallbackURL = sanitizeCallbackURL(
     defaultCallback,
     origin,
@@ -95,18 +103,24 @@ export const POST: APIRoute = async ({ request, redirect }) => {
 
   const authResponse = await auth.handler(authRequest);
   if (!authResponse.ok) {
-    const errData = (await authResponse.json().catch(() => ({}))) as { code?: string };
+    const errData = (await authResponse.json().catch(() => ({}))) as {
+      code?: string;
+    };
     const code = errData?.code ?? "signup_failed";
-    const message = SETUP_ERROR_MESSAGES[code] ?? SETUP_ERROR_MESSAGES.signup_failed;
+    const message =
+      SETUP_ERROR_MESSAGES[code] ?? SETUP_ERROR_MESSAGES.signup_failed;
     if (isHtmx) return badRequestHtmlResponse(message);
     return redirect(`/setup?error=${encodeURIComponent(code)}`, 303);
   }
 
   await upsertSetting("site_name", siteName || "demo site");
-  await upsertSetting("site_description", siteDescription || "demo_description");
+  await upsertSetting(
+    "site_description",
+    siteDescription || "demo_description",
+  );
   await upsertSetting("setup_done", "Y");
 
-  const loginUrl = `/${locale}/login?setup=success`;
+  const loginUrl = `/login?setup=success`;
   const setCookie = "setup_done=Y; Path=/; HttpOnly; SameSite=Lax";
   if (isHtmx) {
     const res = htmxRedirectResponse(loginUrl);

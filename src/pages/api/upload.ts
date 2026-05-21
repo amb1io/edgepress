@@ -7,6 +7,7 @@
 import type { APIRoute } from "astro";
 import { applyRateLimit, getRateLimits } from "../../lib/utils/rate-limiter.ts";
 import { requireMinRole } from "../../lib/api-auth.ts";
+import { env as cfEnv } from "cloudflare:workers";
 
 export const prerender = false;
 
@@ -108,10 +109,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const authResult = await requireMinRole(request, 2, locals);
   if (authResult instanceof Response) return authResult;
 
-  const env = (locals as { runtime?: { env?: Record<string, string> } }).runtime?.env ?? {};
-
   // Obter rate limits do ambiente
-  const rateLimits = getRateLimits(env);
+  const rateLimits = getRateLimits(cfEnv as Record<string, string | undefined>);
 
   // Aplicar rate limiting: configurável via env (padrão: 20 uploads / hora)
   const rateLimitResponse = applyRateLimit(request, rateLimits.UPLOAD);
@@ -119,7 +118,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return rateLimitResponse;
   }
 
-  const bucket = env?.MEDIA_BUCKET as
+  const bucket = cfEnv.MEDIA_BUCKET as
     | { put: (key: string, value: BodyInit, options?: { httpMetadata?: { contentType?: string } }) => Promise<unknown> }
     | undefined;
 
@@ -220,7 +219,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // Opcional: enviar também para Cloudflare Images quando for imagem
   let cloudflareImageId: string | null = null;
   if (finalMimeType.startsWith("image/")) {
-    cloudflareImageId = await uploadToCloudflareImages(file, key, env);
+    cloudflareImageId = await uploadToCloudflareImages(
+      file,
+      key,
+      cfEnv as Record<string, string>,
+    );
   }
 
   const path = `/${key}`;

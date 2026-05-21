@@ -10,9 +10,38 @@ import { getErrorMessage } from "../constants/error-messages.ts";
 interface ErrorLogData {
   context: string;
   message: string;
+  error_name?: string;
+  status?: number;
   stack?: string;
+  details?: unknown;
   metadata?: Record<string, unknown>;
   timestamp: string;
+}
+
+function safeSerialize(value: unknown): string {
+  try {
+    const seen = new WeakSet<object>();
+    return JSON.stringify(
+      value,
+      (_key, currentValue: unknown) => {
+        if (currentValue instanceof Error) {
+          return {
+            name: currentValue.name,
+            message: currentValue.message,
+            stack: currentValue.stack,
+          };
+        }
+        if (currentValue && typeof currentValue === "object") {
+          if (seen.has(currentValue as object)) return "[Circular]";
+          seen.add(currentValue as object);
+        }
+        return currentValue;
+      },
+      2
+    );
+  } catch {
+    return String(value);
+  }
 }
 
 /**
@@ -26,9 +55,20 @@ export function logError(
   error: unknown,
   metadata?: Record<string, unknown>,
 ): void {
+  const errorObj =
+    error && typeof error === "object" ? (error as Record<string, unknown>) : null;
+  const status =
+    errorObj && typeof errorObj["status"] === "number"
+      ? (errorObj["status"] as number)
+      : undefined;
+  const details = errorObj?.["details"];
+
   const errorData: ErrorLogData = {
     context,
     message: error instanceof Error ? error.message : String(error),
+    ...(error instanceof Error ? { error_name: error.name } : {}),
+    ...(status !== undefined ? { status } : {}),
+    ...(details !== undefined ? { details } : {}),
     timestamp: new Date().toISOString(),
   };
 
@@ -41,7 +81,7 @@ export function logError(
   }
 
   // TODO: Integrar com serviço de logging (ex: Sentry, LogRocket, etc)
-  console.error("[ERROR]", JSON.stringify(errorData, null, 2));
+  console.error("[ERROR]", safeSerialize(errorData));
 }
 
 /**

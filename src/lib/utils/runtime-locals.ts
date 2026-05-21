@@ -1,16 +1,19 @@
 /**
- * Helpers para acessar runtime e autenticação a partir de Astro locals (API routes).
- * Centraliza o tipo KVLike e o acesso a edgepress_cache, evitando casts repetidos.
+ * Helpers para autenticação e KV no Worker (Astro 6 + Cloudflare: use `env` de cloudflare:workers).
+ * O parâmetro `locals` permanece para compatibilidade de chamadas; o KV vem sempre do binding Worker.
  */
+
+import { env as cfEnv } from "cloudflare:workers";
 
 /** Tipo do cache KV (edgepress_cache). Compatível com App.KVLike em env.d.ts. */
 export type KVLike = App.KVLike;
 
 /**
- * Retorna a instância do KV (edgepress_cache) dos locals, ou null se não disponível.
+ * Retorna a instância do KV (edgepress_cache), ou null se não disponível.
  */
-export function getKvFromLocals(locals: App.Locals): KVLike | null {
-  return locals.runtime?.env?.edgepress_cache ?? null;
+export function getKvFromLocals(_locals: App.Locals): KVLike | null {
+  const kv = cfEnv.edgepress_cache;
+  return kv != null ? (kv as unknown as KVLike) : null;
 }
 
 /**

@@ -1,0 +1,42 @@
+---
+import Theme2026Layout from "../../../../layouts/Theme2026Layout.astro";
+import { db } from "../../../../db/index.ts";
+import { getTableNames } from "../../../../lib/db-utils.ts";
+
+const localeParam = Astro.params["locale"];
+const locale = typeof localeParam === "string" && localeParam.length > 0 ? localeParam : "pt-br";
+
+const tables = (await getTableNames(db)).sort((a, b) => a.localeCompare(b));
+const basePath = `/themes/2026/${locale}`;
+---
+
+<Theme2026Layout title={`Tabelas — ${locale.toUpperCase()}`} basePath={basePath}>
+  <div class="max-w-3xl mx-auto space-y-6">
+    <div class="flex items-baseline justify-between gap-2">
+      <h1 class="text-3xl font-bold text-base-content">Tabelas do banco</h1>
+      <span class="text-sm text-base-content/60">{tables.length} tabelas encontradas</span>
+    </div>
+
+    {tables.length === 0 ? (
+      <p class="text-base-content/70">Nenhuma tabela de usuário encontrada.</p>
+    ) : (
+      <ul class="grid gap-4 sm:grid-cols-2">
+        {tables.map((table) => (
+          <li class="card bg-base-100 shadow border border-base-300">
+            <div class="card-body">
+              <h2 class="card-title text-lg break-all">
+                <a href={`${basePath}/${table}`} class="link link-hover">
+                  {table}
+                </a>
+              </h2>
+              <p class="text-sm text-base-content/70">
+                Ver registros da tabela <code class="px-1 rounded bg-base-200">{table}</code>.
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</Theme2026Layout>
+

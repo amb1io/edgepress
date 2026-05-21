@@ -1,0 +1,178 @@
+---
+interface Props {
+  type: String;
+  cssClass?: String;
+}
+const { type } = Astro.props;
+---
+
+<link
+  rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"
+/>
+<style lang="scss">
+  #previousSlide {
+    position: relative;
+    transform: rotate(-180deg);
+  }
+  .swiper {
+    width: 100%;
+    &--navigation {
+      margin-top: 1rem;
+      text-align: center;
+
+      &__item {
+        height: 25px;
+        width: 25px;
+        border: none;
+        background: transparent;
+      }
+    }
+  }
+</style>
+<style is:global lang="scss">
+  .swiper-slide.swiper-slide-active.swiper-slide-fully-visible:has(iframe) {
+    &::before {
+      content: "";
+      position: absolute;
+      width: 100%;
+      height: 80%;
+      background-color: transparent;
+      z-index: 1;
+    }
+  }
+  @media screen and (max-width: 811px) {
+    .swiper--navigation {
+      display: none;
+    }
+  }
+  @media screen and (min-width: 812px) {
+    #previousSlide {
+      top: 17px;
+    }
+    .swiper--navigation__item svg {
+      height: 40px;
+      transition: all 0.2s ease-in-out;
+    }
+    .swiper--navigation__item:hover svg {
+      transform: scale(1.5);
+    }
+  }
+  .swiper-slide-next:hover {
+    cursor: url("http://localhost:4321/chevron-right.svg") !important;
+  }
+  .cls-1 {
+    stroke: #fff !important;
+  }
+  /**
+    VIMEO BUTTON PLAY
+  */
+  lite-vimeo {
+    iframe {
+      // z-index: -1;
+    }
+    & > .ltv-playbtn {
+      background-image: url("/play.svg") !important;
+      background-repeat: no-repeat !important;
+      background-position: center !important;
+      background-color: transparent !important;
+      &::before {
+        content: none !important;
+      }
+    }
+  }
+  /*
+  COVERFLOW STYLES
+  */
+  .swiper-coverflow .swiper-slide .swiper-slide__wrapper {
+    transition: transform 0.2s linear;
+  }
+  .swiper-coverflow .swiper-slide .swiper-slide__wrapper {
+    transform: scale(1.03);
+  }
+  .swiper-coverflow .swiper-slide:hover .swiper-slide__wrapper {
+    transform: scale(1);
+  }
+  @media screen and (min-width: 0) {
+    .swiper-coverflow .swiper-slide {
+      width: 80%;
+    }
+  }
+  @media screen and (min-width: 1025px) {
+    .swiper-coverflow .swiper-slide {
+      width: 50%;
+    }
+  }
+</style>
+<div class=`swiper mySwiper`>
+  <div class="swiper-wrapper">
+    <slot />
+  </div>
+</div>
+
+<script is:inline defer src="https://player.vimeo.com/api/player.js"></script>
+<script is:inline type="module" define:vars={{ type }}>
+  import Swiper from "https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.mjs";
+  let options = {};
+  function resetVideo() {
+    // pause previous video anyway
+    document.querySelectorAll("lite-vimeo iframe").forEach(async (item) => {
+      const player = new Vimeo.Player(item);
+      await player.destroy();
+      item.parentElement.classList.remove("ltv-activated");
+    });
+    // return original thumb state
+    document
+      .querySelectorAll("lite-vimeo.ltv-activated")
+      .forEach(async (item) => {
+        item.classList.remove("ltv-activated");
+      });
+  }
+  if (type == "coverflow") {
+    options = {
+      autoplay: false,
+      effect: "coverflow",
+      grabCursor: true,
+      centeredSlides: true,
+      slidesPerView: "auto",
+      navigation: {
+        nextEl: "#nextSlide",
+        prevEl: "#previousSlide",
+      },
+      keyboard: {
+        enabled: true,
+      },
+      loop: true,
+      coverflowEffect: {
+        rotate: 40,
+        stretch: 0,
+        depth: 200,
+        modifier: 1,
+        slideShadows: true,
+      },
+      on: {
+        click(e) {
+          // pause previous video anyway
+          resetVideo();
+          // Move slide > or <
+          if (e.clickedSlide.classList.contains("swiper-slide-next")) {
+            e.slideNext();
+          }
+        },
+      },
+    };
+    document.querySelectorAll(".swiper-slide").forEach((slide) => {
+      slide.addEventListener("click", (e) => {
+        if (e.target.parentElement.classList.contains("swiper-slide-prev")) {
+          swiper.slidePrev();
+        }
+      });
+    });
+  }
+  // INIT SLIDER
+  const swiper = new Swiper(".mySwiper", options);
+  // play button
+  document
+    .querySelectorAll(".ltv-playbtn")
+    .forEach((item) => item.addEventListener("click", () => resetVideo()));
+</script>

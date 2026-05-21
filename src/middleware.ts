@@ -9,13 +9,14 @@ import { ensureTranslationsLoaded } from "./lib/i18n-helpers.ts";
 import { db } from "./db/index.ts";
 import { settings as settingsTable } from "./db/schema.ts";
 import { eq } from "drizzle-orm";
-
-const protectedPaths = ["/admin"];
-const authPaths = ["/login"];
-const setupPath = `/${defaultLocale}/setup`;
+import { env as cfEnv } from "cloudflare:workers";
+import { getKvFromLocals } from "./lib/utils/runtime-locals.ts";
+import { getActiveThemeSlugFromSettings } from "./lib/services/settings-service.ts";
 
 // Endpoints sensíveis que requerem validação extra de CSRF
 const sensitiveAPIPaths = ["/api/posts", "/api/upload", "/api/media"];
+const authPaths = ["/login"];
+const setupPath = `/setup/${defaultLocale}`;
 
 /**
  * Verifica se o setup inicial já foi concluído.
@@ -55,13 +56,23 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const pathname = new URL(context.request.url).pathname;
   const method = context.request.method.toUpperCase();
 
-  const isSetupPage = pathname === setupPath;
   const isApi = pathname.startsWith("/api");
   const isAuthApi = pathname.startsWith("/api/auth");
   const isSetupApi = pathname === "/api/setup";
-  const isLoginPage = authPaths.some(
-    (p) => pathname === p || pathname.startsWith(p + "/"),
-  );
+
+  // URLs públicas não devem expor /themes/* (rota interna).
+  // Quando acessado publicamente, reescrevemos internamente a mesma URL
+  // adicionando `x-edgepress-internal-rewrite: 1` para evitar loops.
+  if (!isApi && pathname.startsWith("/themes/")) {
+    if (context.request.headers.get("x-edgepress-internal-rewrite") === "1") {
+      return next();
+    }
+
+    const url = new URL(context.request.url);
+    const headers = new Headers(context.request.headers);
+    headers.set("x-edgepress-internal-rewrite", "1");
+    return context.rewrite(new Request(url, { headers }));
+  }
 
   // Permitir APIs de auth e setup mesmo quando setup não está completo
   // Essas APIs são necessárias para completar o setup inicial
@@ -71,11 +82,59 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return response;
   }
 
+  // Site público: tudo que não é admin, login, setup ou API reescreve internamente
+  // para /themes/{active_theme}/... usando o setting `active_theme` no banco.
+  // Ex.: /quem-somos → /themes/farramedia/quem-somos (mantém a URL no browser).
+  const skipActiveThemeRewrite =
+    isApi ||
+    pathname.startsWith("/themes/") ||
+    pathname === "/admin" ||
+    pathname.startsWith("/admin/") ||
+    pathname === "/login" ||
+    pathname.startsWith("/login/") ||
+    pathname === "/setup" ||
+    pathname.startsWith("/setup/") ||
+    pathname.startsWith("/.well-known/") ||
+    pathname === "/.well-known" ||
+    pathname.startsWith("/@") ||
+    pathname.startsWith("/_");
+
+  if (!skipActiveThemeRewrite) {
+    const locals = context.locals as App.Locals;
+    const kv = getKvFromLocals(locals);
+    const activeSlug = await getActiveThemeSlugFromSettings(db, {
+      kv,
+      isAuthenticated: Boolean(locals.user),
+    });
+
+    if (activeSlug) {
+      const url = new URL(context.request.url);
+      let outPath = pathname;
+      if (outPath.length > 1 && outPath.endsWith("/")) {
+        outPath = outPath.replace(/\/+$/, "");
+      }
+      url.pathname =
+        outPath === "/" ? `/themes/${activeSlug}` : `/themes/${activeSlug}${outPath}`;
+      const headers = new Headers(context.request.headers);
+      headers.set("x-edgepress-internal-rewrite", "1");
+      return context.rewrite(new Request(url, { headers }));
+    }
+  }
+
   const setupDone = await isSetupDone(context.request);
 
+  const isSetupPage = pathname === setupPath;
+  const isLoginPage = authPaths.some(
+    (p) => pathname === p || pathname.startsWith(p + "/"),
+  );
+
+  // Lógica de setup:
+  // - Se setup JÁ foi concluído e o usuário tenta acessar /{locale}/setup, redireciona para /admin/{locale}.
+  // - Se setup AINDA NÃO foi concluído, qualquer rota não-API e diferente de /setup (e não /login)
+  //   redireciona para a página de setup.
   if (!isApi && !isLoginPage) {
     if (isSetupPage && setupDone) {
-      return context.redirect(`/${defaultLocale}/admin`);
+      // return context.redirect(`/admin/${defaultLocale}`);
     }
     if (!isSetupPage && !setupDone) {
       return context.redirect(setupPath, 303);
@@ -87,16 +146,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const isWriteMethod = ["POST", "PUT", "DELETE", "PATCH"].includes(method);
 
   if (isSensitiveAPI && isWriteMethod) {
-    // Obter origens confiáveis do ambiente
-    const env = (
-      context.locals as { runtime?: { env?: Record<string, unknown> } }
-    ).runtime?.env as
-      | { BETTER_AUTH_URL?: string; BETTER_AUTH_TRUSTED_ORIGINS?: string }
-      | undefined;
-
-    const trustedOrigins = env
-      ? getTrustedOrigins(env)
-      : ["http://localhost:8788"];
+    const trustedOrigins = getTrustedOrigins({
+      BETTER_AUTH_URL: cfEnv.BETTER_AUTH_URL,
+      BETTER_AUTH_TRUSTED_ORIGINS: cfEnv.BETTER_AUTH_TRUSTED_ORIGINS,
+    });
 
     // Validar origem
     if (!isValidOrigin(context.request, trustedOrigins)) {
@@ -111,19 +164,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
         },
       );
     }
-  }
-
-  // Redirect /admin and /admin/* to default locale admin (e.g. /pt-br/admin)
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-    const rest =
-      pathname === "/admin"
-        ? "admin"
-        : pathname.replace(/^\/admin\/?/, "admin/");
-    const newPath =
-      `/${defaultLocale}/${rest}`.replace(/\/$/, "") ||
-      `/${defaultLocale}/admin`;
-    const search = new URL(context.request.url).search;
-    return context.redirect(newPath + search);
   }
 
   if (!setupDone) {
@@ -142,30 +182,24 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  const session = context.locals.session
-    ? { user: context.locals.user!, session: context.locals.session }
-    : null;
-
-  const isProtected = protectedPaths.some(
-    (p) => pathname === p || pathname.startsWith(p + "/"),
-  );
-  const isLocaleProtected = /^\/(en|es|pt-br)\/admin/.test(pathname);
-  const isAuthPage = authPaths.some(
-    (p) => pathname === p || pathname.startsWith(p + "/"),
-  );
-
-  if ((isProtected || isLocaleProtected) && !session) {
-    return context.redirect(`/${defaultLocale}/login`);
+  // Regra: ao acessar /admin (e subrotas), exigir usuário logado
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  if (!isApi && isAdminRoute && !context.locals.session) {
+    return context.redirect("/login", 303);
   }
 
-  if (isAuthPage && session) {
-    return context.redirect(`/${defaultLocale}/admin`);
-  }
+  // Pré-carregar traduções (DB + fallback JSON) para rotas com locale,
+  // suportando tanto /{locale}/... (site público) quanto /admin/{locale}/... (admin).
+  if (!isApi) {
+    const publicMatch = pathname.match(/^\/(en|es|pt-br)(\/|$)/);
+    const adminMatch = pathname.match(/^\/admin\/(en|es|pt-br)(\/|$)/);
+    const localeToLoad =
+      (publicMatch && (publicMatch[1] as "en" | "es" | "pt-br")) ||
+      (adminMatch && (adminMatch[1] as "en" | "es" | "pt-br"));
 
-  // Pré-carregar traduções (DB + fallback JSON) para rotas [locale] para que t() use o banco
-  const localeMatch = pathname.match(/^\/(en|es|pt-br)(\/|$)/);
-  if (!isApi && localeMatch) {
-    await ensureTranslationsLoaded(localeMatch[1]);
+    if (localeToLoad) {
+      await ensureTranslationsLoaded(localeToLoad);
+    }
   }
 
   return next();

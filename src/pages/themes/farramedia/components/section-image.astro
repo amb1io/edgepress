@@ -1,0 +1,33 @@
+---
+let admin = false;
+if (Astro.url.pathname.includes("admin")) {
+  admin = !admin;
+}
+---
+
+<figure>
+  <img src="/servicos/cinema.png" alt="" />
+  <legend contenteditable={admin ? "true" : "false"}>Cinema</legend>
+</figure>
+
+<style lang="scss">
+  figure {
+    margin: 0;
+    padding: 0;
+
+    img {
+      display: block;
+      margin: 0 auto 1em;
+      height: 100px;
+      width: 100px;
+      background-size: contain;
+    }
+    legend {
+      display: inline-block;
+      line-height: 1;
+      max-width: 200px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+  }
+</style>

@@ -342,6 +342,7 @@ export async function runSeed(db: any): Promise<void> {
     { name: "setup_done", value: "N", autoload: true },
     { name: "default_posttype", value: "post", autoload: true },
     { name: "default_taxonomies", value: "category,tag", autoload: true },
+    { name: "active_theme", value: "2026", autoload: true },
   ];
   const existingSettings = await db
     .select({ name: settings.name })
@@ -353,6 +354,34 @@ export async function runSeed(db: any): Promise<void> {
     if (!existingNames.has(row.name)) {
       await db.insert(settings).values(row);
       existingNames.add(row.name);
+    }
+  }
+
+  // Tema padrão (template default 2026): garante que exista um post "themes" com slug 2026 e ativo.
+  const themesTypeId = typeIds["themes"];
+  if (themesTypeId) {
+    const [existingTheme2026] = await db
+      .select({ id: posts.id })
+      .from(posts)
+      .where(and(eq(posts.post_type_id, themesTypeId), eq(posts.slug, "2026")))
+      .limit(1);
+
+    if (!existingTheme2026) {
+      await db.insert(posts).values({
+        post_type_id: themesTypeId,
+        title: "Tema 2026",
+        slug: "2026",
+        status: "published",
+        meta_values: JSON.stringify({
+          is_active: "1",
+          requested_active: "1",
+          github_ref: "main",
+          supports: "single,archive,page",
+          version: "1.0.0",
+        }),
+        created_at: now,
+        updated_at: now,
+      });
     }
   }
 

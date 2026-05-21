@@ -392,7 +392,7 @@ const rateLimitStore = env.RATE_LIMIT_KV;
 
 **Opção C: Cloudflare Rate Limiting**
 ```toml
-# wrangler.jsonc
+# wrangler.toml
 # Usar rate limiting nativo do Cloudflare (plano Pro+)
 ```
 

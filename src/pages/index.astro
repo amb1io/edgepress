@@ -1,5 +1,52 @@
 ---
-import { defaultLocale } from "../i18n/index.ts";
+import { db } from "../db/index.ts";
+import { getKvFromLocals } from "../lib/utils/runtime-locals.ts";
+import { getActiveThemeSlugFromSettings } from "../lib/services/settings-service.ts";
+import {
+  getThemeSnapshotBySlug,
+  validateThemeCanonicalMeta,
+} from "../lib/services/theme-service.ts";
+import Notificacao from "../components/Notificacao.astro";
 
-return Astro.redirect(`/${defaultLocale}/admin`);
+const locals = Astro.locals as App.Locals;
+const kv = getKvFromLocals(locals);
+
+const activeSlug = await getActiveThemeSlugFromSettings(db, {
+  kv,
+  isAuthenticated: Boolean(locals.user),
+});
+
+if (activeSlug) {
+  const snapshot = await getThemeSnapshotBySlug(db, activeSlug);
+  if (snapshot) {
+    const validation = validateThemeCanonicalMeta(snapshot.canonical_meta);
+    if (validation.valid) {
+      Astro.response.headers.set("Cache-Control", "no-store");
+      return Astro.redirect(`/themes/${snapshot.slug}`, 302);
+    }
+  }
+}
+
+Astro.response.status = 500;
+Astro.response.headers.set("Cache-Control", "no-store");
 ---
+
+<main class="min-h-screen flex items-center justify-center bg-base-200 px-4">
+  <div class="max-w-xl w-full">
+    <Notificacao
+      type="error"
+      title="Erro ao carregar tema"
+      message="Não foi possível localizar um tema ativo válido. Verifique a configuração do tema ativo em Settings e tente novamente."
+      dismissible={false}
+      className="mb-4"
+    />
+    <div class="mt-4 text-center text-sm text-base-content/70">
+      <p>
+        Se você é administrador, acesse o painel e configure um tema ativo com
+        um slug que corresponda a uma pasta em <code
+          >src/themes/&lt;slug&gt;</code
+        >.
+      </p>
+    </div>
+  </div>
+</main>

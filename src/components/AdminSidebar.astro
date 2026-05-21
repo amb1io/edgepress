@@ -3,7 +3,6 @@
  * Menu lateral do admin. Extraído do AdminLayout para facilitar testes e alterações.
  */
 import { Icon } from "astro-icon/components";
-import { getRelativeLocaleUrl } from "astro:i18n";
 import { t, type Locale } from "../i18n/index.ts";
 import { resolveMenuOption, type MenuItem } from "../lib/menu.ts";
 
@@ -14,12 +13,25 @@ export interface Props {
 
 const { locale, menuItems } = Astro.props;
 const currentLocale = locale as Locale;
-const base = (path: string) => getRelativeLocaleUrl(currentLocale, path);
+
+/** Gera URLs no padrão /admin/{locale}/{menu_destination}. */
+const adminBase = (path: string) => {
+  const cleaned = path.replace(/^\/+/, "");
+  if (cleaned === "admin") {
+    return `/admin/${currentLocale}`;
+  }
+  if (cleaned.startsWith("admin/")) {
+    const rest = cleaned.slice("admin/".length);
+    return `/admin/${currentLocale}/${rest}`;
+  }
+  return `/admin/${currentLocale}/${cleaned}`;
+};
+
 /** Preserva query string em links do menu (ex: admin/content?post_type=post&action=new). */
 const menuHref = (link: string) => {
   const i = link.indexOf("?");
-  if (i === -1) return base(link);
-  return base(link.slice(0, i)) + "?" + link.slice(i + 1);
+  if (i === -1) return adminBase(link);
+  return adminBase(link.slice(0, i)) + "?" + link.slice(i + 1);
 };
 ---
 
@@ -28,7 +40,7 @@ const menuHref = (link: string) => {
   aria-label="Sidebar"
 >
   <div class="px-4 flex items-center min-h-14 border-b border-base-300">
-    <a href={base("admin")} class="font-semibold text-lg text-primary">
+    <a href={adminBase("admin")} class="font-semibold text-lg text-primary">
       {t(currentLocale, "admin.brand")}
     </a>
   </div>

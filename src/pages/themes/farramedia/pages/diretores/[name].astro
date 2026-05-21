@@ -1,0 +1,281 @@
+---
+import { getLanguageFromUrl } from "../../i18n/utils";
+import { Image } from "astro:assets";
+import Layout from "../../layouts/default.astro";
+import Icons from "../../components/icons.astro";
+import { createEdgepressContent } from "../../utils/api";
+
+const content = createEdgepressContent(Astro.locals, {
+  baseUrl: Astro.url.origin,
+});
+
+type CustomField = {
+  slug?: string;
+  fields?: { name?: string; value?: string }[];
+};
+
+const name = Astro.props.name ?? Astro.params.name;
+const lang = getLanguageFromUrl(Astro.url);
+const page = "diretores";
+const diretor = (await content.getItem("posts", name ?? "")) as {
+  slug?: string;
+  title?: string;
+  body?: unknown;
+  meta_values?: { post_thumbnail_id?: string | number } | null;
+  custom_fields?: CustomField[] | unknown;
+};
+
+const customFields: CustomField[] = Array.isArray(diretor.custom_fields)
+  ? (diretor.custom_fields as CustomField[])
+  : [];
+
+const diretoria = customFields.find((field) =>
+  field.slug?.includes("diretoria"),
+)?.fields;
+
+const socials = customFields
+  .find((field) => field.slug?.includes("social-media"))
+  ?.fields?.map((item) => item.value)
+  .filter((v): v is string => typeof v === "string");
+
+const vimeoLink = socials?.find((sm) => sm.toLowerCase().includes("vimeo"));
+const visibleSocials = socials?.filter(
+  (sm: any) =>
+    !sm.toLowerCase().includes("twitter.com")
+);
+const idiomasBlock = customFields.find((field) =>
+  field.slug?.includes("idiomas"),
+);
+const bodyEn =
+  Array.isArray(idiomasBlock?.fields) && idiomasBlock?.fields
+    ? idiomasBlock.fields.find((f) => f.name === "en")?.value
+    : undefined;
+
+const diretorBody: string =
+  lang === "en" && typeof bodyEn === "string" && bodyEn
+    ? bodyEn
+    : (diretor.body as string) ?? "";
+
+const mediaUrl: string =
+  (diretor.meta_values?.post_thumbnail_id &&
+    (content.getMediaUrl(
+      Number(diretor.meta_values?.post_thumbnail_id),
+    ) as string)) ||
+  "";
+// console.log(diretor);
+// console.log(diretoria);
+// console.log(socials);
+// console.log(media);
+// let bannerVimeo;
+// if(post.videos && Array.isArray(post.videos)) bannerVimeo = post.videos[0]
+// if(post.videos && !Array.isArray(post.videos)) bannerVimeo = post.videos
+// const linkVimeo = post?.socialMedia ? post.socialMedia.find((p: any) => p.includes("vimeo")) : "#";
+---
+
+<style is:global>
+  .diretores .edgtf-page-header .edgtf-menu-area {
+    background-color: transparent;
+  }
+  .reel-wrapper lite-vimeo {
+    height: 100%;
+  }
+  #video > img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100%;
+    z-index: 0;
+  }
+  .diretor-social-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    text-transform: uppercase;
+    width: 50px;
+    height: 50px;
+
+    border: solid 1px #fff;
+    border-radius: 50%;
+
+    svg {
+      height: 40px;
+      width: 50px;
+    }
+  }
+</style>
+
+<style lang="scss">
+  .firstfold {
+    @media screen and (min-width: 0) {
+      padding: 5rem 2rem;
+      h3 {
+        max-width: 650px;
+
+        color: #fff;
+        font-size: 180%;
+        line-height: 1.2;
+        letter-spacing: normal;
+        word-wrap: break-word;
+      }
+      span {
+        color: #01c3cc;
+      }
+      article {
+        margin-top: 3rem;
+      }
+    }
+    @media screen and (min-width: 1024px) {
+      display: flex;
+      max-width: 1080px;
+      padding: 0;
+      margin: 3rem auto;
+
+      h3,
+      article {
+        flex-basis: 50%;
+      }
+
+      h3 {
+        font-size: 60px;
+        text-align: right;
+      }
+
+      article {
+        margin-left: 80px;
+        margin-top: 0;
+        // font-size: 19px;
+      }
+    }
+    .logo {
+      display: block;
+      max-width: 300px;
+      height: 125px;
+      overflow: hidden;
+      text-indent: -100vw;
+      width: 100%;
+
+      background-image: var(--bgImage);
+      background-size: cover;
+      background-repeat: no-repeat;
+    }
+    small {
+      font-size: 1rem;
+    }
+    article {
+      color: #fff;
+    }
+  }
+  .reel-wrapper {
+    &.hugo-moura {
+      background-color: #000;
+    }
+    &.gui-cintra {
+      background-color: #01c3cc;
+    }
+    position: relative;
+    width: 100%;
+
+    
+    color: #fff;
+    text-align: center;
+
+    h1 {
+      display: none;
+      color: inherit;
+    }
+
+    iframe {
+      position: absolute;
+      width: 100%;
+      max-width: none;
+      height: 100%;
+      left: 0;
+      top: 0;
+    }
+  }
+  .sm-wrapper {
+    display: flex;
+    list-style-type: none;
+    li:not(:last-child) {
+      padding-right: 1rem;
+    }
+  }
+  .xs1 {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .image--cover {
+    display: block;
+    width: 100%;
+  }
+  .image--wrapper {
+    height: 100%;
+    max-height: 520px;
+    overflow: hidden;
+  }
+  .text-justify {
+    text-align: justify;
+  }
+</style>
+
+<Layout page={page}>
+  <section class={`reel-wrapper ${diretor.slug}`}>
+    <h1>{diretor.title}</h1>
+    {
+      (() => {
+        const reelField = diretoria?.find(
+          (item) => item.name === "reel",
+        ) as { value?: string } | undefined;
+        if (reelField?.value) {
+          const reelId = String(reelField.value);
+          const src = `https://iframe.mediadelivery.net/embed/203455/${reelId}?autoplay=true&loop=true&muted=true&preload=true&responsive=true`;
+          return (
+            <div id="video" style="position: relative; padding-top: 56.25%;">
+              <a href={vimeoLink} target={vimeoLink ? "_blank" : ""}>
+                <iframe
+                  src={src}
+                  loading="lazy"
+                  style="border:0;top:0;height:100%;width:100%;"
+                  allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;"
+                  allowfullscreen={true}
+                />
+              </a>
+            </div>
+          );
+        }
+        return "";
+      })()
+    }
+
+    <section class="firstfold">
+      <h3 class="image--wrapper">
+        <Image src={mediaUrl} alt={diretor.title ?? ""} width="500" height="300" />
+      </h3>
+      <article class="xs1">
+        <div class="text-justify" set:html={diretorBody} />
+        <ul class="sm-wrapper">
+          {
+            visibleSocials
+              ? visibleSocials.map((sm: any) => (
+                  <li>
+                    <a href={sm} class="diretor-social-link" style="">
+                      <Icons
+                        color="#fff"
+                        social={sm
+                          .match(/^(?:https?:\/\/)?(?:www\.)?([^\/]+)/)[1]
+                          .split(".")[0]
+                          .toLowerCase()}
+                      />
+                    </a>
+                  </li>
+                ))
+              : ""
+          }
+        </ul>
+      </article>
+    </section>
+  </section></Layout
+>

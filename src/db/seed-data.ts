@@ -124,6 +124,7 @@ export const MENU_CONFIG: MenuConfigRow[] = [
   { typeSlug: "user", menu_options: ["list", "new"], menu_order: 5, icon: "line-md:account" },
   { typeSlug: "attachment", menu_options: ["list", "new"], menu_order: 6, icon: "line-md:cloud-alt-upload-loop" },
   { typeSlug: "translations_languages", menu_options: ["list", "new"], menu_order: 7, icon: "line-md:chat-round-dots" },
+  { typeSlug: "themes", menu_options: ["list", "new"], menu_order: 8, icon: "line-md:paint-drop-twotone" },
 ];
 
 /** Post types padrão (slug, name, meta_schema). Re-exportado de default-post-types para centralizar dados de seed. */

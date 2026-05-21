@@ -1,0 +1,39 @@
+---
+import SectionList from "../components/section-list.astro";
+import SectionListItem from "../components/section-list-item.astro";
+import SectionImage from "../components/section-image.astro";
+const { title, data, admin } = Astro.props;
+---
+
+<section class="section--wrapper2">
+  <article>
+    <h3 contenteditable={admin ? "true" : "false"} id="tit1">
+      <div x-data="{ title: '' }">
+        <span x-ref="title">{title}</span>
+        <span x-text="$refs.title.innerHTML"></span>
+        <input type="text" placeholder="" style="color: #fff" />
+      </div>
+    </h3>
+    <SectionList admin={admin}>
+      {
+        data.map(() => (
+          <SectionListItem admin={admin}>
+            <SectionImage admin={admin} />
+          </SectionListItem>
+        ))
+      }
+    </SectionList>
+    <ul>
+      {
+        data.map((item: any) => (
+          <li class={item.class}>
+            <span contenteditable={admin ? "true" : "false"}>{item.label}</span>
+          </li>
+        ))
+      }
+    </ul>
+  </article>
+  <div x-data="$store.notifications">
+    <div x-text="items"></div>
+  </div>
+</section>

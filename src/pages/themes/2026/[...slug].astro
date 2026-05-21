@@ -1,0 +1,53 @@
+---
+import Theme2026Layout from "../../../layouts/Theme2026Layout.astro";
+
+export const prerender = false;
+
+const slugParam = Astro.params["slug"];
+const slug = (Array.isArray(slugParam) ? slugParam[0] : slugParam ?? "") as string;
+
+if (!slug) {
+  return Astro.redirect("/themes/2026");
+}
+
+const apiUrl = new URL(`/api/content/${encodeURIComponent(slug)}`, Astro.url.origin);
+apiUrl.searchParams.set("status", "published");
+
+let post: Record<string, unknown> | null = null;
+try {
+  const res = await fetch(apiUrl.toString());
+  if (res.ok) {
+    post = await res.json();
+  }
+} catch {
+  post = null;
+}
+
+if (!post || typeof post !== "object") {
+  return Astro.redirect("/themes/2026/posts");
+}
+
+function formatDate(ts: unknown): string {
+  if (ts == null) return "—";
+  const n = typeof ts === "number" ? ts : parseInt(String(ts), 10);
+  if (Number.isNaN(n)) return "—";
+  return new Date(n).toLocaleDateString("pt-BR", { dateStyle: "long" });
+}
+
+const title = String(post["title"] ?? "Post");
+const body = post["body"] != null ? String(post["body"]) : "";
+const publishedAt = post["published_at"] ?? post["created_at"];
+---
+
+<Theme2026Layout title={`${title} — Site 2026`} basePath="/themes/2026">
+  <article class="max-w-3xl mx-auto">
+    <a href="/themes/2026/posts" class="link link-hover text-sm text-base-content/70 mb-4 inline-block">← Voltar aos posts</a>
+    <h1 class="text-4xl font-bold text-base-content mb-2">{title}</h1>
+    <p class="text-sm text-base-content/50 mb-6">{formatDate(publishedAt)}</p>
+    {body ? (
+      <div class="prose prose-base max-w-none" set:html={body} />
+    ) : (
+      <p class="text-base-content/70">Sem conteúdo.</p>
+    )}
+  </article>
+</Theme2026Layout>

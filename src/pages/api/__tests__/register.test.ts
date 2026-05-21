@@ -2,6 +2,7 @@
  * Testes do endpoint /api/register (cadastro via better-auth email-password).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { env } from "cloudflare:workers";
 
 vi.mock("../../../lib/auth.ts", () => ({
   auth: {
@@ -15,16 +16,14 @@ vi.mock("../../../lib/api-auth.ts", () => ({
 
 const { auth } = await import("../../../lib/auth.ts");
 
-/** locals com rate limit alto para não bloquear testes em sequência */
-const testLocals = {
-  runtime: {
-    env: { RATE_LIMIT_REGISTER_MAX: "100", RATE_LIMIT_REGISTER_WINDOW_MIN: "60" } as Record<string, string>,
-  },
-};
-
 describe("register API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    for (const k of Object.keys(env)) {
+      delete env[k];
+    }
+    env.RATE_LIMIT_REGISTER_MAX = "100";
+    env.RATE_LIMIT_REGISTER_WINDOW_MIN = "60";
   });
 
   it("redirects with missing_fields when name is empty", async () => {
@@ -47,7 +46,6 @@ describe("register API", () => {
     await POST({
       request,
       redirect,
-      locals: testLocals,
     } as Parameters<typeof POST>[0]);
 
     expect(redirect).toHaveBeenCalledWith(
@@ -76,7 +74,6 @@ describe("register API", () => {
     await POST({
       request,
       redirect,
-      locals: testLocals,
     } as Parameters<typeof POST>[0]);
 
     expect(redirect).toHaveBeenCalledWith(
@@ -113,7 +110,6 @@ describe("register API", () => {
     await POST({
       request,
       redirect,
-      locals: testLocals,
     } as Parameters<typeof POST>[0]);
 
     expect(mockHandler).toHaveBeenCalledTimes(1);
@@ -158,7 +154,6 @@ describe("register API", () => {
     await POST({
       request,
       redirect,
-      locals: testLocals,
     } as Parameters<typeof POST>[0]);
 
     expect(mockHandler).toHaveBeenCalledTimes(1);
@@ -202,7 +197,6 @@ describe("register API", () => {
     await POST({
       request,
       redirect,
-      locals: testLocals,
     } as Parameters<typeof POST>[0]);
 
     expect(mockHandler).toHaveBeenCalledTimes(1);

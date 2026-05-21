@@ -1,0 +1,30 @@
+---
+import { jobLink } from "../helpers/helpers";
+import Layout from "../layouts/default.astro";
+import WorkItem from "../components/workitem.astro";
+import { getLanguageFromUrl } from "../i18n/utils";
+const { jobs, page } = Astro.props;
+const lang = getLanguageFromUrl(Astro.url);
+---
+
+<style>
+  #jobs {
+    display: flex;
+    flex-wrap: wrap;
+    background: #000;
+    width: 100%;
+  }
+</style>
+<Layout page={page}>
+  <section id="jobs">
+    {
+      jobs.map((job: any) => (
+        <WorkItem
+          label={job.data.title}
+          url={`${Astro.site}${lang == "br" ? "" : "/" + lang}/portfolio/${jobLink(job.data.title, jobs)}`}
+          imagepr={job.data.image}
+        />
+      ))
+    }
+  </section>
+</Layout>

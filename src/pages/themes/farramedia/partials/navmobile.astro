@@ -1,0 +1,76 @@
+---
+import Link from "../components/navItem.astro";
+import Submenu from "../components/submenu.astro";
+import { getLanguageFromUrl, useTranslations } from "../i18n/utils";
+const lang = getLanguageFromUrl(Astro.url);
+const t = useTranslations(lang);
+const url = Astro.url;
+const isActive = (menu: string) => {
+  if (url.pathname === menu) {
+    return true;
+  }
+  return false;
+};
+---
+
+<script type="module" is:inline>
+  // document.querySelectorAll(".edgtf-mobile-nav .menu-item a").forEach((item) =>
+  //   item.addEventListener("click", (e) => {
+  //     if (e.target.innerHTML.includes("Trabalhos")) {
+  //       e.preventDefault();
+  //       e.target.nextElementSibling.classList.toggle("hide");
+  //     }
+  //   })
+  // );
+  document.querySelectorAll(".has-submenu").forEach((el) => {
+    el.children[0].addEventListener("click", (e) => {
+      e.preventDefault();
+      el.children[1].classList.toggle("hide");
+    });
+  });
+</script>
+
+<nav class="edgtf-mobile-nav">
+  <div class="edgtf-grid">
+    <ul id="menu-farra-mob-pt" class="">
+      <Link label={t("navHome")} url={t("pagesHome")} active={isActive("/")} />
+      <Link
+        label={t("navDiretor")}
+        url={t("pagesDiretor")}
+        active={isActive("/")}
+        classList="has-submenu"
+      >
+        <Submenu id="submenu" posttype="diretores" />
+      </Link>
+      <Link
+        label={t("navJob")}
+        url={t("pagesJob")}
+        active={isActive("/trabalhos")}
+        classList="has-submenu"
+      >
+        <Submenu id="submenu" posttype="jobs" />
+      </Link>
+      <Link
+        label={t("navAbout")}
+        url={t("pagesAbout")}
+        active={isActive("/quem-somos")}
+      />
+      <Link
+        label={t("navWhatwedo")}
+        url={t("pagesWhatwedo")}
+        active={isActive("/o-que-fazemos")}
+      />
+      <Link
+        label={t("navContact")}
+        url={t("pagesContact")}
+        active={isActive("/contato")}
+      />
+      <Link
+        url="/en"
+        label="English version"
+        flag="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAALCAMAAABBPP0LAAAAmVBMVEViZsViZMJiYrf9gnL8eWrlYkjgYkjZYkj8/PujwPybvPz4+PetraBEgfo+fvo3efkydfkqcvj8Y2T8UlL8Q0P8MzP9k4Hz8/Lu7u4DdPj9/VrKysI9fPoDc/EAZ7z7IiLHYkjp6ekCcOTk5OIASbfY/v21takAJrT5Dg6sYkjc3Nn94t2RkYD+y8KeYkjs/v7l5fz0dF22YkjWvcOLAAAAgElEQVR4AR2KNULFQBgGZ5J13KGGKvc/Cw1uPe62eb9+Jr1EUBFHSgxxjP2Eca6AfUSfVlUfBvm1Ui1bqafctqMndNkXpb01h5TLx4b6TIXgwOCHfjv+/Pz+5vPRw7txGWT2h6yO0/GaYltIp5PT1dEpLNPL/SdWjYjAAZtvRPgHJX4Xio+DSrkAAAAASUVORK5CYII="
+      />
+      <Link url="/" label="Versão em Portguês" flag="/brasil.svg" />
+    </ul>
+  </div>
+</nav>

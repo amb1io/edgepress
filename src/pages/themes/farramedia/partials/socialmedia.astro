@@ -1,0 +1,69 @@
+---
+import linkedin from "../images/icons/linkedin.svg?raw";
+import instagram from "../images/icons/instagram-branco.svg?raw";
+import tiktok from "../images/icons/tiktok-branco.svg?raw";
+import vimeo from "../images/icons/vimeo-branco.svg?raw";
+import { createEdgepressContent } from "../utils/api";
+
+const content = createEdgepressContent(Astro.locals, {
+  baseUrl: Astro.url.origin,
+});
+const socialMediaIcons: Record<string, string> = {
+  instagram,
+  tiktok,
+  vimeo,
+  linkedin,
+};
+const { items } = await content.getList("settings");
+const socialMedia = items
+  .filter((item: Record<string, unknown>) => {
+    const name = item.name;
+    return typeof name === "string" && name.includes("social_media");
+  })
+  .map((item: Record<string, unknown>) => {
+    const name = String(item.name).replace("social_media_", "");
+    return { ...item, name, value: item.value };
+  })
+  .filter((item: Record<string, unknown>) => {
+    const key = item.name;
+    return typeof key === "string" && key in socialMediaIcons;
+  });
+---
+
+<style lang="scss" is:global>
+  .wp-social-link {
+    color: #000 !important;
+  }
+  .trabalhos,
+  .jobs {
+    .wp-social-link {
+      color: #fff !important;
+    }
+  }
+</style>
+
+<div id="block-3" class="widget widget_block edgtf-header-widget-menu-area">
+  <ul
+    class="wp-block-social-links aligncenter has-small-icon-size has-icon-color is-style-logos-only is-content-justification-left is-layout-flex wp-container-1 wp-block-social-links-is-layout-flex"
+  >
+    {
+      socialMedia.map((item: any) => (
+        <li
+          class={`wp-social-link wp-social-link-${item.name} has-black-color wp-block-social-link`}
+        >
+          <a
+            rel=" noopener nofollow"
+            target="_blank"
+            href={item.value}
+            class="wp-block-social-link-anchor"
+          >
+            <Fragment set:html={socialMediaIcons[item.name]} />
+            <span class="wp-block-social-link-label screen-reader-text">
+              {item.name}
+            </span>
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</div>

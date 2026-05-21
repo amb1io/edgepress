@@ -1,0 +1,79 @@
+---
+import Client from "../components/clientlogo.astro";
+import { getLanguageFromUrl, useTranslations } from "../i18n/utils";
+import { createEdgepressContent } from "../utils/api";
+
+const content = createEdgepressContent(Astro.locals, {
+  baseUrl: Astro.url.origin,
+});
+const lang = getLanguageFromUrl(Astro.url);
+const t = useTranslations(lang);
+
+let pageClient = 1;
+let totalPages = 0;
+const clientes: { title: string; image: string; order: number }[] = [];
+do {
+  const { items, totalPages: tp } = await content.getList("posts", {
+    query: {
+      filter_post_type: "cliente",
+      page: pageClient,
+    },
+  });
+  totalPages = tp;
+  for (const item of items) {
+    const row = item as Record<string, unknown>;
+    const metaValues = (row.meta_values ?? {}) as Record<string, unknown>;
+    const postThumbnailId = Number(metaValues.post_thumbnail_id);
+    const order = Number(metaValues.order ?? 0);
+    if (!Number.isFinite(postThumbnailId) || postThumbnailId <= 0) {
+      continue;
+    }
+    clientes.push({
+      title: String(row.title),
+      image: content.getMediaUrl(postThumbnailId),
+      order,
+    });
+  }
+  pageClient++;
+} while (pageClient <= totalPages && totalPages > 0);
+clientes.sort((a, b) => Number(b.order ?? 0) - Number(a.order ?? 0));
+---
+
+<style>
+  @media screen and (min-width: 0) {
+    .edgtf-st-title {
+      margin-bottom: 3rem;
+      color: #fff;
+      text-align: center;
+    }
+    .clients--wrapper {
+      margin: 5rem 2rem;
+    }
+    .clients--list {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: stretch;
+      justify-content: space-around;
+      max-width: 1300px;
+    }
+  }
+  @media screen and (min-width: 1024px) {
+    .clients--wrapper {
+      margin-bottom: 6rem;
+      margin-top: 0;
+    }
+    .clients--list {
+      margin-left: auto;
+      margin-right: auto;
+    }
+  }
+</style>
+
+<section class="clients--wrapper">
+  <h2 class="edgtf-st-title">{t("clientTitle")}</h2>
+  <div class="clients--list">
+    {
+      clientes.map((c) => <Client name={c.title} image={c.image} />)
+    }
+  </div>
+</section>

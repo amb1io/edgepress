@@ -258,7 +258,7 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
               headers: { Accept: "application/json" },
             });
             if (res.ok) {
-              window.location.href = `/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`;
+              window.location.href = `/admin/${locale}/list?type=${postTypeSlug}&limit=10&page=1`;
             } else {
               form.submit();
             }
@@ -430,7 +430,7 @@ const isEditMode = action === "edit" && idParam != null && /^\d+$/.test(idParam)
         </div>
         <AdminFormActions
           submitLabel={t(currentLocale, "admin.content.update")}
-          cancelHref={`/${locale}/admin/list?type=${postTypeSlug}&limit=10&page=1`}
+          cancelHref={`/admin/${locale}/list?type=${postTypeSlug}&limit=10&page=1`}
           cancelLabel={t(currentLocale, "admin.content.cancel")}
         >
           <button

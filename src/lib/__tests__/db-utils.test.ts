@@ -1,7 +1,8 @@
 /**
  * Testes para db-utils (getSafeTableName, escapeIdentifier, VALID_TABLE_IDENTIFIER, getContentApiRuntime).
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
+import { env } from "cloudflare:workers";
 import {
   getSafeTableName,
   escapeIdentifier,
@@ -9,7 +10,17 @@ import {
   getContentApiRuntime,
 } from "../db-utils.ts";
 
+function clearTestEnv() {
+  for (const k of Object.keys(env)) {
+    delete env[k];
+  }
+}
+
 describe("db-utils", () => {
+  beforeEach(() => {
+    clearTestEnv();
+  });
+
   describe("VALID_TABLE_IDENTIFIER", () => {
     it("aceita identificadores SQL válidos", () => {
       expect(VALID_TABLE_IDENTIFIER.test("posts")).toBe(true);
@@ -50,9 +61,9 @@ describe("db-utils", () => {
 
   describe("getContentApiRuntime", () => {
     it("retorna isAuthenticated true e kv null quando user presente", () => {
+      env.edgepress_cache = {};
       const locals = {
         user: { id: "1", email: "a@b.com" },
-        runtime: { env: { edgepress_cache: {} } },
       } as App.Locals;
       const r = getContentApiRuntime(locals);
       expect(r.isAuthenticated).toBe(true);
@@ -61,10 +72,10 @@ describe("db-utils", () => {
 
     it("retorna isAuthenticated false e kv quando user ausente e KV presente", () => {
       const mockKv = { get: async () => null, put: async () => {} };
+      env.edgepress_cache = mockKv;
       const locals = {
         user: null,
         session: null,
-        runtime: { env: { edgepress_cache: mockKv } },
       } as App.Locals;
       const r = getContentApiRuntime(locals);
       expect(r.isAuthenticated).toBe(false);

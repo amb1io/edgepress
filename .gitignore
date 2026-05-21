@@ -5,6 +5,10 @@ tasks.TODO
 node_modules/
 /pnpm-lock.yaml
 
+# Copied theme static files (see scripts/sync-theme-public.mjs)
+/public/**
+!/public/.assetsignore
+
 # Build output
 /dist
 /dist-ssr

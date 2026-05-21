@@ -1,0 +1,106 @@
+---
+import Theme2026Layout from "../../../../../layouts/Theme2026Layout.astro";
+import { db } from "../../../../../db/index.ts";
+import { introspectRecordWithRelations } from "../../../../../lib/services/content-introspection.ts";
+
+const localeParam = Astro.params["locale"];
+const tableParam = Astro.params["table"];
+const idParam = Astro.params["id"];
+
+const locale = typeof localeParam === "string" && localeParam.length > 0 ? localeParam : "pt-br";
+const table = typeof tableParam === "string" && tableParam.length > 0 ? tableParam : "";
+const idNum = idParam && /^\d+$/.test(idParam) ? parseInt(idParam, 10) : NaN;
+
+if (!table || !Number.isFinite(idNum) || idNum < 1) {
+  return Astro.redirect(`/themes/2026/${locale}`);
+}
+
+const node = await introspectRecordWithRelations({
+  db,
+  table,
+  id: idNum,
+  maxDepth: 2,
+});
+
+if (!node) {
+  return Astro.redirect(`/themes/2026/${locale}/${table}`);
+}
+
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+---
+
+<Theme2026Layout title={`Registro ${table}#${node.id} — ${locale.toUpperCase()}`} basePath={`/themes/2026/${locale}`}>
+  <article class="max-w-3xl mx-auto space-y-8">
+    <header>
+      <a
+        href={`/themes/2026/${locale}/${table}`}
+        class="link link-hover text-sm text-base-content/70 mb-2 inline-block"
+      >
+        ← Voltar para {table}
+      </a>
+      <h1 class="text-3xl font-bold text-base-content break-all">
+        {table} #{node.id}
+      </h1>
+    </header>
+
+    <section class="card bg-base-100 shadow border border-base-300">
+      <div class="card-body">
+        <h2 class="card-title text-lg mb-2">Campos</h2>
+        <dl class="divide-y divide-base-200">
+          {Object.entries(node.record).map(([key, value]) => (
+            <div class="py-2 grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-4 items-start">
+              <dt class="text-sm font-medium text-base-content/80 break-all">{key}</dt>
+              <dd class="text-sm text-base-content/80 whitespace-pre-wrap wrap-break-word">
+                {formatValue(value)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
+
+    {Object.entries(node.relations).length > 0 && (
+      <section class="space-y-4">
+        <h2 class="text-2xl font-semibold text-base-content">Relacionamentos</h2>
+        {Object.entries(node.relations).map(([relName, list]) => (
+          <details class="collapse bg-base-100 border border-base-300">
+            <summary class="collapse-title text-base font-medium cursor-pointer">
+              {relName} ({list.length})
+            </summary>
+            <div class="collapse-content space-y-3">
+              {list.map((child) => (
+                <div class="border border-base-200 rounded-lg p-3 space-y-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-sm font-semibold text-base-content/90 break-all">
+                      {child.table} #{child.id}
+                    </span>
+                    <a
+                      href={`/themes/2026/${locale}/${child.table}/${child.id}`}
+                      class="btn btn-xs btn-ghost"
+                    >
+                      Abrir
+                    </a>
+                  </div>
+                  <div class="text-xs text-base-content/70 whitespace-pre-wrap wrap-break-word max-h-40 overflow-auto">
+                    {formatValue(child.record)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        ))}
+      </section>
+    )}
+  </article>
+</Theme2026Layout>
+

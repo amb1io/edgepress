@@ -13,6 +13,7 @@ import type { APIRoute } from "astro";
 import { db } from "../../../db/index.ts";
 import { getMediaById } from "../../../lib/services/media-service.ts";
 import { parseMetaValues } from "../../../lib/utils/meta-parser.ts";
+import { env as cfEnv } from "cloudflare:workers";
 
 export const prerender = false;
 
@@ -104,7 +105,7 @@ function pathToR2Key(path: string): string {
 /** Content types para os quais aplicamos otimização via Cloudflare Image Resizing (apenas imagens). */
 const IMAGE_CONTENT_TYPES = /^image\/(jpeg|jpg|png|gif|webp|avif|bmp|ico|svg\+xml)/i;
 
-export const GET: APIRoute = async ({ params, locals, request }) => {
+export const GET: APIRoute = async ({ params, request }) => {
   const pathArray = params["path"];
   if (!pathArray || (Array.isArray(pathArray) && pathArray.length === 0)) {
     return new Response("Not Found", { status: 404 });
@@ -117,8 +118,8 @@ export const GET: APIRoute = async ({ params, locals, request }) => {
 
   const path = Array.isArray(pathArray) ? pathArray.join("/") : pathArray;
 
-  const env = (locals as { runtime?: { env?: MediaEnv } }).runtime?.env;
-  const bucket = env?.MEDIA_BUCKET;
+  const env = cfEnv as typeof cfEnv & MediaEnv;
+  const bucket = env.MEDIA_BUCKET;
 
   if (!bucket) {
     return new Response("R2 bucket not configured", { status: 503 });

@@ -19,6 +19,14 @@ export type MenuItem = {
 
 type TFunction = (locale: string, key: string) => string;
 
+function normalizeMenuIcon(icon: string | undefined): string {
+  const raw = (icon ?? "").trim();
+  if (!raw) return "line-md:document";
+  // Backward compatibility: old seed used a non-existent icon in line-md.
+  if (raw === "line-md:paint-twotone") return "line-md:paint-drop-twotone";
+  return raw;
+}
+
 /**
  * Parsea opção no formato tabela_coluna_valor (ex: taxonomies_type_category).
  * Retorna { table, column, value } ou null se não bater o padrão.
@@ -140,7 +148,7 @@ export async function getMenuItems(db: Database): Promise<MenuItem[]> {
         };
         menuOptions = Array.isArray(meta.menu_options) ? meta.menu_options : [];
         menuOrder = typeof meta.menu_order === "number" ? meta.menu_order : 0;
-        icon = typeof meta.icon === "string" && meta.icon ? meta.icon : icon;
+        icon = normalizeMenuIcon(typeof meta.icon === "string" ? meta.icon : icon);
       } catch {
         // ignore invalid JSON
       }

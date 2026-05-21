@@ -39,10 +39,7 @@ const currentLocale = locale as Locale;
       >
         {
           locales.map((loc) => {
-            const pathSegments = Astro.url.pathname.split("/").filter(Boolean);
-            const pathAfterLocale = pathSegments.slice(1).join("/") || "admin";
-            const localeUrl =
-              getRelativeLocaleUrl(loc, pathAfterLocale) + Astro.url.search;
+            const localeUrl = `/admin/${loc}${Astro.url.search}`;
             return (
               <li>
                 <a href={localeUrl}>
@@ -94,7 +91,10 @@ const currentLocale = locale as Locale;
               <span>{user.name || user.email}</span>
             </li>
             <li>
-              <a id="logout-link" href={`/api/logout?redirect=${encodeURIComponent(`/${currentLocale}/login`)}`}>
+              <a
+                id="logout-link"
+                href={`/api/logout?redirect=${encodeURIComponent(`/login`)}`}
+              >
                 <Icon name="line-md:logout" size={18} aria-hidden="true" />
                 {t(currentLocale, "admin.signOut")}
               </a>
