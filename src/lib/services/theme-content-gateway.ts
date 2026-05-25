@@ -452,10 +452,10 @@ export class ThemeContentGateway {
     const safeSlug = slug.trim();
     if (!safeSlug) return [];
 
-    const byLegacySlug = (await this.findPostsByLegacySlug(safeSlug, 5)).filter(isJobRecord);
-    if (byLegacySlug.length > 0) return byLegacySlug;
+    const byCategory = await this.getJobsByCategorySlug(safeSlug, lang);
+    if (byCategory.length > 0) return byCategory;
 
-    return this.getJobsByCategorySlug(safeSlug, lang);
+    return (await this.findPostsByLegacySlug(safeSlug, 5)).filter(isJobRecord);
   }
 
   async getCategoriesToPosts(params?: QueryInput): Promise<Array<{ postId: number; categoryId: number }>> {

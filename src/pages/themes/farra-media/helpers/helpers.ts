@@ -1,33 +1,5 @@
 import { themeContentGateway } from "../../../../lib/services/theme-content-gateway.ts";
 
-const API_BASE = "/api/theme-content";
-
-async function fetchThemeContent<T>(
-  resource: string,
-  params?: Record<string, string>,
-): Promise<T> {
-  const origin =
-    typeof globalThis !== "undefined" && "location" in globalThis
-      ? globalThis.location.origin
-      : "http://127.0.0.1:8787";
-
-  const url = new URL(`${API_BASE}/${resource}`, origin);
-  if (params) {
-    for (const [key, value] of Object.entries(params)) {
-      if (value != null && value !== "") url.searchParams.set(key, value);
-    }
-  }
-
-  try {
-    const response = await fetch(url.toString());
-    if (!response.ok) return [] as T;
-    const payload = await response.json();
-    return (payload?.data ?? payload) as T;
-  } catch {
-    return [] as T;
-  }
-}
-
 export const slugify = (value: string, separator: string = "-"): string => {
   return value
     .toString()
@@ -372,6 +344,3 @@ export const FilterPost = async (post: any, lang: any, postType: any) => {
   }
   return null;
 };
-
-/** Compatível com chamadas HTTP legadas (fallback). */
-export const fetchLegacyThemeContent = fetchThemeContent;
