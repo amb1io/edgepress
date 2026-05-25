@@ -67,7 +67,7 @@ function parseSocialMedia(value: unknown): string[] | undefined {
         socials={parseSocialMedia(member.socialMedia)}
         imagepr={member.image}
         name={member.title}
-        job={memberJobText(member)}
+        job={memberJobText(member, { founder: true })}
       />
     ))
   }

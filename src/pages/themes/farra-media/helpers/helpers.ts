@@ -246,12 +246,63 @@ export const directorSlug = (post: { slug?: unknown; legacy_id?: unknown }): str
   return raw.replace(/-(pt-br|en-us)$/i, "") || raw;
 };
 
-export function memberJobText(member: { cargo?: unknown; body?: unknown }): string {
-  if (typeof member.cargo === "string" && member.cargo.trim()) {
-    return member.cargo.trim();
+/** Conteúdo inline seguro para dentro de `<p class="edgtf-team-position">`. */
+export function toTeamPositionHtml(value: unknown): string {
+  const text = value == null ? "" : String(value).trim();
+  if (!text) return "";
+
+  const paragraphs = [...text.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)]
+    .map((match) => match[1]?.trim() ?? "")
+    .filter(Boolean);
+
+  if (paragraphs.length > 0) {
+    return paragraphs.join("<br />");
   }
-  if (typeof member.body === "string") return member.body;
-  return member.body != null ? String(member.body) : "";
+
+  return text.replace(/<\/?p[^>]*>/gi, "").trim();
+}
+
+function firstParagraphText(value: unknown): string {
+  const text = value == null ? "" : String(value).trim();
+  if (!text) return "";
+
+  const match = text.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+  if (match?.[1]?.trim()) return match[1].trim();
+
+  return toTeamPositionHtml(text);
+}
+
+export function memberJobText(
+  member: { cargo?: unknown; excerpt?: unknown; body?: unknown },
+  options?: { founder?: boolean },
+): string {
+  if (typeof member.cargo === "string" && member.cargo.trim()) {
+    return toTeamPositionHtml(member.cargo);
+  }
+
+  if (options?.founder) {
+    const excerpt = typeof member.excerpt === "string" ? member.excerpt.trim() : "";
+    if (excerpt && excerpt.length <= 120) {
+      return toTeamPositionHtml(excerpt);
+    }
+
+    const firstParagraph = firstParagraphText(member.body);
+    if (firstParagraph && firstParagraph.length <= 80) {
+      return firstParagraph;
+    }
+
+    return "";
+  }
+
+  if (typeof member.body === "string" && member.body.trim()) {
+    return toTeamPositionHtml(member.body);
+  }
+
+  if (typeof member.excerpt === "string" && member.excerpt.trim()) {
+    return toTeamPositionHtml(member.excerpt);
+  }
+
+  return member.body != null ? toTeamPositionHtml(member.body) : "";
 }
 
 /** Sócios (equipe) com meta `dono = sim`. */

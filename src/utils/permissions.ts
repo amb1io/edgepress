@@ -8,6 +8,7 @@ import { roleCapability } from "../db/schema.ts";
 import type { Database } from "./types/database.ts";
 import type { MenuItem } from "./menu.ts";
 import { USER_ROLE_IDS, type UserRoleId } from "../db/schema/auth.ts";
+import { ROLE_CAPABILITY_ROWS } from "../db/seed-data.ts";
 
 export const CAPABILITY = {
   DASHBOARD: "admin.dashboard",
@@ -73,9 +74,32 @@ export function canSync(capabilities: Set<string>, capability: string): boolean 
   return capabilities.has("*") || capabilities.has(capability);
 }
 
+const ALL_CAPABILITIES = new Set([
+  "*",
+  CAPABILITY.DASHBOARD,
+  CAPABILITY.CONTENT,
+  CAPABILITY.LIST,
+  CAPABILITY.SETTINGS,
+  CAPABILITY.MEDIA,
+  CAPABILITY.DELETE,
+  CAPABILITY.MENU_FULL,
+]);
+
+/** Fallback quando D1 ainda não tem seed em edp_role_capability. */
+function defaultCapabilitiesForRole(roleId: number): Set<string> {
+  const caps = ROLE_CAPABILITY_ROWS.filter((row) => row.roleId === roleId).map(
+    (row) => row.capability,
+  );
+  const set = new Set(caps);
+  if (set.has("*")) {
+    return new Set(ALL_CAPABILITIES);
+  }
+  return set;
+}
+
 /**
  * Retorna todas as capacidades do perfil a partir da tabela role_capability.
- * Em caso de falha (ex.: D1 sem seed, tabela vazia), aplica fallback por perfil.
+ * Se a tabela estiver vazia ou indisponível, usa ROLE_CAPABILITY_ROWS ou fallback por perfil.
  */
 export async function getCapabilities(
   db: Database,
@@ -92,13 +116,15 @@ export async function getCapabilities(
     }
 
     const set = new Set(rows.map((r) => r.capability));
+    if (set.size === 0) {
+      return defaultCapabilitiesForRole(roleId);
+    }
     if (set.has("*")) {
-      return fallbackCapabilitiesByRole(0);
+      return new Set(ALL_CAPABILITIES);
     }
     return set;
   } catch {
-    // Tabela role_capability inexistente ou falha no D1.
-    return fallbackCapabilitiesByRole(roleId);
+    return defaultCapabilitiesForRole(roleId);
   }
 }
 

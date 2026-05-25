@@ -68,9 +68,53 @@ function buildTranslationsSeed(): { namespace: string; key: string; en_US: strin
 const translationsSeed = buildTranslationsSeed();
 const T = prefixedTable;
 
+/** Garante tabelas usadas pelo seed quando migrações ainda não rodaram no remoto. */
+const SCHEMA_PREAMBLE = `-- Schema mínimo (idempotente) antes dos INSERTs
+CREATE TABLE IF NOT EXISTS ${EDP_TABLES.locales} (
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  language TEXT NOT NULL,
+  hello_world TEXT NOT NULL,
+  locale_code TEXT NOT NULL UNIQUE,
+  country TEXT NOT NULL,
+  timezone TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS locales_locale_code_idx ON ${EDP_TABLES.locales} (locale_code);
+CREATE INDEX IF NOT EXISTS locales_language_idx ON ${EDP_TABLES.locales} (language);
+
+CREATE TABLE IF NOT EXISTS ${EDP_TABLES.translations} (
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  namespace TEXT NOT NULL,
+  key TEXT NOT NULL,
+  created_at INTEGER,
+  updated_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS translations_namespace_idx ON ${EDP_TABLES.translations} (namespace);
+CREATE INDEX IF NOT EXISTS translations_key_idx ON ${EDP_TABLES.translations} (key);
+CREATE INDEX IF NOT EXISTS translations_namespace_key_idx ON ${EDP_TABLES.translations} (namespace, key);
+
+CREATE TABLE IF NOT EXISTS ${EDP_TABLES.translations_languages} (
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  id_translations INTEGER NOT NULL REFERENCES ${EDP_TABLES.translations}(id) ON DELETE CASCADE,
+  id_locale_code INTEGER NOT NULL REFERENCES ${EDP_TABLES.locales}(id) ON DELETE CASCADE,
+  value TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS translations_languages_id_translations_idx ON ${EDP_TABLES.translations_languages} (id_translations);
+CREATE INDEX IF NOT EXISTS translations_languages_id_locale_code_idx ON ${EDP_TABLES.translations_languages} (id_locale_code);
+CREATE INDEX IF NOT EXISTS translations_languages_translations_locale_idx ON ${EDP_TABLES.translations_languages} (id_translations, id_locale_code);
+CREATE UNIQUE INDEX IF NOT EXISTS translations_languages_unique_translation_locale ON ${EDP_TABLES.translations_languages} (id_translations, id_locale_code);
+
+CREATE TABLE IF NOT EXISTS ${EDP_TABLES.role_capability} (
+  role_id INTEGER NOT NULL,
+  capability TEXT NOT NULL,
+  PRIMARY KEY (role_id, capability)
+);
+`;
+
 const lines: string[] = [
   "-- Seed remoto (idempotente). Gerado por scripts/generate-seed-sql.ts",
   "-- Fonte: seed-data + default-post-types + i18n/languages/*.json (mesmos dados que runSeed)",
+  "",
+  SCHEMA_PREAMBLE,
   "",
   "-- Locales (idiomas/países + en_US, es_ES, pt_BR para i18n)",
   `INSERT OR IGNORE INTO ${T("locales")} (language, hello_world, locale_code, country, timezone) VALUES`,

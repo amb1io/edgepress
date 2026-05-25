@@ -61,8 +61,12 @@
     "db:seed": "tsx scripts/seed-local.ts",
     "db:dedupe-locales": "tsx scripts/deduplicate-locales.ts",
     "db:seed:generate-sql": "tsx scripts/generate-seed-sql.ts",
-    "db:seed:remote": "npm run db:seed:generate-sql && wrangler d1 execute edgepress --remote --file=./drizzle/seed/seed-remote.sql -c wrangler.toml",
-    "db:seed:remote:dev": "npm run db:seed:generate-sql && wrangler d1 execute edgepress-1 --remote --file=./drizzle/seed/seed-remote.sql -c wrangler.toml"
+    "db:import:csv:generate-sql": "tsx scripts/generate-csv-import-sql.ts",
+    "db:import:csv:local": "tsx scripts/import-sql-local.ts drizzle/seed/import-farramedia-edgepress.sql",
+    "db:import:csv:remote": "npm run db:import:csv:generate-sql && wrangler d1 execute farramedia --remote --file=./drizzle/seed/import-farramedia-edgepress.sql -c wrangler.toml",
+    "db:import:csv:remote:dev": "npm run db:import:csv:generate-sql && wrangler d1 execute farramedia-1 --remote --file=./drizzle/seed/import-farramedia-edgepress.sql -c wrangler.toml",
+    "db:seed:remote": "npm run db:seed:generate-sql && wrangler d1 execute farramedia --remote --file=./drizzle/seed/seed-remote.sql -c wrangler.toml",
+    "db:seed:remote:dev": "npm run db:seed:generate-sql && wrangler d1 execute farramedia-1 --remote --file=./drizzle/seed/seed-remote.sql -c wrangler.toml"
   },
   "devDependencies": {
     "@astrojs/compiler-rs": "^0.1.6",

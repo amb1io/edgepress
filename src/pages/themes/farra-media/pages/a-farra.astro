@@ -135,7 +135,7 @@ if (!page) {
                   socials={parseSocialMedia(member.socialMedia)}
                   imagepr={member.image}
                   name={member.title}
-                  job={memberJobText(member)}
+                  job={memberJobText(member, { founder: true })}
                 />
               ))}
             </section>

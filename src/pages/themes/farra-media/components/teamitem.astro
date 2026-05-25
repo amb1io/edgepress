@@ -9,8 +9,10 @@ interface Props {
 }
 import { Image } from "astro:assets";
 import Logos from "./icons.astro";
+import { toTeamPositionHtml } from "../helpers/helpers";
 let { name, job, image, founder, socials, imagepr } = Astro.props;
 let founderCss = founder ? "founder-item" : "";
+const positionHtml = toTeamPositionHtml(job);
 ---
 
 <style>
@@ -88,7 +90,7 @@ let founderCss = founder ? "founder-item" : "";
                   <h5 class="edgtf-team-name" style="color: #F0F0F0">
                     {name}
                   </h5>
-                  <p class="edgtf-team-position" set:html={job} />
+                  <p class="edgtf-team-position" set:html={positionHtml} />
                   <div class="edgtf-team-social-holder">
                     <span class="edgtf-team-icon">
                       <span class="edgtf-icon-shortcode edgtf-normal"> </span>
@@ -107,7 +109,7 @@ let founderCss = founder ? "founder-item" : "";
           <h5 class="edgtf-team-name" style="color: #F0F0F0">
             {name}
           </h5>
-          <p class="edgtf-team-position" set:html={job} />
+          <p class="edgtf-team-position" set:html={positionHtml} />
         </div>
       ) : (
         ""
