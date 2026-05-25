@@ -1,6 +1,5 @@
 import { sql } from "drizzle-orm";
 import type { Database } from "./types/database.ts";
-import { stripTablePrefix } from "../db/table-prefix.ts";
 import {
   TABLE_PREFIX,
   EDP_LOGICAL_TABLES,

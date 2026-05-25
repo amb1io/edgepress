@@ -60,12 +60,8 @@ export function resolvePhysicalTableName(param: string): string | null {
   return null;
 }
 
-/** @deprecated Use `tableName`. */
-export function prefixedTable(logicalName: string): string {
-  return tableName(logicalName);
-}
+/** Alias legado de `tableName`. */
+export const prefixedTable = tableName;
 
-/** @deprecated Use `logicalTableName`. */
-export function stripTablePrefix(physicalName: string): string {
-  return logicalTableName(physicalName);
-}
+/** Alias legado de `logicalTableName`. */
+export const stripTablePrefix = logicalTableName;
