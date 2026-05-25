@@ -39,6 +39,7 @@ export const translationsLanguages = sqliteTable(
 
 /**
  * Relações da tabela translations_languages
+ * Nota: localesRelations e translationsRelations ficam aqui para evitar imports circulares
  */
 export const translationsLanguagesRelations = relations(
   translationsLanguages,
@@ -53,3 +54,11 @@ export const translationsLanguagesRelations = relations(
     }),
   })
 );
+
+export const localesRelations = relations(locales, ({ many }) => ({
+  translationsLanguages: many(translationsLanguages),
+}));
+
+export const translationsRelations = relations(translations, ({ many }) => ({
+  translationsLanguages: many(translationsLanguages),
+}));

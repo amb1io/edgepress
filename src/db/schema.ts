@@ -20,9 +20,14 @@ import { postsTaxonomies, postsTaxonomiesRelations } from "./schema/posts_taxono
 import { postsMedia, postsMediaRelations } from "./schema/posts_media.ts";
 import { settings } from "./schema/settings.ts";
 import { roleCapability } from "./schema/role_capability.ts";
-import { locales, localesRelations } from "./schema/locales.ts";
-import { translations, translationsRelations } from "./schema/translations.ts";
-import { translationsLanguages, translationsLanguagesRelations } from "./schema/translations_languages.ts";
+import { locales } from "./schema/locales.ts";
+import { translations } from "./schema/translations.ts";
+import {
+  translationsLanguages,
+  translationsLanguagesRelations,
+  localesRelations,
+  translationsRelations,
+} from "./schema/translations_languages.ts";
 
 // Meta Schema
 export { defaultMetaSchema, buildMetaSchema, type MetaSchemaItem } from "./schema/meta_schema.ts";

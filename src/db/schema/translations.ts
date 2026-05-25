@@ -1,6 +1,4 @@
 import { index, int, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { relations } from "drizzle-orm";
-import { translationsLanguages } from "./translations_languages.ts";
 
 /**
  * Tabela de traduções
@@ -24,10 +22,3 @@ export const translations = sqliteTable(
     ),
   })
 );
-
-/**
- * Relações da tabela translations
- */
-export const translationsRelations = relations(translations, ({ many }) => ({
-  translationsLanguages: many(translationsLanguages),
-}));
