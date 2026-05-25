@@ -101,7 +101,8 @@ describe("menu", () => {
       expect(icons.find((x) => x.menu_order === 1)?.icon).toBe("line-md:home");
       expect(icons.find((x) => x.menu_order === 2)?.icon).toBe("line-md:document");
       expect(icons.find((x) => x.menu_order === 3)?.icon).toBe("line-md:list");
-      expect(icons.find((x) => x.menu_order === 4)?.icon).toBe("line-md:cog");
+      expect(icons.find((x) => x.menu_order === 4)?.icon).toBe("line-md:cloud-alt-upload-loop");
+      expect(icons.find((x) => x.menu_order === 8)?.icon).toBe("line-md:cog");
     });
   });
 
@@ -127,24 +128,36 @@ describe("menu", () => {
 
       const settingsItem = items.find((i) => i.postTypeSlug === "settings");
       expect(settingsItem?.menuOptions).toEqual(["general"]);
-      expect(settingsItem?.menuOrder).toBe(4);
+      expect(settingsItem?.menuOrder).toBe(8);
       expect(settingsItem?.icon).toBe("line-md:cog");
     });
 
-    it("returns items ordered by menu_order (Dashboard=1, Post=2, Page=3, Settings=4)", async () => {
+    it("returns items ordered by menu_order (Dashboard=1, Post=2, Page=3, …, Settings=8)", async () => {
       const items = await getMenuItems(db);
       const slugs = items.map((i) => i.postTypeSlug);
       const dashboardIdx = slugs.indexOf("dashboard");
       const postIdx = slugs.indexOf("post");
       const pageIdx = slugs.indexOf("page");
+      const attachmentIdx = slugs.indexOf("attachment");
+      const themesIdx = slugs.indexOf("themes");
+      const userIdx = slugs.indexOf("user");
+      const translationsIdx = slugs.indexOf("translations_languages");
       const settingsIdx = slugs.indexOf("settings");
       expect(dashboardIdx).toBeGreaterThanOrEqual(0);
       expect(postIdx).toBeGreaterThanOrEqual(0);
       expect(pageIdx).toBeGreaterThanOrEqual(0);
+      expect(attachmentIdx).toBeGreaterThanOrEqual(0);
+      expect(themesIdx).toBeGreaterThanOrEqual(0);
+      expect(userIdx).toBeGreaterThanOrEqual(0);
+      expect(translationsIdx).toBeGreaterThanOrEqual(0);
       expect(settingsIdx).toBeGreaterThanOrEqual(0);
       expect(dashboardIdx).toBeLessThan(postIdx);
       expect(postIdx).toBeLessThan(pageIdx);
-      expect(pageIdx).toBeLessThan(settingsIdx);
+      expect(pageIdx).toBeLessThan(attachmentIdx);
+      expect(attachmentIdx).toBeLessThan(themesIdx);
+      expect(themesIdx).toBeLessThan(userIdx);
+      expect(userIdx).toBeLessThan(translationsIdx);
+      expect(translationsIdx).toBeLessThan(settingsIdx);
     });
   });
 
