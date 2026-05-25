@@ -59,3 +59,9 @@ export function resolvePhysicalTableName(param: string): string | null {
   }
   return null;
 }
+
+/** Alias legado de `tableName`. */
+export const prefixedTable = tableName;
+
+/** Alias legado de `logicalTableName`. */
+export const stripTablePrefix = logicalTableName;
