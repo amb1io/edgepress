@@ -6,6 +6,10 @@ import type { KVLike } from "../utils/runtime-locals.ts";
 /** Chaves permitidas para atualização em lote (PATCH). */
 export const ALLOWED_PATCH_KEYS = ["site_name", "site_description", "setup_done"] as const;
 
+export const SETUP_DONE_SETTING_KEY = "setup_done";
+export const SETUP_DONE_DEFAULT_VALUE = "N";
+export const SETUP_DONE_COMPLETE_VALUE = "Y";
+
 export type SettingRecord = {
   id: number;
   name: string;
@@ -26,6 +30,69 @@ export type SettingUpdatePayload = {
 };
 
 const ACTIVE_THEME_SETTING_KEY = "active_theme";
+
+/**
+ * Garante que setup_done exista na tabela settings (default "N").
+ */
+export async function ensureSetupDoneSetting(db: Database): Promise<string> {
+  const [existing] = await db
+    .select({ value: settingsTable.value })
+    .from(settingsTable)
+    .where(eq(settingsTable.name, SETUP_DONE_SETTING_KEY))
+    .limit(1);
+
+  if (existing) return existing.value;
+
+  await db.insert(settingsTable).values({
+    name: SETUP_DONE_SETTING_KEY,
+    value: SETUP_DONE_DEFAULT_VALUE,
+    autoload: true,
+  });
+  return SETUP_DONE_DEFAULT_VALUE;
+}
+
+/**
+ * Lê setup_done da tabela settings, criando com "N" se ainda não existir.
+ */
+export async function getSetupDoneValue(db: Database): Promise<string> {
+  try {
+    return await ensureSetupDoneSetting(db);
+  } catch {
+    return SETUP_DONE_DEFAULT_VALUE;
+  }
+}
+
+export async function isSetupComplete(db: Database): Promise<boolean> {
+  const value = await getSetupDoneValue(db);
+  return value === SETUP_DONE_COMPLETE_VALUE;
+}
+
+/**
+ * Atualiza ou insere um setting por nome.
+ */
+export async function upsertSettingByName(
+  db: Database,
+  name: string,
+  value: string,
+  autoload = true,
+): Promise<void> {
+  const [existing] = await db
+    .select({ id: settingsTable.id })
+    .from(settingsTable)
+    .where(eq(settingsTable.name, name))
+    .limit(1);
+
+  if (existing?.id) {
+    await db.update(settingsTable).set({ value }).where(eq(settingsTable.name, name));
+    return;
+  }
+
+  await db.insert(settingsTable).values({ name, value, autoload });
+}
+
+export async function markSetupComplete(db: Database): Promise<void> {
+  await upsertSettingByName(db, SETUP_DONE_SETTING_KEY, SETUP_DONE_COMPLETE_VALUE);
+}
 
 /**
  * Busca settings no banco: por nomes específicos ou todas com autoload.

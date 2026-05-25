@@ -130,3 +130,20 @@ export const MENU_CONFIG: MenuConfigRow[] = [
 /** Post types padrão (slug, name, meta_schema). Re-exportado de default-post-types para centralizar dados de seed. */
 export { DEFAULT_POST_TYPES, META_ONLY_POST_TYPE_SLUGS } from "./default-post-types.ts";
 export type { DefaultPostTypeRow } from "./default-post-types.ts";
+
+/** Linha para tabela settings. */
+export interface SettingsRow {
+  name: string;
+  value: string;
+  autoload: boolean;
+}
+
+/** Settings iniciais (setup_done=N até concluir /setup). */
+export const DEFAULT_SETTINGS_ROWS: SettingsRow[] = [
+  { name: "site_name", value: "demo site", autoload: true },
+  { name: "site_description", value: "demo_description", autoload: true },
+  { name: "setup_done", value: "N", autoload: true },
+  { name: "default_posttype", value: "post", autoload: true },
+  { name: "default_taxonomies", value: "category,tag", autoload: true },
+  { name: "active_theme", value: "2026", autoload: true },
+];

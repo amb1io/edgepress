@@ -9,7 +9,7 @@ import {
   translations,
   translationsLanguages,
 } from "./schema.ts";
-import { ROLE_CAPABILITY_ROWS, FULL_LOCALES, DEFAULT_POST_TYPES, META_ONLY_POST_TYPE_SLUGS, MENU_CONFIG, TAXONOMY_SEED_ROWS } from "./seed-data.ts";
+import { ROLE_CAPABILITY_ROWS, FULL_LOCALES, DEFAULT_POST_TYPES, META_ONLY_POST_TYPE_SLUGS, MENU_CONFIG, TAXONOMY_SEED_ROWS, DEFAULT_SETTINGS_ROWS } from "./seed-data.ts";
 import enTranslations from "../i18n/languages/en.json";
 import esTranslations from "../i18n/languages/es.json";
 import ptBrTranslations from "../i18n/languages/pt_br.json";
@@ -336,14 +336,7 @@ export async function runSeed(db: any): Promise<void> {
   }
 
   // Settings (options)
-  const settingsRows = [
-    { name: "site_name", value: "demo site", autoload: true },
-    { name: "site_description", value: "demo_description", autoload: true },
-    { name: "setup_done", value: "N", autoload: true },
-    { name: "default_posttype", value: "post", autoload: true },
-    { name: "default_taxonomies", value: "category,tag", autoload: true },
-    { name: "active_theme", value: "2026", autoload: true },
-  ];
+  const settingsRows = DEFAULT_SETTINGS_ROWS;
   const existingSettings = await db
     .select({ name: settings.name })
     .from(settings);

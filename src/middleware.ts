@@ -7,50 +7,16 @@ import {
 } from "./lib/utils/csrf-protection.ts";
 import { ensureTranslationsLoaded } from "./lib/i18n-helpers.ts";
 import { db } from "./db/index.ts";
-import { settings as settingsTable } from "./db/schema.ts";
-import { eq } from "drizzle-orm";
+import {
+  getActiveThemeSlugFromSettings,
+  isSetupComplete,
+} from "./lib/services/settings-service.ts";
 import { env as cfEnv } from "cloudflare:workers";
 import { getKvFromLocals } from "./lib/utils/runtime-locals.ts";
-import { getActiveThemeSlugFromSettings } from "./lib/services/settings-service.ts";
 
 // Endpoints sensíveis que requerem validação extra de CSRF
 const sensitiveAPIPaths = ["/api/posts", "/api/upload", "/api/media"];
-const authPaths = ["/login"];
 const setupPath = `/setup/${defaultLocale}`;
-
-/**
- * Verifica se o setup inicial já foi concluído.
- * Primeiro verifica o cookie "setup_done" (equivalente ao session storage),
- * se não encontrar, consulta o banco de dados.
- * Retorna false se: o cookie não for "Y" e o banco não estiver configurado,
- * a tabela settings não existir, ou setup_done não for "Y".
- * Nesses casos o usuário deve ser redirecionado para /setup.
- */
-async function isSetupDone(request: Request): Promise<boolean> {
-  // Primeiro verifica o cookie (equivalente ao session storage)
-  const cookies = request.headers.get("cookie") ?? "";
-  const setupDoneCookie = cookies
-    .split(";")
-    .find((c) => c.trim().startsWith("setup_done="));
-  if (setupDoneCookie) {
-    const value = setupDoneCookie.split("=")[1]?.trim();
-    if (value === "Y") {
-      return true;
-    }
-  }
-
-  // Se não encontrar no cookie, consulta o banco de dados
-  try {
-    const rows = await db
-      .select({ value: settingsTable.value })
-      .from(settingsTable)
-      .where(eq(settingsTable.name, "setup_done"))
-      .limit(1);
-    return rows[0]?.value === "Y";
-  } catch {
-    return false;
-  }
-}
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const pathname = new URL(context.request.url).pathname;
@@ -59,6 +25,38 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const isApi = pathname.startsWith("/api");
   const isAuthApi = pathname.startsWith("/api/auth");
   const isSetupApi = pathname === "/api/setup";
+
+  // Permitir APIs de auth e setup mesmo quando setup não está completo
+  if (isAuthApi || isSetupApi) {
+    return next();
+  }
+
+  const setupDone = await isSetupComplete(db);
+
+  const isSetupPage =
+    pathname === setupPath ||
+    pathname === "/setup" ||
+    pathname.startsWith("/setup/");
+
+  if (!setupDone) {
+    if (!isSetupPage) {
+      if (isApi) {
+        return new Response(
+          JSON.stringify({
+            error: "setup_required",
+            message: "Conclua a configuração inicial antes de continuar.",
+          }),
+          {
+            status: 503,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+      return context.redirect(setupPath, 303);
+    }
+  } else if (isSetupPage) {
+    return context.redirect("/login", 303);
+  }
 
   // URLs públicas não devem expor /themes/* (rota interna).
   // Quando acessado publicamente, reescrevemos internamente a mesma URL
@@ -72,14 +70,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
     const headers = new Headers(context.request.headers);
     headers.set("x-edgepress-internal-rewrite", "1");
     return context.rewrite(new Request(url, { headers }));
-  }
-
-  // Permitir APIs de auth e setup mesmo quando setup não está completo
-  // Essas APIs são necessárias para completar o setup inicial
-  // Chamar next() antes de verificar setup para garantir que a rota seja encontrada
-  if (isAuthApi || isSetupApi) {
-    const response = await next();
-    return response;
   }
 
   // Site público: tudo que não é admin, login, setup ou API reescreve internamente
@@ -118,26 +108,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
       const headers = new Headers(context.request.headers);
       headers.set("x-edgepress-internal-rewrite", "1");
       return context.rewrite(new Request(url, { headers }));
-    }
-  }
-
-  const setupDone = await isSetupDone(context.request);
-
-  const isSetupPage = pathname === setupPath;
-  const isLoginPage = authPaths.some(
-    (p) => pathname === p || pathname.startsWith(p + "/"),
-  );
-
-  // Lógica de setup:
-  // - Se setup JÁ foi concluído e o usuário tenta acessar /{locale}/setup, redireciona para /admin/{locale}.
-  // - Se setup AINDA NÃO foi concluído, qualquer rota não-API e diferente de /setup (e não /login)
-  //   redireciona para a página de setup.
-  if (!isApi && !isLoginPage) {
-    if (isSetupPage && setupDone) {
-      // return context.redirect(`/admin/${defaultLocale}`);
-    }
-    if (!isSetupPage && !setupDone) {
-      return context.redirect(setupPath, 303);
     }
   }
 

@@ -19,11 +19,6 @@ const setupSuccess = Astro.url.searchParams.get("setup") === "success";
 
 <script>
   if (import.meta.env.SSR === false) {
-    // Definir session storage após setup bem-sucedido
-    if (new URL(window.location.href).searchParams.get("setup") === "success") {
-      sessionStorage.setItem("setup_done", "Y");
-    }
-
     const passwordInput = document.getElementById("password");
     const passwordToggle = document.getElementById("password-toggle");
     const showIcon = passwordToggle?.querySelector('[data-password-icon="show"]');

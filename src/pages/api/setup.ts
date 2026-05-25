@@ -7,26 +7,11 @@
 import type { APIRoute } from "astro";
 import { auth } from "../../lib/auth.ts";
 import { db } from "../../db/index.ts";
-import { settings as settingsTable } from "../../db/schema.ts";
-import { eq } from "drizzle-orm";
+import {
+  markSetupComplete,
+  upsertSettingByName,
+} from "../../lib/services/settings-service.ts";
 import { getString } from "../../lib/utils/form-data.ts";
-
-/** Garante que a opção exista: atualiza se já existir, insere se não existir. */
-async function upsertSetting(name: string, value: string): Promise<void> {
-  const existing = await db
-    .select({ id: settingsTable.id })
-    .from(settingsTable)
-    .where(eq(settingsTable.name, name))
-    .limit(1);
-  if (existing.length > 0) {
-    await db
-      .update(settingsTable)
-      .set({ value })
-      .where(eq(settingsTable.name, name));
-  } else {
-    await db.insert(settingsTable).values({ name, value, autoload: true });
-  }
-}
 import { sanitizeCallbackURL } from "../../lib/utils/url-validator.ts";
 import {
   badRequestHtmlResponse,
@@ -113,21 +98,17 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     return redirect(`/setup?error=${encodeURIComponent(code)}`, 303);
   }
 
-  await upsertSetting("site_name", siteName || "demo site");
-  await upsertSetting(
+  await upsertSettingByName(db, "site_name", siteName || "demo site");
+  await upsertSettingByName(
+    db,
     "site_description",
     siteDescription || "demo_description",
   );
-  await upsertSetting("setup_done", "Y");
+  await markSetupComplete(db);
 
   const loginUrl = `/login?setup=success`;
-  const setCookie = "setup_done=Y; Path=/; HttpOnly; SameSite=Lax";
   if (isHtmx) {
-    const res = htmxRedirectResponse(loginUrl);
-    res.headers.set("Set-Cookie", setCookie);
-    return res;
+    return htmxRedirectResponse(loginUrl);
   }
-  const response = redirect(loginUrl, 303);
-  response.headers.set("Set-Cookie", setCookie);
-  return response;
+  return redirect(loginUrl, 303);
 };

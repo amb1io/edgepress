@@ -78,6 +78,15 @@ INSERT OR IGNORE INTO role_capability (role_id, capability) VALUES
   (2, 'menu.full'),
   (3, 'admin.dashboard');
 
+-- Settings iniciais (setup_done=N até concluir /setup)
+INSERT OR IGNORE INTO settings (name, value, autoload) VALUES
+  ('site_name', 'demo site', 1),
+  ('site_description', 'demo_description', 1),
+  ('setup_done', 'N', 1),
+  ('default_posttype', 'post', 1),
+  ('default_taxonomies', 'category,tag', 1),
+  ('active_theme', '2026', 1);
+
 -- Traduções (chaves dos arquivos en.json, es.json, pt_br.json)
 INSERT INTO translations (namespace, key, created_at, updated_at) SELECT 'admin.menu', 'dashboard', 0, 0 WHERE NOT EXISTS (SELECT 1 FROM translations WHERE namespace='admin.menu' AND key='dashboard');
 INSERT INTO translations (namespace, key, created_at, updated_at) SELECT 'admin.menu', 'posts', 0, 0 WHERE NOT EXISTS (SELECT 1 FROM translations WHERE namespace='admin.menu' AND key='posts');
@@ -125,6 +134,7 @@ INSERT INTO translations (namespace, key, created_at, updated_at) SELECT 'postTy
 INSERT INTO translations (namespace, key, created_at, updated_at) SELECT 'postType', 'attachment', 0, 0 WHERE NOT EXISTS (SELECT 1 FROM translations WHERE namespace='postType' AND key='attachment');
 INSERT INTO translations (namespace, key, created_at, updated_at) SELECT 'postType', 'translations', 0, 0 WHERE NOT EXISTS (SELECT 1 FROM translations WHERE namespace='postType' AND key='translations');
 INSERT INTO translations (namespace, key, created_at, updated_at) SELECT 'postType', 'translations_languages', 0, 0 WHERE NOT EXISTS (SELECT 1 FROM translations WHERE namespace='postType' AND key='translations_languages');
+INSERT INTO translations (namespace, key, created_at, updated_at) SELECT 'postType', 'themes', 0, 0 WHERE NOT EXISTS (SELECT 1 FROM translations WHERE namespace='postType' AND key='themes');
 INSERT INTO translations (namespace, key, created_at, updated_at) SELECT 'admin.content', 'newTitle', 0, 0 WHERE NOT EXISTS (SELECT 1 FROM translations WHERE namespace='admin.content' AND key='newTitle');
 INSERT INTO translations (namespace, key, created_at, updated_at) SELECT 'admin.content', 'editTitle', 0, 0 WHERE NOT EXISTS (SELECT 1 FROM translations WHERE namespace='admin.content' AND key='editTitle');
 INSERT INTO translations (namespace, key, created_at, updated_at) SELECT 'admin.content', 'slug', 0, 0 WHERE NOT EXISTS (SELECT 1 FROM translations WHERE namespace='admin.content' AND key='slug');
@@ -357,6 +367,9 @@ INSERT OR REPLACE INTO translations_languages (id_translations, id_locale_code, 
 INSERT OR REPLACE INTO translations_languages (id_translations, id_locale_code, value) SELECT (SELECT id FROM translations WHERE namespace='postType' AND key='translations_languages' LIMIT 1), (SELECT id FROM locales WHERE locale_code='en_US' LIMIT 1), 'Translations Languages';
 INSERT OR REPLACE INTO translations_languages (id_translations, id_locale_code, value) SELECT (SELECT id FROM translations WHERE namespace='postType' AND key='translations_languages' LIMIT 1), (SELECT id FROM locales WHERE locale_code='es_ES' LIMIT 1), 'Traducciones de Idiomas';
 INSERT OR REPLACE INTO translations_languages (id_translations, id_locale_code, value) SELECT (SELECT id FROM translations WHERE namespace='postType' AND key='translations_languages' LIMIT 1), (SELECT id FROM locales WHERE locale_code='pt_BR' LIMIT 1), 'Traduções de Idiomas';
+INSERT OR REPLACE INTO translations_languages (id_translations, id_locale_code, value) SELECT (SELECT id FROM translations WHERE namespace='postType' AND key='themes' LIMIT 1), (SELECT id FROM locales WHERE locale_code='en_US' LIMIT 1), 'Themes';
+INSERT OR REPLACE INTO translations_languages (id_translations, id_locale_code, value) SELECT (SELECT id FROM translations WHERE namespace='postType' AND key='themes' LIMIT 1), (SELECT id FROM locales WHERE locale_code='es_ES' LIMIT 1), 'Temas';
+INSERT OR REPLACE INTO translations_languages (id_translations, id_locale_code, value) SELECT (SELECT id FROM translations WHERE namespace='postType' AND key='themes' LIMIT 1), (SELECT id FROM locales WHERE locale_code='pt_BR' LIMIT 1), 'Temas';
 INSERT OR REPLACE INTO translations_languages (id_translations, id_locale_code, value) SELECT (SELECT id FROM translations WHERE namespace='admin.content' AND key='newTitle' LIMIT 1), (SELECT id FROM locales WHERE locale_code='en_US' LIMIT 1), 'New {type}';
 INSERT OR REPLACE INTO translations_languages (id_translations, id_locale_code, value) SELECT (SELECT id FROM translations WHERE namespace='admin.content' AND key='newTitle' LIMIT 1), (SELECT id FROM locales WHERE locale_code='es_ES' LIMIT 1), 'Nuevo {type}';
 INSERT OR REPLACE INTO translations_languages (id_translations, id_locale_code, value) SELECT (SELECT id FROM translations WHERE namespace='admin.content' AND key='newTitle' LIMIT 1), (SELECT id FROM locales WHERE locale_code='pt_BR' LIMIT 1), 'Novo {type}';

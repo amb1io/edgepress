@@ -41,6 +41,7 @@
     "test:watch": "vitest",
     "task:env": "cp .env.example .env",
     "task:init": "npm run task:env && npm run db:migrate:local",
+    "setup:local": "npm run db:migrate:local && npm run db:seed",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:migrate:local": "wrangler d1 migrations apply edgepress --local -c wrangler.toml",
