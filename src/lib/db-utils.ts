@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { Database } from "./types/database.ts";
+import { stripTablePrefix } from "../db/table-prefix.ts";
 import {
   TABLE_PREFIX,
   EDP_LOGICAL_TABLES,
@@ -64,6 +65,8 @@ export async function getTableNames(db: Database): Promise<string[]> {
     .map((name) => logicalTableName(name))
     .filter((name) => (EDP_LOGICAL_TABLES as readonly string[]).includes(name));
 }
+
+export { prefixedTable, stripTablePrefix, TABLE_PREFIX } from "../db/table-prefix.ts";
 
 /**
  * Dado um parâmetro de rota e a lista de tabelas permitidas, retorna o nome seguro da tabela ou null.

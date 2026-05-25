@@ -120,7 +120,7 @@ INSERT OR IGNORE INTO edp_role_capability (role_id, capability) VALUES
   (3, 'admin.dashboard');
 
 -- Settings iniciais (setup_done=N até concluir /setup)
-INSERT OR IGNORE INTO settings (name, value, autoload) VALUES
+INSERT OR IGNORE INTO edp_settings (name, value, autoload) VALUES
   ('site_name', 'demo site', 1),
   ('site_description', 'demo_description', 1),
   ('setup_done', 'N', 1),

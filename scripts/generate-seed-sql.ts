@@ -149,7 +149,7 @@ const lines: string[] = [
   ),
   "",
   "-- Settings iniciais (setup_done=N até concluir /setup)",
-  "INSERT OR IGNORE INTO settings (name, value, autoload) VALUES",
+  `INSERT OR IGNORE INTO ${EDP_TABLES.settings} (name, value, autoload) VALUES`,
   ...DEFAULT_SETTINGS_ROWS.map(
     (row, i) =>
       `  ('${escapeSql(row.name)}', '${escapeSql(row.value)}', ${row.autoload ? 1 : 0})${i < DEFAULT_SETTINGS_ROWS.length - 1 ? "," : ";"}`
