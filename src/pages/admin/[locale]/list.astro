@@ -7,6 +7,7 @@ import { getMenuItems } from "../../../lib/menu.ts";
 import { getTableList, TABLE_DELETE_TEMPLATE } from "../../../lib/list-table-dynamic.ts";
 import { t, locales, defaultLocale } from "../../../i18n/index.ts";
 import { getSourceKind } from "../../../lib/content-source.ts";
+import { getTableNames, resolveTableName } from "../../../lib/db-utils.ts";
 import { ensureTranslationsLoaded } from "../../../lib/i18n-helpers.ts";
 
 const locale = Astro.params["locale"] ?? defaultLocale;
@@ -46,8 +47,10 @@ for (const [key, value] of Astro.url.searchParams) {
   if (key.startsWith("filter_") && value) filter[key.replace("filter_", "")] = value;
 }
 
+const tableNames = await getTableNames(db);
 const sourceKind = await getSourceKind(db, type);
 const loadFromTable = sourceKind === "table";
+const physicalTable = loadFromTable ? (resolveTableName(type, tableNames) ?? type) : type;
 
 function buildListUrl(overrides: Record<string, string>) {
   const params = new URLSearchParams(Astro.url.searchParams);
@@ -70,7 +73,7 @@ let deletePathTemplate: string;
 let tableColumns: string[] = [];
 
 if (loadFromTable) {
-  const tableResult = await getTableList(db, type, {
+  const tableResult = await getTableList(db, physicalTable, {
     order,
     orderDir,
     limit,

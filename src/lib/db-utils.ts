@@ -17,6 +17,36 @@ export type { KVLike } from "./utils/runtime-locals.ts";
 /** Regex para nome de tabela válido (identificador SQL). */
 export const VALID_TABLE_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
+/** Tipos de URL que mapeiam para tabelas de schema (auth/config), nunca para posts. */
+export const LOGICAL_TABLE_TYPES = ["user", "settings"] as const;
+
+/**
+ * Resolve o nome físico da tabela no SQLite a partir do tipo lógico da URL.
+ * Aceita nome exato (ex.: user) ou prefixado (ex.: edp_user).
+ */
+export function findPhysicalTableName(
+  logicalName: string,
+  tableNames: string[],
+): string | null {
+  if (tableNames.includes(logicalName)) return logicalName;
+  const suffixed = tableNames.filter((name) => name.endsWith(`_${logicalName}`));
+  if (suffixed.length === 1) return suffixed[0]!;
+  if (suffixed.length > 1) {
+    return suffixed.find((name) => name !== logicalName) ?? suffixed[0]!;
+  }
+  return null;
+}
+
+/**
+ * Retorna o nome físico da tabela para listagem dinâmica, ou null se o tipo não for tabela.
+ */
+export function resolveTableName(type: string, tableNames: string[]): string | null {
+  if ((LOGICAL_TABLE_TYPES as readonly string[]).includes(type)) {
+    return findPhysicalTableName(type, tableNames);
+  }
+  return tableNames.includes(type) ? type : null;
+}
+
 /**
  * Retorna os nomes das tabelas do banco (excluindo tabelas internas sqlite e drizzle).
  * Útil para decidir dinamicamente se o parâmetro "type" da listagem corresponde a uma tabela.

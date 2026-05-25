@@ -76,6 +76,15 @@ describe("content-source", () => {
       const kind = await getSourceKind(db, "page");
       expect(kind).toBe("posts");
     });
+
+    it("returns 'table' when auth table uses a prefix (edp_user)", async () => {
+      await client.execute("DROP TABLE IF EXISTS user");
+      await client.execute(
+        "CREATE TABLE edp_user (id text PRIMARY KEY NOT NULL, name text NOT NULL, email text NOT NULL UNIQUE, email_verified integer DEFAULT 0 NOT NULL, image text, role integer DEFAULT 3, created_at integer NOT NULL, updated_at integer NOT NULL)"
+      );
+      const kind = await getSourceKind(db, "user");
+      expect(kind).toBe("table");
+    });
   });
 
   describe("getRecordById", () => {

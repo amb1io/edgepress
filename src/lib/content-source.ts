@@ -7,7 +7,7 @@
  * Usado em list.astro (listagem) e content.astro (edição por id).
  */
 import { and, eq } from "drizzle-orm";
-import { getTableNames } from "./db-utils.ts";
+import { getTableNames, resolveTableName } from "./db-utils.ts";
 import type { Database } from "./types/database.ts";
 import { user as userTable, settings as settingsTable, postTypes, posts } from "../db/schema.ts";
 
@@ -18,7 +18,7 @@ export type SourceKind = "table" | "posts";
  */
 export async function getSourceKind(db: Database, type: string): Promise<SourceKind> {
   const tableNames = await getTableNames(db);
-  return tableNames.includes(type) ? "table" : "posts";
+  return resolveTableName(type, tableNames) ? "table" : "posts";
 }
 
 export type ContentRecordResult = {

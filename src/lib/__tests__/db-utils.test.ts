@@ -8,6 +8,8 @@ import {
   escapeIdentifier,
   VALID_TABLE_IDENTIFIER,
   getContentApiRuntime,
+  findPhysicalTableName,
+  resolveTableName,
 } from "../db-utils.ts";
 
 function clearTestEnv() {
@@ -56,6 +58,35 @@ describe("db-utils", () => {
 
     it("mantém nome sem aspas", () => {
       expect(escapeIdentifier("posts")).toBe("posts");
+    });
+  });
+
+  describe("findPhysicalTableName", () => {
+    it("retorna nome exato quando presente", () => {
+      expect(findPhysicalTableName("user", ["posts", "user"])).toBe("user");
+    });
+
+    it("retorna tabela prefixada quando nome exato não existe", () => {
+      expect(findPhysicalTableName("user", ["edp_posts", "edp_user"])).toBe("edp_user");
+    });
+
+    it("retorna null quando nenhuma tabela corresponde", () => {
+      expect(findPhysicalTableName("user", ["posts", "settings"])).toBeNull();
+    });
+  });
+
+  describe("resolveTableName", () => {
+    it("resolve tipos lógicos de schema (user, settings)", () => {
+      expect(resolveTableName("user", ["edp_user"])).toBe("edp_user");
+      expect(resolveTableName("settings", ["settings"])).toBe("settings");
+    });
+
+    it("resolve tabelas dinâmicas pelo nome exato", () => {
+      expect(resolveTableName("posts", ["posts", "user"])).toBe("posts");
+    });
+
+    it("retorna null para post types sem tabela homônima", () => {
+      expect(resolveTableName("post", ["posts", "user"])).toBeNull();
     });
   });
 
