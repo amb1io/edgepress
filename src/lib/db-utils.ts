@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { Database } from "./types/database.ts";
+import { stripTablePrefix } from "../db/table-prefix.ts";
 import {
   type KVLike,
   getCacheKvFromLocals,
@@ -22,8 +23,13 @@ export async function getTableNames(db: Database): Promise<string[]> {
     sql`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'drizzle%'`
   );
   if (!Array.isArray(rows)) return [];
-  return rows.map((row: unknown) => String((row as { name?: string })?.name ?? "")).filter(Boolean);
+  return rows
+    .map((row: unknown) => String((row as { name?: string })?.name ?? ""))
+    .filter(Boolean)
+    .map(stripTablePrefix);
 }
+
+export { prefixedTable, stripTablePrefix, TABLE_PREFIX } from "../db/table-prefix.ts";
 
 /**
  * Dado um parâmetro de rota e a lista de tabelas permitidas, retorna o nome seguro da tabela ou null.

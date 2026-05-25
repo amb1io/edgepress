@@ -146,9 +146,9 @@ describe("list dynamic: type as table name vs post_type", () => {
     });
     // Create only the settings table (avoids migration 0011 which can fail in libsql)
     await client.execute(
-      "CREATE TABLE IF NOT EXISTS settings (id integer PRIMARY KEY AUTOINCREMENT NOT NULL, name text NOT NULL, value text NOT NULL, autoload integer DEFAULT 1 NOT NULL)"
+      "CREATE TABLE IF NOT EXISTS edp_settings (id integer PRIMARY KEY AUTOINCREMENT NOT NULL, name text NOT NULL, value text NOT NULL, autoload integer DEFAULT 1 NOT NULL)"
     );
-    await client.execute("CREATE INDEX IF NOT EXISTS settings_name_idx ON settings (name)");
+    await client.execute("CREATE INDEX IF NOT EXISTS settings_name_idx ON edp_settings (name)");
     await db.insert(settings).values([
       { name: "site_name", value: "My Site", autoload: true },
       { name: "setup_done", value: "Y", autoload: true },
@@ -207,7 +207,7 @@ describe("getTableList with Foreign Keys", () => {
     // Criar tabelas para testar Foreign Keys
     // Tabela locales
     await client.execute(`
-      CREATE TABLE IF NOT EXISTS locales (
+      CREATE TABLE IF NOT EXISTS edp_locales (
         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
         language TEXT NOT NULL,
         hello_world TEXT NOT NULL,
@@ -219,7 +219,7 @@ describe("getTableList with Foreign Keys", () => {
     
     // Tabela translations
     await client.execute(`
-      CREATE TABLE IF NOT EXISTS translations (
+      CREATE TABLE IF NOT EXISTS edp_translations (
         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
         namespace TEXT NOT NULL,
         key TEXT NOT NULL,
@@ -230,37 +230,37 @@ describe("getTableList with Foreign Keys", () => {
     
     // Tabela translations_languages com Foreign Keys
     await client.execute(`
-      CREATE TABLE IF NOT EXISTS translations_languages (
+      CREATE TABLE IF NOT EXISTS edp_translations_languages (
         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-        id_translations INTEGER NOT NULL REFERENCES translations(id) ON DELETE CASCADE,
-        id_locale_code INTEGER NOT NULL REFERENCES locales(id) ON DELETE CASCADE,
+        id_translations INTEGER NOT NULL REFERENCES edp_translations(id) ON DELETE CASCADE,
+        id_locale_code INTEGER NOT NULL REFERENCES edp_locales(id) ON DELETE CASCADE,
         value TEXT NOT NULL
       )
     `);
     
     // Inserir dados de teste
     await client.execute(`
-      INSERT INTO locales (language, hello_world, locale_code, country, timezone) 
+      INSERT INTO edp_locales (language, hello_world, locale_code, country, timezone) 
       VALUES ('English', 'Hello World', 'en', 'United States', 'UTC-5')
     `);
     
     await client.execute(`
-      INSERT INTO locales (language, hello_world, locale_code, country, timezone) 
+      INSERT INTO edp_locales (language, hello_world, locale_code, country, timezone) 
       VALUES ('Portuguese', 'Olá Mundo', 'pt_br', 'Brazil', 'UTC-3')
     `);
     
     await client.execute(`
-      INSERT INTO translations (namespace, key, created_at, updated_at) 
+      INSERT INTO edp_translations (namespace, key, created_at, updated_at) 
       VALUES ('admin.menu', 'dashboard', ${Date.now()}, ${Date.now()})
     `);
     
     await client.execute(`
-      INSERT INTO translations_languages (id_translations, id_locale_code, value) 
+      INSERT INTO edp_translations_languages (id_translations, id_locale_code, value) 
       VALUES (1, 1, 'Dashboard')
     `);
     
     await client.execute(`
-      INSERT INTO translations_languages (id_translations, id_locale_code, value) 
+      INSERT INTO edp_translations_languages (id_translations, id_locale_code, value) 
       VALUES (1, 2, 'Painel')
     `);
   });

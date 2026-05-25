@@ -59,3 +59,5 @@ export {
   USER_ROLE_IDS,
   USER_ROLE_LABEL_KEYS,
 };
+
+export { TABLE_PREFIX, prefixedTable, stripTablePrefix } from "./table-prefix.ts";

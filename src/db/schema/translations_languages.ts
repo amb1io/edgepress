@@ -1,5 +1,6 @@
 import { index, int, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
+import { prefixedTable } from "../table-prefix.ts";
 import { translations } from "./translations.ts";
 import { locales } from "./locales.ts";
 
@@ -8,7 +9,7 @@ import { locales } from "./locales.ts";
  * Armazena as traduções de cada chave para cada locale
  */
 export const translationsLanguages = sqliteTable(
-  "translations_languages",
+  prefixedTable("translations_languages"),
   {
     id: int().primaryKey({ autoIncrement: true }),
     id_translations: int("id_translations")

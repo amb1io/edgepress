@@ -4,7 +4,7 @@
  */
 import { sql } from "drizzle-orm";
 import type { Database } from "./types/database.ts";
-import { VALID_TABLE_IDENTIFIER } from "./db-utils.ts";
+import { VALID_TABLE_IDENTIFIER, prefixedTable, stripTablePrefix } from "./db-utils.ts";
 
 function safeIdentifier(name: string): string | null {
   return VALID_TABLE_IDENTIFIER.test(name) ? name : null;
@@ -39,10 +39,11 @@ function escapeIdentifier(name: string): string {
  * Retorna os nomes das colunas da tabela (via PRAGMA table_info).
  */
 export async function getTableColumns(db: Database, tableName: string): Promise<string[]> {
-  const safe = safeIdentifier(tableName);
-  if (!safe) return [];
+  const logical = safeIdentifier(tableName);
+  if (!logical) return [];
+  const physical = prefixedTable(logical);
   const rows = await db.all(
-    sql.raw(`PRAGMA table_info("${escapeIdentifier(safe)}")`)
+    sql.raw(`PRAGMA table_info("${escapeIdentifier(physical)}")`)
   ) as { name?: string }[];
   if (!Array.isArray(rows)) return [];
   return rows.map((r) => String(r?.name ?? "")).filter(Boolean);
@@ -51,28 +52,31 @@ export async function getTableColumns(db: Database, tableName: string): Promise<
 /**
  * Retorna informações sobre Foreign Keys de uma tabela (via PRAGMA foreign_key_list).
  */
-async function getForeignKeys(db: Database, tableName: string): Promise<Array<{ column: string; referencedTable: string; referencedColumn: string }>> {
-  const safe = safeIdentifier(tableName);
-  if (!safe) return [];
+async function getForeignKeys(db: Database, tableName: string): Promise<Array<{ column: string; table: string; tablePhysical: string; referencedColumn: string }>> {
+  const logical = safeIdentifier(tableName);
+  if (!logical) return [];
+  const physical = prefixedTable(logical);
   const rows = await db.all(
-    sql.raw(`PRAGMA foreign_key_list("${escapeIdentifier(safe)}")`)
+    sql.raw(`PRAGMA foreign_key_list("${escapeIdentifier(physical)}")`)
   ) as Array<{ id?: number; seq?: number; table?: string; from?: string; to?: string; on_update?: string; on_delete?: string; match?: string }>;
   if (!Array.isArray(rows)) return [];
   return rows.map((r) => ({
     column: String(r?.from ?? ""),
-    referencedTable: String(r?.table ?? ""),
+    table: stripTablePrefix(String(r?.table ?? "")),
+    tablePhysical: String(r?.table ?? ""),
     referencedColumn: String(r?.to ?? ""),
-  })).filter((fk) => fk.column && fk.referencedTable && fk.referencedColumn);
+  })).filter((fk) => fk.column && fk.table && fk.referencedColumn);
 }
 
 /**
  * Retorna campos de texto (TEXT) de uma tabela.
  */
 async function getTextColumns(db: Database, tableName: string): Promise<string[]> {
-  const safe = safeIdentifier(tableName);
-  if (!safe) return [];
+  const logical = safeIdentifier(tableName);
+  if (!logical) return [];
+  const physical = prefixedTable(logical);
   const rows = await db.all(
-    sql.raw(`PRAGMA table_info("${escapeIdentifier(safe)}")`)
+    sql.raw(`PRAGMA table_info("${escapeIdentifier(physical)}")`)
   ) as Array<{ name?: string; type?: string }>;
   if (!Array.isArray(rows)) return [];
   return rows
@@ -90,25 +94,26 @@ async function getTextColumns(db: Database, tableName: string): Promise<string[]
 export async function getRelatedTableInfo(
   db: Database,
   tableName: string
-): Promise<Array<{ table: string; fkColumn: string; refColumn: string; textColumns: string[] }>> {
-  const safe = safeIdentifier(tableName);
-  if (!safe) return [];
-  
+): Promise<Array<{ table: string; tablePhysical: string; fkColumn: string; refColumn: string; textColumns: string[] }>> {
+  const logical = safeIdentifier(tableName);
+  if (!logical) return [];
+
   const foreignKeys = await getForeignKeys(db, tableName);
-  const relatedInfo: Array<{ table: string; fkColumn: string; refColumn: string; textColumns: string[] }> = [];
-  
+  const relatedInfo: Array<{ table: string; tablePhysical: string; fkColumn: string; refColumn: string; textColumns: string[] }> = [];
+
   for (const fk of foreignKeys) {
-    const textColumns = await getTextColumns(db, fk.referencedTable);
+    const textColumns = await getTextColumns(db, fk.table);
     if (textColumns.length > 0) {
       relatedInfo.push({
-        table: fk.referencedTable,
+        table: fk.table,
+        tablePhysical: fk.tablePhysical,
         fkColumn: fk.column,
         refColumn: fk.referencedColumn,
         textColumns,
       });
     }
   }
-  
+
   return relatedInfo;
 }
 
@@ -132,21 +137,22 @@ export async function getTableList(
   tableName: string,
   params: GetTableListParams = {}
 ): Promise<GetTableListResult> {
-  const safeTable = safeIdentifier(tableName);
-  if (!safeTable) {
+  const logicalTable = safeIdentifier(tableName);
+  if (!logicalTable) {
     return { items: [], total: 0, page: 1, limit: 10, totalPages: 0, columns: [] };
   }
+  const physicalTable = prefixedTable(logicalTable);
 
-  const columns = await getTableColumns(db, tableName);
+  const columns = await getTableColumns(db, logicalTable);
   if (columns.length === 0) {
     return { items: [], total: 0, page: 1, limit: 10, totalPages: 0, columns: [] };
   }
 
   // Buscar informações sobre tabelas relacionadas
-  const relatedInfo = await getRelatedTableInfo(db, tableName);
+  const relatedInfo = await getRelatedTableInfo(db, logicalTable);
   
   // Buscar campos de texto da tabela principal
-  const mainTextColumns = await getTextColumns(db, tableName);
+  const mainTextColumns = await getTextColumns(db, logicalTable);
   
   // Construir lista de colunas para SELECT (incluindo campos de texto relacionados)
   const selectColumns: string[] = [];
@@ -154,11 +160,11 @@ export async function getTableList(
   type RelatedWithAlias = (typeof relatedInfo)[number] & { alias: string };
   const relatedWithAliases: RelatedWithAlias[] = relatedInfo.map((r) => ({
     ...r,
-    alias: r.table === safeTable ? `${safeTable}_ref` : r.table,
+    alias: r.table === logicalTable ? `${logicalTable}_ref` : r.table,
   }));
 
   // Adicionar todas as colunas da tabela principal
-  const quotedTable = `"${escapeIdentifier(safeTable)}"`;
+  const quotedTable = `"${escapeIdentifier(physicalTable)}"`;
   selectColumns.push(`${quotedTable}.*`);
   displayColumns.push(...columns);
 
@@ -176,7 +182,7 @@ export async function getTableList(
   const page = Math.max(1, params.page ?? 1);
   const offset = (page - 1) * limit;
   const orderDir = params.orderDir === "asc" ? "ASC" : "DESC";
-  const metaOrderCandidate = safeTable === "posts" && params.order?.startsWith("meta_") && params.order.length > 5
+  const metaOrderCandidate = logicalTable === "posts" && params.order?.startsWith("meta_") && params.order.length > 5
     ? params.order.slice(5)
     : null;
   const useMetaOrder = metaOrderCandidate != null && /^[a-zA-Z0-9_]+$/.test(metaOrderCandidate);
@@ -188,8 +194,8 @@ export async function getTableList(
   // Construir JOINs (com alias para self-join para evitar ambiguidade)
   const joins: string[] = [];
   for (const related of relatedWithAliases) {
-    const isSelfJoin = related.table === safeTable;
-    const quotedRelatedTable = `"${escapeIdentifier(related.table)}"`;
+    const isSelfJoin = related.table === logicalTable;
+    const quotedRelatedTable = `"${escapeIdentifier(related.tablePhysical)}"`;
     const joinTarget = isSelfJoin ? `${quotedRelatedTable} AS "${escapeIdentifier(related.alias)}"` : quotedRelatedTable;
     const quotedFkCol = `"${escapeIdentifier(related.fkColumn)}"`;
     const quotedRefCol = `"${escapeIdentifier(related.refColumn)}"`;
@@ -206,29 +212,30 @@ export async function getTableList(
 
   const whereParts: string[] = [];
   // Na listagem de posts: excluir status "trash" e excluir o post "pai" do menu lateral (show_in_menu = 1)
-  if (safeTable === "posts") {
+  if (logicalTable === "posts") {
     whereParts.push(`${quotedTable}."status" != 'trash'`);
     whereParts.push(`(json_extract(${quotedTable}."meta_values", '$.show_in_menu') IS NULL OR json_extract(${quotedTable}."meta_values", '$.show_in_menu') != 1)`);
-    // Filtro por taxonomia: filter_taxonomy_id (id do termo) ou filter_taxonomy_slug (+ opcional filter_taxonomy_type)
     const taxonomyId = filter["taxonomy_id"];
     const taxonomySlug = filter["taxonomy_slug"];
     const taxonomyType = filter["taxonomy_type"];
     if (taxonomyId != null && taxonomyId.trim() !== "" && /^\d+$/.test(taxonomyId)) {
       whereParts.push(
-        `${quotedTable}."id" IN (SELECT "post_id" FROM "posts_taxonomies" WHERE "term_id" = ${parseInt(taxonomyId, 10)})`
+        `${quotedTable}."id" IN (SELECT "post_id" FROM "${escapeIdentifier(prefixedTable("posts_taxonomies"))}" WHERE "term_id" = ${parseInt(taxonomyId, 10)})`
       );
     } else if (taxonomySlug != null && taxonomySlug.trim() !== "") {
       const slugEscaped = escapeSqliteString(taxonomySlug.trim());
       const typeEscaped = taxonomyType != null && taxonomyType.trim() !== ""
         ? escapeSqliteString(taxonomyType.trim())
         : null;
+      const ptTable = escapeIdentifier(prefixedTable("posts_taxonomies"));
+      const taxTable = escapeIdentifier(prefixedTable("taxonomies"));
       if (typeEscaped != null) {
         whereParts.push(
-          `${quotedTable}."id" IN (SELECT pt."post_id" FROM "posts_taxonomies" pt INNER JOIN "taxonomies" t ON pt."term_id" = t."id" WHERE t."slug" = '${slugEscaped}' AND t."type" = '${typeEscaped}')`
+          `${quotedTable}."id" IN (SELECT pt."post_id" FROM "${ptTable}" pt INNER JOIN "${taxTable}" t ON pt."term_id" = t."id" WHERE t."slug" = '${slugEscaped}' AND t."type" = '${typeEscaped}')`
         );
       } else {
         whereParts.push(
-          `${quotedTable}."id" IN (SELECT pt."post_id" FROM "posts_taxonomies" pt INNER JOIN "taxonomies" t ON pt."term_id" = t."id" WHERE t."slug" = '${slugEscaped}')`
+          `${quotedTable}."id" IN (SELECT pt."post_id" FROM "${ptTable}" pt INNER JOIN "${taxTable}" t ON pt."term_id" = t."id" WHERE t."slug" = '${slugEscaped}')`
         );
       }
     }
@@ -260,7 +267,7 @@ export async function getTableList(
 
   // Construir ORDER BY (inclui custom field em meta_values quando order = "meta_<key>" na tabela posts)
   const META_ORDER_PREFIX = "meta_";
-  const metaOrderKey = safeTable === "posts" && orderCol.startsWith(META_ORDER_PREFIX) && orderCol.length > META_ORDER_PREFIX.length
+  const metaOrderKey = logicalTable === "posts" && orderCol.startsWith(META_ORDER_PREFIX) && orderCol.length > META_ORDER_PREFIX.length
     ? orderCol.slice(META_ORDER_PREFIX.length)
     : null;
   const isSafeMetaKey = metaOrderKey != null && /^[a-zA-Z0-9_]+$/.test(metaOrderKey);

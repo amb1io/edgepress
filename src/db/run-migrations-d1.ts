@@ -72,7 +72,7 @@ async function isSchemaAlreadyApplied(d1: D1Database): Promise<boolean> {
   try {
     const r = await d1
       .prepare(
-        `SELECT 1 FROM sqlite_master WHERE type='table' AND name IN ('post_types','settings') LIMIT 1`
+        `SELECT 1 FROM sqlite_master WHERE type='table' AND name IN ('edp_post_types','edp_settings','post_types','settings') LIMIT 1`
       )
       .first();
     return r != null;
