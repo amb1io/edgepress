@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import { customType, int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { prefixedTable } from "../table-prefix.ts";
 
 /** Integer column that accepts Date or number; D1 requires number, so we convert Date to timestamp. */
 const timestampInt = customType<{ data: number; driverData: number }>({
@@ -21,7 +22,7 @@ export type UserRoleId = (typeof USER_ROLE_IDS)[number];
 /** Label keys for i18n (admin.user.role.${key}) */
 export const USER_ROLE_LABEL_KEYS = ["administrador", "editor", "autor", "leitor"] as const;
 
-export const user = sqliteTable("user", {
+export const user = sqliteTable(prefixedTable("user"), {
   id: text().primaryKey(),
   name: text().notNull(),
   email: text().notNull().unique(),
@@ -32,7 +33,7 @@ export const user = sqliteTable("user", {
   updatedAt: timestampInt("updated_at").notNull(),
 });
 
-export const session = sqliteTable("session", {
+export const session = sqliteTable(prefixedTable("session"), {
   id: text().primaryKey(),
   userId: text("user_id")
     .notNull()
@@ -45,7 +46,7 @@ export const session = sqliteTable("session", {
   updatedAt: timestampInt("updated_at").notNull(),
 });
 
-export const account = sqliteTable("account", {
+export const account = sqliteTable(prefixedTable("account"), {
   id: text().primaryKey(),
   userId: text("user_id")
     .notNull()
@@ -63,7 +64,7 @@ export const account = sqliteTable("account", {
   updatedAt: timestampInt("updated_at").notNull(),
 });
 
-export const verification = sqliteTable("verification", {
+export const verification = sqliteTable(prefixedTable("verification"), {
   id: text().primaryKey(),
   identifier: text().notNull(),
   value: text().notNull(),

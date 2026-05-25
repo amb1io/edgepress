@@ -1,5 +1,6 @@
 import { index, int, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
+import { prefixedTable } from "../table-prefix.ts";
 import { postsTaxonomies } from "./posts_taxonomies.ts";
 import { locales } from "./locales.ts";
 
@@ -8,7 +9,7 @@ import { locales } from "./locales.ts";
  * Armazena categorias, tags e outras taxonomias hierárquicas
  */
 export const taxonomies = sqliteTable(
-  "taxonomies",
+  prefixedTable("taxonomies"),
   {
     id: int().primaryKey({ autoIncrement: true }),
     name: text().notNull(),

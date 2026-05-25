@@ -1,5 +1,6 @@
 import { index, int, primaryKey, sqliteTable } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
+import { prefixedTable } from "../table-prefix.ts";
 import { posts } from "./post.ts";
 
 /**
@@ -7,7 +8,7 @@ import { posts } from "./post.ts";
  * Relaciona posts com attachments (media são posts do tipo "attachment")
  */
 export const postsMedia = sqliteTable(
-  "posts_media",
+  prefixedTable("posts_media"),
   {
     post_id: int("post_id")
       .notNull()

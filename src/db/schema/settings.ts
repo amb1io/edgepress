@@ -1,11 +1,12 @@
 import { index, int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { prefixedTable } from "../table-prefix.ts";
 
 /**
  * Tabela de configurações (options/settings)
  * Armazena pares name/value com flag autoload
  */
 export const settings = sqliteTable(
-  "settings",
+  prefixedTable("settings"),
   {
     id: int().primaryKey({ autoIncrement: true }),
     name: text().notNull(),

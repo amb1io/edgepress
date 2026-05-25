@@ -17,6 +17,7 @@ import {
   sessionRelations,
   accountRelations,
 } from "../../db/schema/auth.ts";
+import { prefixedTable } from "../../db/table-prefix.ts";
 
 const authSchema = {
   user,
@@ -29,7 +30,7 @@ const authSchema = {
 };
 
 const AUTH_TABLE_STATEMENTS = [
-  `CREATE TABLE IF NOT EXISTS "user" (
+  `CREATE TABLE IF NOT EXISTS "${prefixedTable("user")}" (
     "id" text PRIMARY KEY NOT NULL,
     "name" text NOT NULL,
     "email" text NOT NULL,
@@ -39,8 +40,8 @@ const AUTH_TABLE_STATEMENTS = [
     "created_at" integer NOT NULL,
     "updated_at" integer NOT NULL
   )`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS "user_email_unique" ON "user" ("email")`,
-  `CREATE TABLE IF NOT EXISTS "session" (
+  `CREATE UNIQUE INDEX IF NOT EXISTS "user_email_unique" ON "${prefixedTable("user")}" ("email")`,
+  `CREATE TABLE IF NOT EXISTS "${prefixedTable("session")}" (
     "id" text PRIMARY KEY NOT NULL,
     "user_id" text NOT NULL,
     "token" text NOT NULL,
@@ -50,8 +51,8 @@ const AUTH_TABLE_STATEMENTS = [
     "created_at" integer NOT NULL,
     "updated_at" integer NOT NULL
   )`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS "session_token_unique" ON "session" ("token")`,
-  `CREATE TABLE IF NOT EXISTS "account" (
+  `CREATE UNIQUE INDEX IF NOT EXISTS "session_token_unique" ON "${prefixedTable("session")}" ("token")`,
+  `CREATE TABLE IF NOT EXISTS "${prefixedTable("account")}" (
     "id" text PRIMARY KEY NOT NULL,
     "user_id" text NOT NULL,
     "account_id" text NOT NULL,
@@ -66,7 +67,7 @@ const AUTH_TABLE_STATEMENTS = [
     "created_at" integer NOT NULL,
     "updated_at" integer NOT NULL
   )`,
-  `CREATE TABLE IF NOT EXISTS "verification" (
+  `CREATE TABLE IF NOT EXISTS "${prefixedTable("verification")}" (
     "id" text PRIMARY KEY NOT NULL,
     "identifier" text NOT NULL,
     "value" text NOT NULL,

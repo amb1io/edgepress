@@ -1,5 +1,6 @@
 import { index, int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
+import { prefixedTable } from "../table-prefix.ts";
 import { metaSchemaColumn } from "./meta_schema.ts";
 import { posts } from "./post.ts";
 
@@ -8,7 +9,7 @@ import { posts } from "./post.ts";
  * Define tipos customizados (post, page, attachment, etc)
  */
 export const postTypes = sqliteTable(
-  "post_types",
+  prefixedTable("post_types"),
   {
     id: int().primaryKey({ autoIncrement: true }),
     slug: text().notNull().unique(),

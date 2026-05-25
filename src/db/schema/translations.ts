@@ -1,11 +1,12 @@
 import { index, int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { prefixedTable } from "../table-prefix.ts";
 
 /**
  * Tabela de traduções
  * Armazena chaves de tradução organizadas por namespace
  */
 export const translations = sqliteTable(
-  "translations",
+  prefixedTable("translations"),
   {
     id: int().primaryKey({ autoIncrement: true }),
     namespace: text("namespace").notNull(),

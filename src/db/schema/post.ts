@@ -1,5 +1,6 @@
 import { index, int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
+import { prefixedTable } from "../table-prefix.ts";
 import { postTypes } from "./post_type.ts";
 import { user } from "./auth.ts";
 import { locales } from "./locales.ts";
@@ -9,7 +10,7 @@ import { locales } from "./locales.ts";
  * Armazena conteúdo de diferentes tipos (post, page, attachment, etc)
  */
 export const posts = sqliteTable(
-  "posts",
+  prefixedTable("posts"),
   {
     id: int().primaryKey({ autoIncrement: true }),
     post_type_id: int("post_type_id")

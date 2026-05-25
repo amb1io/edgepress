@@ -1,11 +1,12 @@
 import { index, int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { prefixedTable } from "../table-prefix.ts";
 
 /**
  * Tabela de locales
  * Armazena informações sobre idiomas, países e fusos horários
  */
 export const locales = sqliteTable(
-  "locales",
+  prefixedTable("locales"),
   {
     id: int().primaryKey({ autoIncrement: true }),
     language: text().notNull(),
