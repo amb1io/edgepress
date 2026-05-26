@@ -3,7 +3,7 @@ import { db } from "../db/index.ts";
 import {
   buildSitemapXml,
   getSitemapEntries,
-} from "../lib/services/sitemap-service.ts";
+} from "../core/services/sitemap-service.ts";
 
 export const prerender = false;
 

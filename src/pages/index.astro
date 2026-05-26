@@ -1,12 +1,12 @@
 ---
 import { db } from "../db/index.ts";
-import { getKvFromLocals } from "../lib/utils/runtime-locals.ts";
-import { getActiveThemeSlugFromSettings } from "../lib/services/settings-service.ts";
+import { getKvFromLocals } from "../utils/runtime-locals.ts";
+import { getActiveThemeSlugFromSettings } from "../core/services/settings-service.ts";
 import {
   getThemeSnapshotBySlug,
   validateThemeCanonicalMeta,
-} from "../lib/services/theme-service.ts";
-import Notificacao from "../components/Notificacao.astro";
+} from "../core/services/theme-service.ts";
+import Notificacao from "../components/themes/Notificacao.astro";
 
 const locals = Astro.locals as App.Locals;
 const kv = getKvFromLocals(locals);

@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "@libsql/client/node";
 import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "../src/db/schema.ts";
-import { getSitemapAbsoluteUrls } from "../src/lib/services/sitemap-service.ts";
+import { getSitemapAbsoluteUrls } from "../src/utils/services/sitemap-service.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const WRANGLER_STATE = join(root, ".wrangler", "state", "v3", "d1");

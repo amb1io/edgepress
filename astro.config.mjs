@@ -16,8 +16,8 @@ import icon from "astro-icon";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const patchPagesWrangler = path.join(root, "scripts/patch-pages-wrangler.mjs");
-const shimDebug = path.resolve(root, "src/lib/shim-debug.ts");
-const shimAsyncHooks = path.resolve(root, "src/lib/shim-node-async-hooks.ts");
+const shimDebug = path.resolve(root, "src/utils/shim-debug.ts");
+const shimAsyncHooks = path.resolve(root, "src/utils/shim-node-async-hooks.ts");
 const reactRoot = path.resolve(root, "node_modules/react");
 const reactDomRoot = path.resolve(root, "node_modules/react-dom");
 
@@ -106,7 +106,7 @@ export default defineConfig({
     // invalidar chunks em node_modules/.vite/deps_ssr durante reload ("file does not exist"
     // / "Module is undefined"). Mantém drizzle/auth/libsql fora do dep optimizer.
     optimizeDeps: {
-      entries: ["src/components/BlockNoteEditor.tsx"],
+      entries: ["src/components/admin/BlockNoteEditor.tsx"],
       include: [
         "react",
         "react-dom",

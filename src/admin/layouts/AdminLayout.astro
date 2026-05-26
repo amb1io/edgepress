@@ -1,0 +1,53 @@
+---
+import "../../assets/app.css";
+import { type Locale } from "../../i18n/index.ts";
+import type { MenuItem } from "../../utils/menu.ts";
+import AdminHeader from "../components/AdminHeader.astro";
+import AdminSidebar from "../components/AdminSidebar.astro";
+import HtmxLoader from "../../components/themes/HtmxLoader.astro";
+// HTMX carregado do pacote instalado (não CDN)
+import htmxScript from "htmx.org/dist/htmx.min.js?url";
+
+interface Props {
+  title: string;
+  locale: string;
+  menuItems?: MenuItem[];
+  user?: {
+    email?: string;
+    name?: string;
+    image?: string | null;
+  } | null;
+}
+
+const { title, locale, menuItems = [], user } = Astro.props;
+const currentLocale = locale as Locale;
+---
+
+<!doctype html>
+<html
+  lang={currentLocale === "pt-br" ? "pt-BR" : currentLocale}
+  data-theme="light"
+>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <script src={htmxScript}></script>
+  </head>
+  <body class="min-h-screen bg-base-200">
+    <HtmxLoader />
+    <div class="flex min-h-screen">
+      <AdminSidebar locale={locale} menuItems={menuItems} />
+
+      <div class="flex-1 flex flex-col min-w-0">
+        <AdminHeader title={title} locale={locale} user={user}>
+          <slot name="header-actions" slot="header-actions" />
+        </AdminHeader>
+        <main class="flex-1 flex flex-col min-h-0 overflow-auto">
+          <slot />
+        </main>
+      </div>
+    </div>
+    <!-- Logout: link "Sair" no AdminHeader aponta para /api/logout -->
+  </body>
+</html>

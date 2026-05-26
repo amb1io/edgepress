@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { db } from "../db/index.ts";
-import { getSiteOrigin } from "../lib/services/sitemap-service.ts";
+import { getSiteOrigin } from "../core/services/sitemap-service.ts";
 
 export const prerender = false;
 

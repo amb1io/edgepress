@@ -1,18 +1,18 @@
-import { auth } from "./lib/auth.ts";
+import { auth } from "./utils/auth.ts";
 import { defineMiddleware } from "astro:middleware";
 import { defaultLocale } from "./i18n/index.ts";
 import {
   getTrustedOrigins,
   isValidOrigin,
-} from "./lib/utils/csrf-protection.ts";
-import { ensureTranslationsLoaded } from "./lib/i18n-helpers.ts";
+} from "./utils/csrf-protection.ts";
+import { ensureTranslationsLoaded } from "./utils/i18n-helpers.ts";
 import { db } from "./db/index.ts";
 import {
   getActiveThemeSlugFromSettings,
   isSetupComplete,
-} from "./lib/services/settings-service.ts";
+} from "./core/services/settings-service.ts";
 import { env as cfEnv } from "cloudflare:workers";
-import { getKvFromLocals } from "./lib/utils/runtime-locals.ts";
+import { getKvFromLocals } from "./utils/runtime-locals.ts";
 
 // Endpoints sensíveis que requerem validação extra de CSRF
 const sensitiveAPIPaths = ["/api/posts", "/api/upload", "/api/media"];
