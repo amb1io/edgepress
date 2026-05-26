@@ -8,8 +8,8 @@ binding = "ASSETS"
 
 # Production (default): `wrangler deploy`
 [vars]
-BETTER_AUTH_URL = "https://farra-media.rhamses.workers.dev"
-BETTER_AUTH_TRUSTED_ORIGINS = "https://farra-media.rhamses.workers.dev,https://feat-farra-theme.rhamses.workers.dev"
+BETTER_AUTH_URL = "https://farra.media"
+BETTER_AUTH_TRUSTED_ORIGINS = "https://farra-media.rhamses.workers.dev,https://feat-farra-theme.rhamses.workers.dev,https://farra.media"
 RATE_LIMIT_LOGIN_MAX = "10"
 RATE_LIMIT_LOGIN_WINDOW_MIN = "5"
 RATE_LIMIT_REGISTER_MAX = "10"
