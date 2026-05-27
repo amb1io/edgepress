@@ -6,16 +6,11 @@
 import AdminLayout from "../layouts/AdminLayout.astro";
 import AdminFormContainer from "../components/admin/AdminFormContainer.astro";
 import AdminFormActions from "../components/admin/AdminFormActions.astro";
-import DataListPanel from "../components/DataListPanel.astro";
+import DataList from "../components/DataList.astro";
 import { t, type Locale } from "../../i18n/index.ts";
 import type { MenuItem } from "../../utils/menu.ts";
 import type { MetaSchemaItem } from "../../db/schema/meta_schema.ts";
 import { LINE_MD_ICONS, DEFAULT_ICON, isValidLineMdIcon } from "../../utils/line-md-icons.ts";
-import {
-  buildUrlWithParams,
-  filterItemsClientSide,
-  parseFilterParams,
-} from "../../utils/list-utils.ts";
 
 export interface PostTypeRow {
   id: number;
@@ -128,16 +123,11 @@ const listColumns = [
   { key: "name", label: t(currentLocale, "admin.settings.name") },
   { key: "slug", label: t(currentLocale, "admin.taxonomy.formSlug") },
 ];
-const filter = parseFilterParams(Astro.url.searchParams);
-const listItems = filterItemsClientSide(
-  items.map((row) => ({ id: row.id, name: row.name, slug: row.slug })),
-  filter,
-  listColumns.map((col) => col.key),
-);
-const filterClearHref = buildUrlWithParams(listUrl, Astro.url.searchParams, {
-  filter_name: null,
-  filter_slug: null,
-});
+const listItems = items.map((row) => ({
+  id: row.id,
+  name: row.name,
+  slug: row.slug,
+}));
 const deleteConfirmMessage =
   t(currentLocale, "admin.postTypes.deleteConfirm") ||
   "Se apagar o post type todos os posts associados serão deletados.";
@@ -386,16 +376,9 @@ const deleteConfirmMessage =
 
       <div>
         <h3 class="font-medium mb-3">{t(currentLocale, "admin.list.title")}</h3>
-        <DataListPanel
+        <DataList
           columns={listColumns}
           items={listItems}
-          action={listUrl}
-          hiddenFields={{ page: "post_types" }}
-          filterValues={filter}
-          filterPlaceholder={t(currentLocale, "admin.list.filter")}
-          filterSubmitLabel={t(currentLocale, "admin.list.filterSubmit")}
-          filterClearLabel={t(currentLocale, "admin.list.filterClear")}
-          filterClearHref={filterClearHref}
           emptyMessage={t(currentLocale, "admin.list.noItems")}
           emptyColspan={3}
           editLabel={t(currentLocale, "admin.list.edit")}

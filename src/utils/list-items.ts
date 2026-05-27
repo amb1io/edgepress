@@ -20,11 +20,15 @@ export type ListItem = {
   updated_at: number | null;
 };
 
+export type ListOrderEntry = { column: string; dir: "asc" | "desc" };
+
 export type GetListItemsParams = {
   type?: string;
   status?: string;
   order?: string;
   orderDir?: "asc" | "desc";
+  /** Ordenação multi-coluna; tem prioridade sobre `order` / `orderDir`. */
+  orders?: ListOrderEntry[];
   limit?: number;
   page?: number;
   /** Optional filters: column name -> search string (LIKE) */
@@ -62,19 +66,34 @@ export async function getListItems(
 ): Promise<GetListItemsResult> {
   const typeSlug = params.type ?? "post";
   const status = params.status;
-  const order = params.order ?? "created_at";
-  const orderDir = params.orderDir ?? "desc";
-  const limit = Math.min(Math.max(1, params.limit ?? 10), 100);
+  const orderEntries: ListOrderEntry[] =
+    params.orders && params.orders.length > 0
+      ? params.orders
+      : [
+          {
+            column: params.order ?? "created_at",
+            dir: params.orderDir ?? "desc",
+          },
+        ];
+  const limit = Math.min(Math.max(1, params.limit ?? 10), 5000);
   const page = Math.max(1, params.page ?? 1);
   const offset = (page - 1) * limit;
   const filter = params.filter ?? {};
 
-  const orderColumn = SORTABLE_COLUMNS.includes(
-    order as (typeof SORTABLE_COLUMNS)[number],
-  )
-    ? order
-    : "created_at";
-  const orderFn = orderDir === "asc" ? asc : desc;
+  function orderExpression(entry: ListOrderEntry) {
+    const column = SORTABLE_COLUMNS.includes(
+      entry.column as (typeof SORTABLE_COLUMNS)[number],
+    )
+      ? entry.column
+      : "created_at";
+    const orderFn = entry.dir === "asc" ? asc : desc;
+    if (column === "author") return orderFn(user.name);
+    if (column === "id") return orderFn(posts.id);
+    if (column === "title") return orderFn(posts.title);
+    if (column === "status") return orderFn(posts.status);
+    if (column === "created_at") return orderFn(posts.created_at);
+    return orderFn(posts.updated_at);
+  }
 
   const conditions = [
     eq(postTypes.slug, typeSlug),
@@ -167,21 +186,8 @@ export async function getListItems(
 
   const total = Number(countResult?.count ?? 0);
 
-  const orderByColumn =
-    orderColumn === "author"
-      ? orderFn(user.name)
-      : orderColumn === "id"
-        ? orderFn(posts.id)
-        : orderColumn === "title"
-          ? orderFn(posts.title)
-          : orderColumn === "status"
-            ? orderFn(posts.status)
-            : orderColumn === "created_at"
-              ? orderFn(posts.created_at)
-              : orderFn(posts.updated_at);
-
   const rows = await baseQuery
-    .orderBy(orderByColumn)
+    .orderBy(...orderEntries.map((entry) => orderExpression(entry)))
     .limit(limit)
     .offset(offset);
 
@@ -272,7 +278,7 @@ export async function getSettingsListItems(
     ? params.order
     : "id";
   const orderDir = params.orderDir ?? "desc";
-  const limit = Math.min(Math.max(1, params.limit ?? 10), 100);
+  const limit = Math.min(Math.max(1, params.limit ?? 10), 5000);
   const page = Math.max(1, params.page ?? 1);
   const offset = (page - 1) * limit;
   const filter = params.filter ?? {};

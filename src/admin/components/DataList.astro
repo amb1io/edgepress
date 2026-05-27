@@ -1,14 +1,27 @@
 ---
 /**
- * Lista de dados reutilizável (thead + tbody). Usado em list.astro e templates (ex.: taxonomies).
+ * Lista de dados reutilizável com DataTables (datatables.net-dt).
+ * Usado em list.astro e templates (ex.: taxonomies).
  */
 import DataListActions from "./DataListActions.astro";
+import {
+  normalizeDataListPageLength,
+  toLimitUrlTemplate,
+  type DataListTableConfig,
+} from "./data-list-page-length.ts";
+import {
+  buildDataTableInitialOrder,
+  toOrderUrlTemplate,
+  type DataListOrderEntry,
+} from "./data-list-order.ts";
 
 export interface DataListColumn {
   key: string;
   label: string;
-  /** Link para ordenação (opcional). */
+  /** @deprecated Use `sortable` + ordenação DataTables. */
   sortLink?: string;
+  /** Coluna participa da ordenação (multi-coluna com Shift+clique). */
+  sortable?: boolean;
 }
 
 export interface DataListActionConfig {
@@ -19,12 +32,14 @@ export interface DataListActionConfig {
   duplicatePathTemplate?: string;
 }
 
+export type { DataListOrderEntry } from "./data-list-order.ts";
+
 interface Props {
   columns: DataListColumn[];
   items: Record<string, unknown>[];
   emptyMessage: string;
-  /** Número de colunas para o colspan da linha vazia. */
-  emptyColspan: number;
+  /** Número de colunas para o colspan da linha vazia (legado; DataTables usa emptyTable). */
+  emptyColspan?: number;
   /** Se definido, renderiza coluna "Ações" com Editar e Deletar (HTMX). */
   actionConfig?: DataListActionConfig;
   /** Se true, inclui coluna com checkbox "select all" e checkboxes por linha. */
@@ -45,20 +60,29 @@ interface Props {
   deleteLabel?: string;
   /** Label do botão Duplicar. */
   duplicateLabel?: string;
-  /** Paginação: quando definido e totalPages > 1, renderiza controles abaixo da tabela. */
+  /** Coluna com link para edição (padrão: title). */
+  linkColumnKey?: string;
+  /** ID da tabela (opcional; gerado se omitido). */
+  tableId?: string;
+  /** Paginação no servidor: quando definido, DataTables não pagina; controles abaixo da tabela. */
   pagination?: {
     page: number;
     totalPages: number;
     total: number;
-    /** Função que retorna a URL para uma página (ex.: page=2). */
+    limit?: number;
     buildPageUrl: (page: number) => string;
+    buildLimitUrl?: (limit: number) => string;
   };
-  /** Label do botão "Anterior". */
+  /** Itens por página (listas sem paginação no servidor). */
+  pageLength?: number;
   previousLabel?: string;
-  /** Label do botão "Próxima". */
   nextLabel?: string;
-  /** Texto central da paginação (ex.: "Página 1 de 3 (10 itens)"). */
   pageOfText?: string;
+  /** Ordenação no servidor sincronizada com DataTables (Shift+clique = multi-coluna). */
+  serverOrder?: {
+    entries: DataListOrderEntry[];
+    buildOrderUrl: (order: string, orderDir: string) => string;
+  };
 }
 
 const {
@@ -75,16 +99,57 @@ const {
   editLabel = "Editar",
   deleteLabel = "Deletar",
   duplicateLabel = "Duplicar",
+  linkColumnKey = "title",
+  tableId = `data-list-${Math.random().toString(36).slice(2, 9)}`,
   pagination,
+  pageLength: pageLengthProp = 10,
   previousLabel = "Anterior",
   nextLabel = "Próxima",
   pageOfText = "",
+  serverOrder,
+  emptyColspan: emptyColspanProp,
 } = Astro.props;
 
-/** Regra geral: não exibir coluna ID na lista (o id continua nos items para links de edição/deleção). */
 const displayColumns = columns.filter((col) => col.key !== "id");
-const computedEmptyColspan =
-  (selectable ? 1 : 0) + displayColumns.length + (actionConfig ? 1 : 0);
+const emptyColspan =
+  emptyColspanProp ?? displayColumns.length + (actionConfig ? 1 : 0);
+const displayColumnKeys = displayColumns.map((col) => col.key);
+const sortableColumnKeys = displayColumns
+  .filter((col) => col.sortable !== false)
+  .map((col) => col.key);
+const serverBackedOrder = Boolean(serverOrder);
+const columnIndexOffset = selectable ? 1 : 0;
+
+const resolvedPageLength = normalizeDataListPageLength(
+  pagination?.limit ?? pageLengthProp,
+);
+
+const dtConfig: DataListTableConfig = {
+  emptyMessage,
+  serverPagination: Boolean(pagination),
+  serverBackedOrder,
+  selectable,
+  hasActions: Boolean(actionConfig),
+  dataColumnCount: displayColumns.length,
+  displayColumnKeys,
+  sortableColumnKeys,
+  pageLength: resolvedPageLength,
+  ...(serverOrder
+    ? {
+        initialOrder: buildDataTableInitialOrder(
+          serverOrder.entries,
+          displayColumnKeys,
+          sortableColumnKeys,
+          columnIndexOffset,
+        ),
+        orderUrlTemplate: toOrderUrlTemplate(serverOrder.buildOrderUrl),
+      }
+    : {}),
+  ...(pagination?.buildLimitUrl
+    ? { limitUrlTemplate: toLimitUrlTemplate(pagination.buildLimitUrl) }
+    : {}),
+  ...(selectable && selectAllId ? { selectAllId } : {}),
+};
 
 function expandTemplate(
   template: string,
@@ -94,51 +159,37 @@ function expandTemplate(
 }
 ---
 
-<table class="table table-zebra">
-  <thead>
-    <tr>
+<div class="data-list-wrapper overflow-x-auto">
+  <table
+    id={tableId}
+    class="display w-full"
+    data-dt-config={JSON.stringify(dtConfig)}
+    data-display-column-keys={displayColumnKeys.join("|")}
+  >
+    <thead>
+      <tr>
+        {
+          selectable && (
+            <th class="w-10">
+              <label class="label cursor-pointer justify-center p-0">
+                <input
+                  type="checkbox"
+                  class="checkbox checkbox-sm"
+                  id={selectAllId}
+                  aria-label={selectAllLabel}
+                />
+              </label>
+            </th>
+          )
+        }
+        {
+          displayColumns.map((col) => <th>{col.label}</th>)
+        }
+        {actionConfig && <th>{actionsColumnLabel}</th>}
+      </tr>
+    </thead>
+    <tbody>
       {
-        selectable && (
-          <th class="w-10">
-            <label class="label cursor-pointer justify-center p-0">
-              <input
-                type="checkbox"
-                class="checkbox checkbox-sm"
-                id={selectAllId}
-                aria-label={selectAllLabel}
-              />
-            </label>
-          </th>
-        )
-      }
-      {
-        displayColumns.map((col) => (
-          <th>
-            {col.sortLink ? (
-              <a href={col.sortLink} class="link link-hover">
-                {col.label}
-              </a>
-            ) : (
-              col.label
-            )}
-          </th>
-        ))
-      }
-      {actionConfig && <th>{actionsColumnLabel}</th>}
-    </tr>
-  </thead>
-  <tbody>
-    {
-      items.length === 0 ? (
-        <tr>
-          <td
-            colspan={computedEmptyColspan}
-            class="text-center py-8 text-base-content/60"
-          >
-            {emptyMessage}
-          </td>
-        </tr>
-      ) : (
         items.map((item) => (
           <tr>
             {selectable && (
@@ -155,9 +206,7 @@ function expandTemplate(
             )}
             {displayColumns.map((col) => {
               const cellValue = String(item[col.key] ?? "—");
-              // Se for a coluna "title" e houver actionConfig, transformar em link para edição
-              const isTitleColumn = col.key === "title";
-              const shouldLinkTitle = isTitleColumn && actionConfig;
+              const shouldLinkTitle = col.key === linkColumnKey && actionConfig;
 
               return (
                 <td>
@@ -197,14 +246,14 @@ function expandTemplate(
             )}
           </tr>
         ))
-      )
-    }
-  </tbody>
-</table>
+      }
+    </tbody>
+  </table>
+</div>
 
 {
   pagination && pagination.totalPages > 1 && (
-    <div class="flex justify-center gap-2 mt-4">
+    <div class="flex justify-center gap-2 mt-4 data-list-server-pagination">
       <a
         href={pagination.buildPageUrl(pagination.page - 1)}
         class={`btn btn-sm ${pagination.page <= 1 ? "invisible" : ""}`}
@@ -222,29 +271,7 @@ function expandTemplate(
   )
 }
 
-<style>
-  tr.data-list-row-fade-out {
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-</style>
-
-<script define:vars={{ selectAllId }}>
-  const selectAll = document.getElementById(selectAllId);
-  const rowSelects = document.querySelectorAll(".row-select");
-  if (selectAll && selectAll instanceof HTMLInputElement) {
-    selectAll.addEventListener("change", () => {
-      rowSelects.forEach((el) => {
-        if (el instanceof HTMLInputElement) el.checked = selectAll.checked;
-      });
-    });
-  }
-  document.body.addEventListener("htmx:beforeRequest", (ev) => {
-    const evt = ev;
-    const el = "detail" in evt && evt.detail?.elt;
-    if (el?.getAttribute?.("hx-delete")) {
-      const tr = el.closest("tr");
-      if (tr) tr.classList.add("data-list-row-fade-out");
-    }
-  });
+<script>
+  import "./data-list-client.ts";
+  import "./data-list-init.ts";
 </script>

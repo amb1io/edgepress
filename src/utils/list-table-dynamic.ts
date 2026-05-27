@@ -10,9 +10,12 @@ function safeIdentifier(name: string): string | null {
   return VALID_TABLE_IDENTIFIER.test(name) ? name : null;
 }
 
+export type TableListOrderEntry = { column: string; dir: "asc" | "desc" };
+
 export type GetTableListParams = {
   order?: string;
   orderDir?: "asc" | "desc";
+  orders?: TableListOrderEntry[];
   limit?: number;
   page?: number;
   filter?: Record<string, string>;
@@ -178,17 +181,22 @@ export async function getTableList(
     }
   }
 
-  const limit = Math.min(100, Math.max(1, params.limit ?? 10));
+  const limit = Math.min(5000, Math.max(1, params.limit ?? 10));
   const page = Math.max(1, params.page ?? 1);
   const offset = (page - 1) * limit;
-  const orderDir = params.orderDir === "asc" ? "ASC" : "DESC";
-  const metaOrderCandidate = logicalTable === "posts" && params.order?.startsWith("meta_") && params.order.length > 5
-    ? params.order.slice(5)
-    : null;
-  const useMetaOrder = metaOrderCandidate != null && /^[a-zA-Z0-9_]+$/.test(metaOrderCandidate);
-  const orderCol = useMetaOrder
-    ? params.order!
-    : (params.order && displayColumns.includes(params.order) ? params.order : displayColumns[0] || columns[0]);
+  const defaultOrderCol = displayColumns[0] || columns[0];
+  const orderEntries: TableListOrderEntry[] =
+    params.orders && params.orders.length > 0
+      ? params.orders
+      : [
+          {
+            column:
+              params.order && displayColumns.includes(params.order)
+                ? params.order
+                : defaultOrderCol,
+            dir: params.orderDir ?? "desc",
+          },
+        ];
   const filter = params.filter ?? {};
 
   // Construir JOINs (com alias para self-join para evitar ambiguidade)
@@ -266,32 +274,35 @@ export async function getTableList(
   }
   const whereSql = whereParts.length > 0 ? ` WHERE ${whereParts.join(" AND ")}` : "";
 
-  // Construir ORDER BY (inclui custom field em meta_values quando order = "meta_<key>" na tabela posts)
   const META_ORDER_PREFIX = "meta_";
-  const metaOrderKey = logicalTable === "posts" && orderCol.startsWith(META_ORDER_PREFIX) && orderCol.length > META_ORDER_PREFIX.length
-    ? orderCol.slice(META_ORDER_PREFIX.length)
-    : null;
-  const isSafeMetaKey = metaOrderKey != null && /^[a-zA-Z0-9_]+$/.test(metaOrderKey);
 
-  let quotedOrderCol: string;
-  if (isSafeMetaKey) {
-    quotedOrderCol = `json_extract(${quotedTable}."meta_values", '$.${metaOrderKey.replace(/"/g, '""')}')`;
-  } else if (logicalTable === "posts" && orderCol === "published_at") {
-    // Mais recente/antigo por data efetiva (publicação ou criação).
-    quotedOrderCol = `COALESCE(${quotedTable}."published_at", ${quotedTable}."created_at")`;
-  } else if (columns.includes(orderCol)) {
-    quotedOrderCol = `${quotedTable}."${escapeIdentifier(orderCol)}"`;
-  } else {
+  function resolveQuotedOrderCol(orderCol: string): string {
+    const metaOrderKey =
+      logicalTable === "posts" &&
+      orderCol.startsWith(META_ORDER_PREFIX) &&
+      orderCol.length > META_ORDER_PREFIX.length
+        ? orderCol.slice(META_ORDER_PREFIX.length)
+        : null;
+    const isSafeMetaKey = metaOrderKey != null && /^[a-zA-Z0-9_]+$/.test(metaOrderKey);
+
+    if (isSafeMetaKey) {
+      return `json_extract(${quotedTable}."meta_values", '$.${metaOrderKey.replace(/"/g, '""')}')`;
+    }
+    if (logicalTable === "posts" && orderCol === "published_at") {
+      return `COALESCE(${quotedTable}."published_at", ${quotedTable}."created_at")`;
+    }
+    if (columns.includes(orderCol)) {
+      return `${quotedTable}."${escapeIdentifier(orderCol)}"`;
+    }
     const related = relatedWithAliases.find((r) => {
       const prefix = `${r.alias}_`;
       return orderCol.startsWith(prefix) && r.textColumns.includes(orderCol.slice(prefix.length));
     });
     if (related) {
       const colPart = orderCol.slice(related.alias.length + 1);
-      quotedOrderCol = `"${escapeIdentifier(related.alias)}"."${escapeIdentifier(colPart)}"`;
-    } else {
-      quotedOrderCol = `"${escapeIdentifier(orderCol)}"`;
+      return `"${escapeIdentifier(related.alias)}"."${escapeIdentifier(colPart)}"`;
     }
+    return `"${escapeIdentifier(orderCol)}"`;
   }
 
   const countQuery = sql.raw(
@@ -300,7 +311,15 @@ export async function getTableList(
   const countResult = await db.all(countQuery) as { c?: number }[];
   const total = Number(countResult?.[0]?.c ?? 0);
 
-  const orderSql = `ORDER BY ${quotedOrderCol} ${orderDir}`;
+  const orderSql = `ORDER BY ${orderEntries
+    .map((entry) => {
+      const orderCol = displayColumns.includes(entry.column)
+        ? entry.column
+        : defaultOrderCol;
+      const dir = entry.dir === "asc" ? "ASC" : "DESC";
+      return `${resolveQuotedOrderCol(orderCol)} ${dir}`;
+    })
+    .join(", ")}`;
   const selectQuery = sql.raw(
     `SELECT ${selectColumns.join(", ")} FROM ${quotedTable}${joinSql}${whereSql} ${orderSql} LIMIT ${limit} OFFSET ${offset}`
   );

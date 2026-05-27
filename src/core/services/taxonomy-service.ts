@@ -1,4 +1,4 @@
-import { eq, and, like, inArray } from "drizzle-orm";
+import { eq, and, like, inArray, or, isNull } from "drizzle-orm";
 import { taxonomies, postsTaxonomies } from "../../db/schema.ts";
 import type { Database } from "../../shared/types/database.ts";
 import type { Taxonomy, TaxonomyCreatePayload, TaxonomyUpdatePayload } from "../../shared/types/taxonomy.ts";
@@ -231,4 +231,47 @@ export async function taxonomySlugExists(
   }
   
   return results.length > 0;
+}
+
+const TAXONOMY_ROOT_SLUG: Record<string, string> = {
+  category: "categoria",
+  tag: "tag",
+};
+
+/**
+ * ID do termo raiz do type (parent_id null). Cria o registro raiz se ainda não existir.
+ */
+export async function getTaxonomyTypeRootId(db: Database, type: string): Promise<number | null> {
+  if (!type.trim()) return null;
+
+  const [existing] = await db
+    .select({ id: taxonomies.id })
+    .from(taxonomies)
+    .where(
+      and(
+        eq(taxonomies.type, type),
+        or(isNull(taxonomies.parent_id), eq(taxonomies.parent_id, 0)),
+      ),
+    )
+    .limit(1);
+
+  if (existing) return existing.id;
+
+  const now = Date.now();
+  const slug = TAXONOMY_ROOT_SLUG[type] ?? type;
+  const name = slug.charAt(0).toUpperCase() + slug.slice(1);
+
+  const [inserted] = await db
+    .insert(taxonomies)
+    .values({
+      name,
+      slug,
+      type,
+      parent_id: null,
+      created_at: now,
+      updated_at: now,
+    })
+    .returning({ id: taxonomies.id });
+
+  return inserted?.id ?? null;
 }

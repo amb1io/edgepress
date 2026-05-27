@@ -5,18 +5,14 @@
  * type e parent_id vêm da URL e do registro pai do type.
  */
 import AdminTwoColumns from "../components/admin/AdminTwoColumns.astro";
-import DataListPanel from "../components/DataListPanel.astro";
+import DataList from "../components/DataList.astro";
 import LanguageDropdown from "../components/LanguageDropdown.astro";
 import { db } from "../../db/index.ts";
 import { taxonomies, locales as localesTable } from "../../db/schema.ts";
-import { and, eq, or, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { getTaxonomyTypeRootId } from "../../core/services/taxonomy-service.ts";
 import { t, type Locale } from "../../i18n/index.ts";
 import type { MenuItem } from "../../utils/menu.ts";
-import {
-  buildUrlWithParams,
-  filterFromParams,
-  filterItemsClientSide,
-} from "../../utils/list-utils.ts";
 
 export interface Props {
   locale: string;
@@ -47,20 +43,7 @@ const action = params["action"] ?? "";
 const idParam = params["id"] ?? "";
 const isEdit = action === "edit" && idParam && /^\d+$/.test(idParam);
 
-// Registro pai desse type (raiz: parent_id null) para usar como parent_id no form
-const rootRows = type
-  ? await db
-      .select({ id: taxonomies.id })
-      .from(taxonomies)
-      .where(
-        and(
-          eq(taxonomies.type, type),
-          or(isNull(taxonomies.parent_id), eq(taxonomies.parent_id, 0)),
-        ),
-      )
-      .limit(1)
-  : [];
-const parentId = rootRows.length > 0 ? rootRows[0]!.id : null;
+const parentId = type ? await getTaxonomyTypeRootId(db, type) : null;
 
 // Em modo edição, carregar o registro para preencher o formulário
 let editTaxonomy: {
@@ -129,34 +112,19 @@ const initialSlug = editTaxonomy?.slug ?? "";
 const initialDescription = editTaxonomy?.description ?? "";
 const initialLocaleId = editTaxonomy?.id_locale_code ?? null;
 
-const filter = filterFromParams(params);
-const taxonomyItems = filterItemsClientSide(
-  taxonomyRows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    slug: r.slug,
-    type: r.type,
-    language: r.language ?? "—",
-  })),
-  filter,
-  columns.map((col) => col.key),
-);
+const taxonomyItems = taxonomyRows.map((r) => ({
+  id: r.id,
+  name: r.name,
+  slug: r.slug,
+  type: r.type,
+  language: r.language ?? "—",
+}));
 
-const emptyColspan = columns.length;
-const filterClearHref = buildUrlWithParams(
-  baseUrl,
-  new URLSearchParams(Object.entries(params)),
-  {
-  filter_name: null,
-  filter_slug: null,
-  filter_type: null,
-  filter_language: null,
-  },
-);
+const emptyColspan = columns.length + 1;
 ---
 
 <script define:vars={{ initialName, initialSlug, initialDescription }}>
-    window.slugify = function (text) {
+  window.slugify = function (text) {
       if (typeof text !== "string" || !text.trim()) return "";
       return text
         .trim()
@@ -334,20 +302,12 @@ const filterClearHref = buildUrlWithParams(
       data-delete-label={t(locale, "admin.list.delete")}
       data-delete-confirm={t(locale, "admin.list.deleteConfirm")}
     >
-      <DataListPanel
+      <DataList
         columns={columns}
         items={taxonomyItems}
-        action={baseUrl}
-        filterValues={filter}
-        filterPlaceholder={t(locale, "admin.list.filter")}
-        filterSubmitLabel={t(locale, "admin.list.filterSubmit")}
-        filterClearLabel={t(locale, "admin.list.filterClear")}
-        filterClearHref={filterClearHref}
+        linkColumnKey="name"
         emptyMessage={t(currentLocale, "admin.list.noItems")}
         emptyColspan={emptyColspan}
-        selectable
-        selectAllId="select-all"
-        selectAllLabel={t(locale, "admin.list.selectAll")}
         actionsColumnLabel={t(locale, "admin.list.actions")}
         editLabel={t(locale, "admin.list.edit")}
         deleteLabel={t(locale, "admin.list.delete")}
@@ -393,91 +353,36 @@ const filterClearHref = buildUrlWithParams(
       }
     });
 
-    const listWrapper = document.getElementById("taxonomy-list-wrapper");
-    if (listWrapper) {
-      listWrapper.addEventListener("click", function (ev) {
-        const link = ev.target && ev.target.closest ? ev.target.closest("a[hx-delete]") : null;
-        if (!link || !link.getAttribute("hx-delete")) return;
-        ev.preventDefault();
-        const url = link.getAttribute("hx-delete");
-        const confirmMsg = link.getAttribute("hx-confirm") || "Tem certeza que deseja deletar este item?";
-        if (!window.confirm(confirmMsg)) return;
-        const tr = link.closest("tr");
-        fetch(url, { method: "DELETE" })
-          .then(function (res) {
-            if (res.ok && tr && tr.parentNode) tr.remove();
-          })
-          .catch(function () {});
-      });
-    }
-
     window.addEventListener("taxonomy-added", function (ev) {
       const d = ev.detail;
       if (!d || typeof d.id === "undefined") return;
 
       const wrapper = document.getElementById("taxonomy-list-wrapper");
-      if (!wrapper) return;
-      const tbody = wrapper.querySelector("tbody");
-      if (!tbody) return;
+      const dl = window.edgepressDataList;
+      if (!wrapper || !dl) return;
 
       const editLink =
-        wrapper
-          .getAttribute("data-edit-link-template")
-          ?.replace("{id}", String(d.id)) ?? "#";
+        wrapper.getAttribute("data-edit-link-template")?.replace("{id}", String(d.id)) ?? "#";
       const deletePath =
-        wrapper
-          .getAttribute("data-delete-path-template")
-          ?.replace("{id}", String(d.id)) ?? "#";
-      const editLabel = wrapper.getAttribute("data-edit-label") ?? "Editar";
-      const deleteLabel =
-        wrapper.getAttribute("data-delete-label") ?? "Deletar";
-      const deleteConfirm = wrapper.getAttribute("data-delete-confirm") ?? "";
+        wrapper.getAttribute("data-delete-path-template")?.replace("{id}", String(d.id)) ?? "#";
 
-      const name = escapeHtml(d?.name);
-      const slug = escapeHtml(d?.slug);
-      const type = escapeHtml(d?.type);
-      const language = escapeHtml(d?.language);
-
-      const emptyRow = tbody.querySelector("tr td[colspan]");
-      const emptyTr = emptyRow?.closest("tr");
-      if (emptyTr) emptyTr.remove();
-
-      const tr = document.createElement("tr");
-      tr.innerHTML =
-        '<td><label class="label cursor-pointer justify-center p-0"><input type="checkbox" class="checkbox checkbox-sm row-select" value="' +
-        escapeHtml(d.id) +
-        '" aria-label="Select item ' +
-        escapeHtml(d.id) +
-        '"></label></td>' +
-        "<td>" +
-        name +
-        "</td>" +
-        "<td>" +
-        slug +
-        "</td>" +
-        "<td>" +
-        type +
-        "</td>" +
-        "<td>" +
-        language +
-        "</td>" +
-        '<td class="flex gap-1"><a href="' +
-        editLink +
-        '" class="link link-primary text-sm">' +
-        editLabel +
-        "</a>" +
-        '<span class="text-base-content/40">|</span>' +
-        '<a href="#" class="link link-error text-sm" hx-delete="' +
-        deletePath +
-        '" hx-confirm="' +
-        escapeHtml(deleteConfirm) +
-        '" hx-target="closest tr" hx-swap="outerHTML swap:300ms">' +
-        deleteLabel +
-        "</a></td>";
-      tbody.appendChild(tr);
-      const htmxLib =
-        typeof globalThis !== "undefined" && globalThis["htmx"];
-      if (htmxLib?.process) htmxLib.process(tr);
+      dl.addDataListRow(
+        wrapper,
+        [
+          escapeHtml(d.name),
+          escapeHtml(d.slug),
+          escapeHtml(d.type),
+          escapeHtml(d.language),
+        ],
+        dl.buildDataListActionsHtml({
+          editLink,
+          deletePath,
+          deleteConfirm: wrapper.getAttribute("data-delete-confirm") ?? "",
+          editLabel: wrapper.getAttribute("data-edit-label") ?? "Editar",
+          deleteLabel: wrapper.getAttribute("data-delete-label") ?? "Deletar",
+          actionsLabel: "Actions",
+        }),
+      );
 
       const form = document.querySelector("form.taxonomy-form");
       if (form instanceof HTMLFormElement) resetFormAndDropdown(form);
@@ -486,35 +391,17 @@ const filterClearHref = buildUrlWithParams(
     window.addEventListener("taxonomy-updated", function (ev) {
       const d = ev.detail;
       if (!d || typeof d.id === "undefined") return;
-      const wrapper = document.getElementById("taxonomy-list-wrapper");
-      if (!wrapper) return;
-      const tbody = wrapper.querySelector("tbody");
-      if (!tbody) return;
 
-      const id = String(d.id);
-      const rows = tbody.querySelectorAll("tr");
-      for (const row of rows) {
-        const editLink = row.querySelector(
-          'a[href*="action=edit"][href*="id="]'
-        );
-        if (!editLink || !editLink.getAttribute("href")) continue;
-        const m = editLink.getAttribute("href")?.match(/[?&]id=(\d+)(?:&|$)/);
-        if (m && m[1] === id) {
-          const cells = row.querySelectorAll("td");
-          if (cells.length >= 5 && d != null) {
-            const dataStart = row.querySelector(".row-select") ? 1 : 0;
-            const c0 = cells[dataStart];
-            const c1 = cells[dataStart + 1];
-            const c2 = cells[dataStart + 2];
-            const c3 = cells[dataStart + 3];
-            if (c0 != null) c0.textContent = d.name ?? "—";
-            if (c1 != null) c1.textContent = d.slug ?? "—";
-            if (c2 != null) c2.textContent = d.type ?? "—";
-            if (c3 != null) c3.textContent = d.language ?? "—";
-          }
-          break;
-        }
-      }
+      const wrapper = document.getElementById("taxonomy-list-wrapper");
+      const dl = window.edgepressDataList;
+      if (!wrapper || !dl) return;
+
+      dl.updateDataListRowByEditId(wrapper, d.id, [
+        d.name ?? "—",
+        d.slug ?? "—",
+        d.type ?? "—",
+        d.language ?? "—",
+      ]);
 
       const form = document.querySelector("form.taxonomy-form");
       if (window.history && window.history.replaceState) {
