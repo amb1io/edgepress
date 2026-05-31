@@ -82,6 +82,10 @@ export type ContentPageDataResult = {
   initialOrder: string;
   initialLocaleId: number | null;
   initialParentId: number | null;
+  initialTranslationKey: string;
+  /** Bloqueia chave de tradução quando meta `original_post` está definido. */
+  lockTranslationKey: boolean;
+  initialOriginalPostId: number | null;
   parentPostOptions: ParentPostOption[];
   asideAccordionName: string;
   thumbnailPath: string;
@@ -249,6 +253,9 @@ export async function getContentPageData(params: {
 
   let post: ContentPagePost | null = null;
   let initialParentId: number | null = null;
+  let initialTranslationKey = "";
+  let lockTranslationKey = false;
+  let initialOriginalPostId: number | null = null;
   let selectedTermIds: number[] = [];
   let thumbnailPath = "";
   let thumbnailUrl = "";
@@ -302,6 +309,21 @@ export async function getContentPageData(params: {
           initialOrder = String(rawOrder);
         } else if (typeof rawOrder === "string") {
           initialOrder = rawOrder;
+        }
+        const rawTranslationKey = meta["translation_key"];
+        if (typeof rawTranslationKey === "string" && rawTranslationKey.trim()) {
+          initialTranslationKey = rawTranslationKey.trim();
+        }
+        const rawOriginalPost = meta["original_post"];
+        const originalPostId =
+          typeof rawOriginalPost === "number"
+            ? rawOriginalPost
+            : typeof rawOriginalPost === "string"
+              ? parseInt(rawOriginalPost, 10)
+              : NaN;
+        if (Number.isInteger(originalPostId) && originalPostId > 0) {
+          initialOriginalPostId = originalPostId;
+          lockTranslationKey = true;
         }
         const postThumbnailId =
           typeof meta["post_thumbnail_id"] === "string"
@@ -489,6 +511,9 @@ export async function getContentPageData(params: {
     initialOrder,
     initialLocaleId: post?.id_locale_code ?? null,
     initialParentId,
+    initialTranslationKey,
+    lockTranslationKey,
+    initialOriginalPostId,
     parentPostOptions,
     asideAccordionName: "content-aside",
     thumbnailPath: String(thumbnailPath),

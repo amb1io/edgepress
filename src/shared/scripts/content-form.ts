@@ -33,6 +33,7 @@ declare global {
 export type ContentFormInitProps = {
   initialTitle: string;
   initialSlug: string;
+  initialTranslationKey: string;
   initialExcerpt: string;
   initialStatus: string;
   initialAuthorId: string;
@@ -40,11 +41,14 @@ export type ContentFormInitProps = {
   thumbnailPath: string;
   thumbnailUrl: string;
   initialThumbnailAttachmentId: number;
+  translationKeyLocked?: boolean;
 };
 
 export type ContentFormContext = {
   title: string;
   slug: string;
+  translation_key: string;
+  translationKeyLocked: boolean;
   excerpt: string;
   status: string;
   author_id: string;
@@ -55,6 +59,7 @@ export type ContentFormContext = {
   blocknote_attachment_ids: number[];
   notification: { show: boolean; type: string; message: string; title: string };
   slugifyFromTitle: () => void;
+  syncSlugAndTranslationKey: () => void;
   showNotification: (type: string, message: string, title?: string) => void;
   hideNotification: () => void;
 };
@@ -68,7 +73,9 @@ export function initContentForm(props: ContentFormInitProps): void {
   const {
     initialTitle,
     initialSlug,
+    initialTranslationKey = "",
     initialExcerpt,
+    translationKeyLocked = false,
     initialStatus,
     initialAuthorId,
     initialOrder,
@@ -84,6 +91,8 @@ export function initContentForm(props: ContentFormInitProps): void {
     window.Alpine.data("contentForm", () => ({
       title: safeStr(initialTitle),
       slug: safeStr(initialSlug),
+      translation_key: safeStr(initialTranslationKey || initialSlug),
+      translationKeyLocked: Boolean(translationKeyLocked),
       excerpt: safeStr(initialExcerpt),
       status: String(initialStatus || "draft"),
       author_id: String(initialAuthorId || ""),
@@ -101,8 +110,15 @@ export function initContentForm(props: ContentFormInitProps): void {
         message: "",
         title: "",
       },
+      syncSlugAndTranslationKey() {
+        const next = window.slugify?.(this.title) ?? "";
+        this.slug = next;
+        if (!this.translationKeyLocked) {
+          this.translation_key = next;
+        }
+      },
       slugifyFromTitle() {
-        this.slug = window.slugify?.(this.title) ?? "";
+        this.syncSlugAndTranslationKey();
       },
       showNotification(type: string, message: string, title = "") {
         this.notification = { show: true, type, message, title };
@@ -306,15 +322,23 @@ export function initContentForm(props: ContentFormInitProps): void {
       const excerptInput = form.querySelector('textarea[name="excerpt"]');
       const safeTitle = safeStr(ctx.title);
       const safeSlug = safeStr(ctx.slug);
+      const safeTranslationKey = safeStr(ctx.translation_key);
       const safeExcerpt = safeStr(ctx.excerpt).slice(0, 250);
       if (titleInput instanceof HTMLInputElement) titleInput.value = safeTitle;
       if (slugInput instanceof HTMLInputElement) slugInput.value = safeSlug;
+      const translationKeyInput = form.querySelector(
+        'input[name="meta_translation_key"]',
+      );
+      if (translationKeyInput instanceof HTMLInputElement) {
+        translationKeyInput.value = safeTranslationKey;
+      }
       if (excerptInput instanceof HTMLTextAreaElement) excerptInput.value = safeExcerpt;
 
       try {
         const formData = new FormData(form);
         formData.set("title", safeTitle);
         formData.set("slug", safeSlug);
+        formData.set("meta_translation_key", safeTranslationKey);
         formData.set("excerpt", safeExcerpt);
 
         const wrapperEl = document.getElementById("custom-fields-wrapper");

@@ -28,7 +28,11 @@ type PostPayload = {
 type Props = {
   /** Aceita id numérico ou slug (preferido). */
   pageId?: number | string;
+  /** Chave lógica de tradução (meta `translation_key`); use com `locale`. */
+  pageKey?: string;
   pageSlug?: string;
+  /** Locale do conteúdo (ex.: pt-br, es, en). Usado com `pageKey`. */
+  locale?: string;
 
   /** Default: "posts" (onde vivem page/post). */
   table?: string;
@@ -60,9 +64,11 @@ type Props = {
 
 const {
   pageId,
+  pageKey,
   pageSlug,
   table = "posts",
   status = "published",
+  locale = "pt-br",
   fallbackTitle = "",
   canonical: canonicalOverride,
   image: imageOverride,
@@ -70,10 +76,13 @@ const {
   required = true,
 } = Astro.props as Props;
 
-const idOrSlug = (pageSlug ?? pageId ?? "").toString().trim();
+const pageKeyTrimmed = (pageKey ?? "").toString().trim();
+const idOrSlug = (pageSlug ?? pageId ?? pageKeyTrimmed).toString().trim();
 if (!idOrSlug) {
-  throw new Error("baseHead.astro: passe `pageSlug` ou `pageId`.");
+  throw new Error("baseHead.astro: passe `pageKey`, `pageSlug` ou `pageId`.");
 }
+
+const resolveByTranslationKey = Boolean(pageKeyTrimmed) && table === "posts";
 
 const content = createEdgepressContent(Astro.locals as App.Locals, {
   baseUrl: Astro.url.origin,
@@ -82,7 +91,9 @@ const content = createEdgepressContent(Astro.locals as App.Locals, {
 let data: unknown = null;
 try {
   data = await content.getItem(table, idOrSlug, {
-    ...(table === "posts" ? { status } : {}),
+    ...(table === "posts"
+      ? { status, locale, resolve: resolveByTranslationKey ? "translation_key" : "slug" }
+      : {}),
   });
 } catch (err) {
   const e = err as { message?: string; stack?: string; status?: number; detail?: unknown };

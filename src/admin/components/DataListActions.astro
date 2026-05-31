@@ -8,9 +8,11 @@ export interface DataListActionsProps {
   deletePath?: string;
   deleteConfirm: string;
   duplicatePath?: string;
+  addTranslationPath?: string;
   editLabel?: string;
   deleteLabel?: string;
   duplicateLabel?: string;
+  addTranslationLabel?: string;
   actionsLabel?: string;
 }
 
@@ -19,9 +21,11 @@ const {
   deletePath,
   deleteConfirm,
   duplicatePath,
+  addTranslationPath,
   editLabel = "Editar",
   deleteLabel = "Deletar",
   duplicateLabel = "Duplicar",
+  addTranslationLabel = "Adicionar Tradução",
   actionsLabel = "Actions",
 } = Astro.props;
 ---
@@ -49,6 +53,20 @@ const {
             hx-swap="none"
           >
             {duplicateLabel}
+          </button>
+        </li>
+      )
+    }
+    {
+      addTranslationPath && (
+        <li>
+          <button
+            type="button"
+            class="text-sm w-full text-left"
+            hx-post={addTranslationPath}
+            hx-swap="none"
+          >
+            {addTranslationLabel}
           </button>
         </li>
       )

@@ -80,6 +80,11 @@ import { syncSeoMetadataFromPostSave } from "../../core/services/seo-metadata-se
 
 // Auth
 import { requireMinRole, resolveAuthorIdForRole } from "../../utils/api-auth.ts";
+import {
+  normalizeTranslationKey,
+  TRANSLATION_KEY_META,
+} from "../../core/services/post-translation-service.ts";
+
 export const prerender = false;
 
 /** Normaliza parent_id de hierarquia (não confundir com parent_id de attachments). */
@@ -177,6 +182,15 @@ export async function POST({
 
     // Extrair meta_values customizados
     const metaValues = getFieldsWithPrefix(formData, "meta_", true);
+    const translationKeyRaw =
+      metaValues[TRANSLATION_KEY_META] ?? getString(formData, "translation_key", "");
+    const translationKey =
+      normalizeTranslationKey(translationKeyRaw) ?? normalizeTranslationKey(slug);
+    if (translationKey) {
+      metaValues[TRANSLATION_KEY_META] = translationKey;
+    } else {
+      delete metaValues[TRANSLATION_KEY_META];
+    }
     const customFieldsDataRaw = getString(formData, "custom_fields_data");
     const customFieldsToDeleteRaw = getString(formData, "custom_fields_to_delete");
     let themeCanonicalMeta: ThemeCanonicalMeta | null = null;

@@ -9,6 +9,13 @@ import type { Database } from "./types/database.ts";
 import { posts, postTypes } from "../db/schema.ts";
 import { eq } from "drizzle-orm";
 import { buildContentPostPayload } from "./content-post-payload.ts";
+import { parseMetaValues } from "./meta-parser.ts";
+import {
+  buildTranslationPostCacheKey,
+  normalizeTranslationKey,
+  TRANSLATION_KEY_META,
+} from "../core/services/post-translation-service.ts";
+import { locales } from "../db/schema.ts";
 import {
   getActiveThemeFromDb,
   THEME_ACTIVE_KV_KEY,
@@ -63,7 +70,9 @@ export async function syncPostCache(
         slug: posts.slug,
         excerpt: posts.excerpt,
         body: posts.body,
+        body_blocks: posts.body_blocks,
         status: posts.status,
+        id_locale_code: posts.id_locale_code,
         meta_values: posts.meta_values,
         published_at: posts.published_at,
         created_at: posts.created_at,
@@ -80,10 +89,35 @@ export async function syncPostCache(
 
     const idKey = `post:id:${postId}`;
     const slugStatusKey = `post:${post.slug}:status=${post.status}`;
-    await Promise.all([
+    const puts: Promise<void>[] = [
       kv.put(idKey, payloadStr),
       kv.put(slugStatusKey, payloadStr),
-    ]);
+    ];
+
+    const meta = parseMetaValues(post.meta_values) as Record<string, unknown>;
+    const rawTk = meta[TRANSLATION_KEY_META];
+    const translationKey = normalizeTranslationKey(
+      typeof rawTk === "string" ? rawTk : typeof rawTk === "number" ? String(rawTk) : null,
+    );
+    if (translationKey) {
+      let localeCode = "_";
+      if (post.id_locale_code != null) {
+        const [locRow] = await db
+          .select({ locale_code: locales.locale_code })
+          .from(locales)
+          .where(eq(locales.id, post.id_locale_code))
+          .limit(1);
+        if (locRow?.locale_code) localeCode = locRow.locale_code;
+      }
+      puts.push(
+        kv.put(
+          buildTranslationPostCacheKey(translationKey, localeCode, post.status),
+          payloadStr,
+        ),
+      );
+    }
+
+    await Promise.all(puts);
   } catch {
     // não falha a resposta da API por causa do cache
   }

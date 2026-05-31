@@ -18,6 +18,11 @@ import {
   VALID_TABLE_IDENTIFIER,
 } from "../../utils/db-utils.ts";
 import { buildContentPostPayload, getPostTaxonomiesForPayload } from "../../utils/content-post-payload.ts";
+import {
+  buildTranslationPostCacheKey,
+  findPostByTranslationKey,
+  normalizeTranslationKey,
+} from "./post-translation-service.ts";
 import { parseMetaValues } from "../../utils/meta-parser.ts";
 import { isValidSlug } from "../../utils/validation.ts";
 import type { GetTableListParams } from "../../utils/list-table-dynamic.ts";
@@ -73,6 +78,14 @@ export interface ContentBySlugParams {
   status?: "published" | "draft" | "archived";
 }
 
+/** Opções de resolução para getItem / API content (posts). */
+export interface ContentPostResolveOptions {
+  status?: string | null;
+  locale?: string;
+  /** `translation_key`: `idOrSlug` é a chave lógica (ex.: hello-world), não o slug localizado. */
+  resolve?: "slug" | "translation_key";
+}
+
 export interface ContentPostDetail {
   id: number;
   post_type_id: number;
@@ -80,6 +93,7 @@ export interface ContentPostDetail {
   slug: string;
   excerpt?: string;
   body?: string;
+  body_blocks?: string;
   status: string;
   published_at?: string;
   created_at?: string;
@@ -290,6 +304,7 @@ export async function getPostPayloadBySlug(
       slug: posts.slug,
       excerpt: posts.excerpt,
       body: posts.body,
+      body_blocks: posts.body_blocks,
       status: posts.status,
       meta_values: posts.meta_values,
       published_at: posts.published_at,
@@ -322,18 +337,75 @@ export async function getPostPayloadBySlug(
   return payload;
 }
 
+export async function getPostPayloadByTranslationKey(
+  kv: ReturnType<typeof getContentApiRuntime>["kv"],
+  translationKey: string,
+  localeCode: string | null | undefined,
+  rawStatus: string | null,
+  baseUrl?: string,
+): Promise<ContentPostPayload> {
+  const key = normalizeTranslationKey(translationKey);
+  if (!key) {
+    throw new ContentBadRequestError("translation_key inválida");
+  }
+  const statusList = parseStatusList(rawStatus);
+  const statusKey = statusList.join(",");
+  const postCacheKey = buildTranslationPostCacheKey(key, localeCode, statusKey);
+
+  if (kv) {
+    try {
+      const cached = (await kv.get(postCacheKey, "json")) as Record<string, unknown> | null;
+      if (cached && typeof cached === "object") {
+        return cached as ContentPostPayload;
+      }
+    } catch {
+      // segue para o banco
+    }
+  }
+
+  const post = await findPostByTranslationKey(key, localeCode, statusList);
+  if (!post) {
+    throw new ContentNotFoundError("Post not found", {
+      translation_key: key,
+      locale: localeCode ?? null,
+    });
+  }
+
+  const payload = await buildContentPostPayload(db, post, { baseUrl });
+
+  if (kv) {
+    try {
+      await kv.put(postCacheKey, JSON.stringify(payload));
+    } catch {
+      // ignora
+    }
+  }
+
+  return payload;
+}
+
 export async function getPostOrRowPayload(
   kv: ReturnType<typeof getContentApiRuntime>["kv"],
   safeTable: string,
   idOrSlug: string,
   rawStatus: string | null,
   baseUrl?: string,
+  resolveOptions?: Pick<ContentPostResolveOptions, "locale" | "resolve">,
 ): Promise<ContentPostPayload | ContentRowResponse> {
   const isNumericId = /^\d+$/.test(idOrSlug);
   const idNum = isNumericId ? parseInt(idOrSlug, 10) : null;
 
   if (safeTable === "posts") {
     const bySlug = !isNumericId;
+    if (bySlug && resolveOptions?.resolve === "translation_key") {
+      return getPostPayloadByTranslationKey(
+        kv,
+        idOrSlug,
+        resolveOptions.locale,
+        rawStatus,
+        baseUrl,
+      );
+    }
     if (bySlug && !isValidSlug(idOrSlug)) {
       throw new ContentBadRequestError("Slug inválido");
     }
@@ -369,6 +441,7 @@ export async function getPostOrRowPayload(
         slug: posts.slug,
         excerpt: posts.excerpt,
         body: posts.body,
+        body_blocks: posts.body_blocks,
         status: posts.status,
         meta_values: posts.meta_values,
         published_at: posts.published_at,
@@ -484,14 +557,29 @@ export class EdgepressContent {
   async getBySlug(slug: string, params: ContentBySlugParams = {}): Promise<ContentPostDetail> {
     const { kv } = this.runtime();
     const status = params.status ?? null;
-    const payload = await getPostPayloadBySlug(kv, slug, status);
+    const payload = await getPostPayloadBySlug(kv, slug, status, this.baseUrl || undefined);
+    return payload as unknown as ContentPostDetail;
+  }
+
+  async getByTranslationKey(
+    translationKey: string,
+    params: ContentBySlugParams & { locale?: string } = {},
+  ): Promise<ContentPostDetail> {
+    const { kv } = this.runtime();
+    const payload = await getPostPayloadByTranslationKey(
+      kv,
+      translationKey,
+      params.locale,
+      params.status ?? null,
+      this.baseUrl || undefined,
+    );
     return payload as unknown as ContentPostDetail;
   }
 
   async getItem(
     table: string,
     idOrSlug: string | number,
-    options?: { status?: string | null },
+    options?: ContentPostResolveOptions,
   ): Promise<ContentPostDetail | ContentRowResponse> {
     const { kv } = this.runtime();
     const allowedTables = await getTableNames(db);
@@ -500,9 +588,14 @@ export class EdgepressContent {
       throw new ContentNotFoundError("Table not found or not allowed");
     }
     const segment = typeof idOrSlug === "number" ? String(idOrSlug) : idOrSlug;
-    return getPostOrRowPayload(kv, safeTable, segment, options?.status ?? null) as Promise<
-      ContentPostDetail | ContentRowResponse
-    >;
+    return getPostOrRowPayload(
+      kv,
+      safeTable,
+      segment,
+      options?.status ?? null,
+      this.baseUrl || undefined,
+      { locale: options?.locale, resolve: options?.resolve },
+    ) as Promise<ContentPostDetail | ContentRowResponse>;
   }
 
   async getPostTaxonomies(postId: number): Promise<TaxonomiesResponse> {
@@ -608,8 +701,26 @@ export async function getTableContentListFromUrl(
   return getTableContentListResult(kv, safeTable, merged);
 }
 
+function resolveOptionsFromUrl(url: URL): Pick<ContentPostResolveOptions, "locale" | "resolve"> {
+  const resolveParam = url.searchParams.get("resolve");
+  return {
+    locale: url.searchParams.get("locale") ?? undefined,
+    resolve: resolveParam === "translation_key" ? "translation_key" : undefined,
+  };
+}
+
 export async function getPostBySlugFromUrl(locals: App.Locals, slug: string, url: URL): Promise<ContentPostPayload> {
   const { kv } = getContentApiRuntime(locals);
+  const opts = resolveOptionsFromUrl(url);
+  if (opts.resolve === "translation_key") {
+    return getPostPayloadByTranslationKey(
+      kv,
+      slug,
+      opts.locale,
+      url.searchParams.get("status"),
+      url.origin,
+    );
+  }
   return getPostPayloadBySlug(kv, slug, url.searchParams.get("status"), url.origin);
 }
 
@@ -620,5 +731,12 @@ export async function getPostOrRowFromUrl(
   url: URL,
 ): Promise<ContentPostPayload | ContentRowResponse> {
   const { kv } = getContentApiRuntime(locals);
-  return getPostOrRowPayload(kv, safeTable, idOrSlug, url.searchParams.get("status"), url.origin);
+  return getPostOrRowPayload(
+    kv,
+    safeTable,
+    idOrSlug,
+    url.searchParams.get("status"),
+    url.origin,
+    resolveOptionsFromUrl(url),
+  );
 }

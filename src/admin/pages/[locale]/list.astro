@@ -131,6 +131,19 @@ if (loadFromTable) {
   listEmptyColspan = listColumns.length + 1;
   deletePathTemplate = "/api/posts/{id}";
 }
+
+const TRANSLATION_ACTION_EXCLUDED_TYPES = new Set([
+  "attachment",
+  "custom_fields",
+  "translations_languages",
+  "themes",
+  "user",
+]);
+const showAddTranslationAction =
+  !loadFromTable && !TRANSLATION_ACTION_EXCLUDED_TYPES.has(type);
+const addTranslationPathTemplate = showAddTranslationAction
+  ? `/api/posts/{id}/duplicate-translation?admin_locale=${locale}`
+  : undefined;
 ---
 
 <AdminLayout title={t(locale, "admin.list.title")} locale={locale} menuItems={menuItems} user={layoutUser}>
@@ -159,14 +172,26 @@ if (loadFromTable) {
               deletePathTemplate,
               deleteConfirm: t(locale, "admin.list.deleteConfirm"),
               duplicatePathTemplate: `/api/posts/{id}/duplicate`,
+              ...(addTranslationPathTemplate
+                ? { addTranslationPathTemplate }
+                : {}),
             },
+            ...(addTranslationPathTemplate
+              ? { addTranslationLabel: t(locale, "admin.list.addTranslation") }
+              : {}),
           }
         : {
             actionConfig: {
               editLinkTemplate: `/admin/${locale}/content?post_type=${type}&action=edit&id={id}`,
               duplicatePathTemplate: `/api/posts/{id}/duplicate`,
+              ...(addTranslationPathTemplate
+                ? { addTranslationPathTemplate }
+                : {}),
               deleteConfirm: t(locale, "admin.list.deleteConfirm"),
             },
+            ...(addTranslationPathTemplate
+              ? { addTranslationLabel: t(locale, "admin.list.addTranslation") }
+              : {}),
           })}
     />
   </div>

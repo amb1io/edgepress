@@ -123,6 +123,9 @@ let initialAuthorId = "";
 let initialOrder = "";
 let initialLocaleId: number | null = null;
 let initialParentId: number | null = null;
+let initialTranslationKey = "";
+let lockTranslationKey = false;
+let initialOriginalPostId: number | null = null;
 let parentPostOptions: Array<{
   id: number;
   title: string;
@@ -164,6 +167,9 @@ if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate &&
   initialOrder = result.initialOrder;
   initialLocaleId = result.initialLocaleId;
   initialParentId = result.initialParentId;
+  initialTranslationKey = result.initialTranslationKey;
+  lockTranslationKey = result.lockTranslationKey;
+  initialOriginalPostId = result.initialOriginalPostId;
   parentPostOptions = result.parentPostOptions;
   asideAccordionName = result.asideAccordionName;
   thumbnailPath = result.thumbnailPath;
@@ -209,6 +215,8 @@ const showAlternateTemplate =
     define:vars={{
       initialTitle: String(initialTitle || ""),
       initialSlug: String(initialSlug || ""),
+      initialTranslationKey: String(initialTranslationKey || ""),
+      lockTranslationKey: Boolean(lockTranslationKey),
       initialExcerpt: String(initialExcerpt || ""),
       initialStatus: String(initialStatus || "draft"),
       initialAuthorId: String(initialAuthorId || ""),
@@ -221,6 +229,8 @@ const showAlternateTemplate =
     window.__contentFormProps = {
       initialTitle,
       initialSlug,
+      initialTranslationKey,
+      translationKeyLocked: lockTranslationKey,
       initialExcerpt,
       initialStatus,
       initialAuthorId,
@@ -241,7 +251,7 @@ const showAlternateTemplate =
       class="flex flex-col gap-4 w-full min-h-0 flex-1"
       data-is-edit={String(action === "edit")}
       x-data="contentForm"
-      x-init="if ($el.dataset.isEdit !== 'true') slug = (window.slugify && window.slugify(title)) || ''"
+      x-init="if ($el.dataset.isEdit !== 'true') syncSlugAndTranslationKey()"
       @blocknote-excerpt.window="excerpt = ($event.detail.text || '').slice(0, 250)"
     >
       <ContentFormNotification />
@@ -272,7 +282,7 @@ const showAlternateTemplate =
             class="input input-bordered w-full"
             value={initialTitle}
             x-model="title"
-            @input="slug = (window.slugify && window.slugify(title)) || ''"
+            @input="syncSlugAndTranslationKey()"
           />
         </div>
 
@@ -307,6 +317,8 @@ const showAlternateTemplate =
         users={users}
         initialLocaleId={initialLocaleId}
         initialParentId={initialParentId}
+        lockTranslationKey={lockTranslationKey}
+        initialOriginalPostId={initialOriginalPostId}
         parentPostOptions={parentPostOptions}
         initialSlug={initialSlug}
         initialExcerpt={initialExcerpt}

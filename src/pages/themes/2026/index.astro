@@ -1,22 +1,155 @@
 ---
 import BaseHead from "../../../components/themes/baseHead.astro";
 import BaseNav from "../../../components/themes/baseNav.astro";
-import BaseProp from "../../../components/themes/baseProp.astro";
 import BaseLogo from "../../../components/themes/baseLogo.astro";
+import BaseBody from "../../../components/themes/baseBody.astro";
 import PostList from "../../../components/themes/postList.astro";
+import "../../../assets/app.css";
+import "./theme.css";
 ---
+
 <!doctype html>
 <html lang="pt-BR">
-  <BaseHead pageSlug="hello-world" />
-  <body>
-    <header>
-      <BaseLogo width={200} height={200} />
-      <BaseNav postType="menus" locale="pt-br" />
-      <div>
-        <BaseProp table="settings" id="10" />
-        <BaseProp table="settings" id="9" />
+  <BaseHead pageKey="hello-world" locale="pt-br" />
+  <body class="bg-white font-sans text-slate-900 antialiased">
+    <header class="border-b border-slate-200">
+      <div
+        class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-7 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <a href="/" class="flex items-center gap-3">
+          <BaseLogo width={52} height={52} />
+          <span class="text-xl font-semibold tracking-tight">Meu Blog 2026</span
+          >
+        </a>
+        <BaseNav postType="menus" locale="pt-br" className="starter-nav" />
+        <div class="flex items-center gap-3 px-6 py-2">
+          <a href="#" title="Português (Brasil)">
+            <img
+              src="https://flagcdn.com/br.svg"
+              alt="Português (Brasil)"
+              class="h-6 w-6 rounded-full shadow border"
+              loading="lazy"
+            />
+          </a>
+          <a href="#" title="Español (España)">
+            <img
+              src="https://flagcdn.com/es.svg"
+              alt="Español (Espanha)"
+              class="h-6 w-6 rounded-full shadow border"
+              loading="lazy"
+            />
+          </a>
+          <a href="#" title="English (US)">
+            <img
+              src="https://flagcdn.com/us.svg"
+              alt="English (US)"
+              class="h-6 w-6 rounded-full shadow border"
+              loading="lazy"
+            />
+          </a>
+        </div>
       </div>
     </header>
-    <PostList locale="pt-br" postType="post" order="desc" />
+
+    <main class="mx-auto w-full max-w-5xl px-6 py-12">
+      <section class="border-b border-slate-200">
+        <BaseBody pageKey="hello-world" locale="pt-br" />
+      </section>
+
+      <section id="ultimos-posts" class="py-12">
+        <div class="mb-8 flex items-end justify-between gap-4">
+          <div>
+            <h2 class="text-3xl font-bold tracking-tight text-slate-900">
+              Latest
+            </h2>
+            <p class="mt-2 text-slate-600">
+              Últimos conteúdos publicados no blog.
+            </p>
+          </div>
+          <a
+            href="/posts"
+            class="text-sm font-semibold text-slate-700 underline-offset-4 hover:underline"
+            >All Posts</a
+          >
+        </div>
+        <PostList
+          locale="pt-br"
+          postType="post"
+          order="desc"
+          variant="starter"
+        />
+      </section>
+
+      <section
+        class="rounded-2xl border border-slate-200 bg-slate-50 px-6 py-8 sm:px-8"
+      >
+        <h3 class="text-2xl font-semibold tracking-tight text-slate-900">
+          Subscribe to the newsletter
+        </h3>
+        <p class="mt-2 text-slate-600">
+          Receba novidades e artigos recentes direto no seu e-mail.
+        </p>
+        <form
+          class="mt-6 flex flex-col gap-3 sm:flex-row"
+          action="#"
+          method="post"
+        >
+          <input
+            type="email"
+            name="email"
+            placeholder="Email address"
+            class="w-full rounded-md border border-slate-300 bg-white px-4 py-2.5 text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none"
+          />
+          <button
+            type="submit"
+            class="inline-flex items-center justify-center rounded-md bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
+          >
+            Sign up
+          </button>
+        </form>
+      </section>
+    </main>
+
+    <footer class="border-t border-slate-200 py-8">
+      <div
+        class="mx-auto flex w-full max-w-5xl flex-col gap-2 px-6 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <span>&copy; 2026 Meu Blog. Todos os direitos reservados.</span>
+        <span>
+          Desenvolvido com <a href="https://astro.build/" class="underline"
+            >Astro</a
+          > e
+          <a href="https://tailwindcss.com/" class="underline">Tailwind CSS</a>.
+        </span>
+      </div>
+    </footer>
   </body>
 </html>
+
+<style>
+  :global(.starter-nav ul) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    align-items: center;
+  }
+
+  :global(.starter-nav a) {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: rgb(51 65 85);
+    transition: color 0.2s ease;
+  }
+
+  :global(.starter-nav a:hover) {
+    color: rgb(15 23 42);
+  }
+
+  :global(.starter-nav li) {
+    list-style: none;
+  }
+
+  :global(.theme-meta p) {
+    margin: 0;
+  }
+</style>

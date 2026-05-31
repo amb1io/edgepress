@@ -3,9 +3,11 @@ export interface DataListActionsHtmlOptions {
   deletePath?: string;
   deleteConfirm: string;
   duplicatePath?: string;
+  addTranslationPath?: string;
   editLabel?: string;
   deleteLabel?: string;
   duplicateLabel?: string;
+  addTranslationLabel?: string;
   actionsLabel?: string;
 }
 
@@ -30,10 +32,14 @@ export function buildDataListActionsHtml(options: DataListActionsHtmlOptions): s
   const editLabel = options.editLabel ?? "Editar";
   const deleteLabel = options.deleteLabel ?? "Deletar";
   const duplicateLabel = options.duplicateLabel ?? "Duplicar";
+  const addTranslationLabel = options.addTranslationLabel ?? "Adicionar Tradução";
   const actionsLabel = options.actionsLabel ?? "Actions";
 
   const duplicateBtn = options.duplicatePath
     ? `<li><button type="button" class="text-sm w-full text-left" hx-post="${options.duplicatePath}" hx-swap="none">${duplicateLabel}</button></li>`
+    : "";
+  const addTranslationBtn = options.addTranslationPath
+    ? `<li><button type="button" class="text-sm w-full text-left" hx-post="${options.addTranslationPath}" hx-swap="none">${addTranslationLabel}</button></li>`
     : "";
 
   const deleteBtn = options.deletePath
@@ -46,6 +52,7 @@ export function buildDataListActionsHtml(options: DataListActionsHtmlOptions): s
     `<ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-50 w-40 border border-base-300 p-1 shadow-lg">` +
     `<li><a href="${options.editLink}" class="text-sm text-blue-600 focus:text-white">${editLabel}</a></li>` +
     duplicateBtn +
+    addTranslationBtn +
     deleteBtn +
     `</ul></div>`
   );
