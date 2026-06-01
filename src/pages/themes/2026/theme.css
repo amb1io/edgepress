@@ -1,70 +1,163 @@
-@import "@blocknote/mantine/style.css";
-@import "@blocknote/core/fonts/inter.css";
+:root {
+  --background-body: #fff;
+  --text-main: #36393b;
+  --text-secondary: #6b6f72;
+  --primary-color: #bdd747;
+  --font-family-serif: Merriweather, Georgia, serif;
+  --font-family-sans: "Fira Sans", "Inter", Arial, sans-serif;
+}
 
-.block-editor-content h1 {
-  margin-bottom: 1rem;
-  font-size: 2.25rem;
+*,
+*:before,
+*:after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family-serif);
+  font-size: 16px;
+  line-height: 1.6;
+  background-color: var(--background-body);
+  color: var(--text-main);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-family-sans);
   font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.025em;
-}
-
-.block-editor-content h2 {
-  margin-top: 2rem;
-  margin-bottom: 0.75rem;
-  font-size: 1.875rem;
-  font-weight: 600;
   line-height: 1.2;
+  margin: 0 0 0.5em 0;
 }
 
-.block-editor-content p {
-  margin-bottom: 1rem;
-  color: rgb(51 65 85);
-  font-size: 1.125rem;
-  line-height: 1.75;
+h1 {
+  font-family: var(--font-family-serif);
+  font-size: 3.5em;
+  margin: 0 0 0.8em 0;
 }
 
-.block-editor-content ul {
-  margin-bottom: 1rem;
-  padding-left: 1.5rem;
-  list-style-type: disc;
+h2 {
+  margin: 1.2em 0 0.4em 0;
+  font-size: 1.8em;
 }
 
-.block-editor-content ol {
-  margin-bottom: 1rem;
-  padding-left: 1.5rem;
-  list-style-type: decimal;
+p,
+ul,
+ol {
+  font-size: 1.2rem;
+  line-height: 1.7em;
+  margin: 1em 0;
 }
 
-.block-editor-content a {
-  color: rgb(15 23 42);
-  text-decoration: underline;
+a {
+  color: inherit;
+  transition: color linear 0.15s;
 }
 
-.block-editor-content blockquote {
-  margin-top: 1.5rem;
-  margin-bottom: 1.5rem;
-  padding-left: 1rem;
-  border-left: 4px solid rgb(203 213 225);
-  font-style: italic;
+a:hover {
+  color: var(--primary-color);
 }
 
-.block-editor-content .edgepress-bn-button {
-  margin-top: 0.25rem;
-  margin-bottom: 0.5rem;
-  transition: filter 0.15s ease-in-out;
+img {
+  max-width: 100%;
+  height: auto;
 }
 
-.block-editor-content .edgepress-bn-button:hover {
-  filter: brightness(0.95);
+hr {
+  padding: 0;
+  border: 0;
+  height: 10px;
+  margin: 40px auto;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg width='20' height='10' viewBox='0 0 20 10' xmlns='http://www.w3.org/2000/svg' fill-rule='evenodd' clip-rule='evenodd' stroke-miterlimit='10'%3e%3cpath fill='none' d='M0 0h20v10H0z'/%3e%3cclipPath id='a'%3e%3cpath d='M0 0h20v10H0z'/%3e%3c/clipPath%3e%3cg clip-path='url(%23a)'%3e%3cpath d='M20 7.384c-4.999-.001-5-4.768-9.999-4.768C5 2.616 5 7.384 0 7.384' fill='none' stroke-width='3' stroke='%23BDD747'/%3e%3c/g%3e%3c/svg%3e");
 }
 
-.block-editor-content .edgepress-bn-button .bn-inline-content {
-  min-width: 3ch;
+.layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.site-header,
+.site-main,
+.site-footer {
+  margin: 0 auto;
+  max-width: 1400px;
+  width: 100%;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2em;
+}
+
+.site-main {
+  flex: 1;
+  padding: 1em 2em;
+}
+
+.site-footer {
+  color: var(--text-secondary);
+  font-size: 0.85em;
+  margin: 1em auto;
+  padding: 1em 2em;
   text-align: center;
 }
 
-.block-editor-content .edgepress-bn-button .bn-inline-content a {
-  color: inherit;
+.logo {
+  font-size: 1.5rem;
+  font-family: var(--font-family-sans);
+  font-weight: 700;
   text-decoration: none;
+}
+
+.container {
+  margin: 0 auto;
+  max-width: 42em;
+  width: 100%;
+}
+
+.post-item {
+  margin-bottom: 2rem;
+}
+
+.post-item figure {
+  margin-bottom: 1rem;
+}
+
+.post-item h2 {
+  margin-top: 0;
+}
+
+.post-item a {
+  text-decoration: none;
+}
+
+.post-item-date {
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-family: var(--font-family-sans);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.post-content h1 {
+  font-size: 3em;
+  margin: 1em 0;
+}
+
+.post-header {
+  text-align: center;
+}
+
+.post-header p {
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-family: var(--font-family-sans);
+  font-weight: 600;
 }
