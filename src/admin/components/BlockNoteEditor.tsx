@@ -1,4 +1,3 @@
-import { BlockNoteSchema } from "@blocknote/core";
 import { filterSuggestionItems } from "@blocknote/core/extensions";
 import { combineByGroup } from "@blocknote/core";
 import { useCreateBlockNote } from "@blocknote/react";
@@ -7,7 +6,6 @@ import { BlockNoteView } from "@blocknote/mantine";
 import { SuggestionMenuController } from "@blocknote/react";
 import { en, es, pt } from "@blocknote/core/locales";
 import {
-  withMultiColumn,
   getMultiColumnSlashMenuItems,
   locales as multiColumnLocales,
 } from "@blocknote/xl-multi-column";
@@ -15,6 +13,10 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToR2 } from "../../utils/upload";
+import {
+  createButtonSlashMenuItem,
+  edgepressBlockNoteSchema,
+} from "../../shared/blocknote/schema.tsx";
 
 function getDocumentTheme(): "light" | "dark" {
   if (typeof document === "undefined") return "light";
@@ -36,19 +38,25 @@ const MULTICOLUMN_LOCALES: Record<string, { slash_menu: { two_columns: object; t
   pt: multiColumnLocales.pt,
 };
 
-const schema = withMultiColumn(BlockNoteSchema.create() as any);
+const schema = edgepressBlockNoteSchema;
 
 export interface BlockNoteEditorProps {
   initialBody?: string | null;
+  initialBodyBlocks?: string | null;
   name?: string;
   inputId?: string;
+  blocksName?: string;
+  blocksInputId?: string;
   locale?: string;
 }
 
 export default function BlockNoteEditor({
   initialBody,
+  initialBodyBlocks,
   name = "body",
   inputId = "body",
+  blocksName = "body_blocks",
+  blocksInputId = "body_blocks",
   locale: localeProp = "en",
 }: BlockNoteEditorProps) {
   const dictionary = useMemo(() => {
@@ -153,8 +161,22 @@ export default function BlockNoteEditor({
   }, []);
 
   useEffect(() => {
-    if (!editor || initialLoaded.current || !initialBody?.trim()) return;
+    if (!editor || initialLoaded.current) return;
     initialLoaded.current = true;
+
+    if (initialBodyBlocks?.trim()) {
+      try {
+        const parsed = JSON.parse(initialBodyBlocks) as unknown;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          editor.replaceBlocks(editor.document, parsed as never);
+          return;
+        }
+      } catch {
+        // fallback para parse de HTML abaixo
+      }
+    }
+
+    if (!initialBody?.trim()) return;
     try {
       const blocks = editor.tryParseHTMLToBlocks(initialBody);
       if (blocks.length > 0) {
@@ -176,15 +198,19 @@ export default function BlockNoteEditor({
 
   const syncToInput = () => {
     const input = document.getElementById(inputId) as HTMLInputElement | null;
+    const blocksInput = document.getElementById(blocksInputId) as HTMLInputElement | null;
     if (!input || !editor) return;
     try {
       const html = editor.blocksToHTMLLossy(editor.document);
+      const blocks = editor.document;
       input.value = html ?? "";
+      if (blocksInput) blocksInput.value = JSON.stringify(blocks ?? []);
       const plain = htmlToPlainText(html ?? "");
       const excerpt = plain.slice(0, EXCERPT_MAX_LENGTH);
       window.dispatchEvent(new CustomEvent("blocknote-excerpt", { detail: { text: excerpt } }));
     } catch {
       input.value = "";
+      if (blocksInput) blocksInput.value = "[]";
       window.dispatchEvent(new CustomEvent("blocknote-excerpt", { detail: { text: "" } }));
     }
   };
@@ -209,17 +235,20 @@ export default function BlockNoteEditor({
       const defaultItems = getDefaultReactSlashMenuItems(editor);
       const columnItems = getMultiColumnSlashMenuItems(editor);
       const combined = combineByGroup(defaultItems, columnItems);
-      return filterSuggestionItems(combined, query);
+      const buttonItem = createButtonSlashMenuItem(editor, localeProp);
+      const allItems = [...combined, buttonItem];
+      return filterSuggestionItems(allItems, query);
     },
-    [editor],
+    [editor, localeProp],
   );
 
   return (
     <div className="content-editor-wrapper flex min-h-[480px] w-full flex-col rounded-lg bg-base-100">
+      <input type="hidden" id={inputId} name={name} defaultValue="" aria-hidden="true" />
       <input
         type="hidden"
-        id={inputId}
-        name={name}
+        id={blocksInputId}
+        name={blocksName}
         defaultValue=""
         aria-hidden="true"
       />
