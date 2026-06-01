@@ -1,0 +1,176 @@
+---
+/**
+ * Dropdown reutilizável para selecionar post pai (hierarquia via posts.parent_id).
+ */
+import type { ParentPostOption } from "../core/services/content-page-data.ts";
+
+export interface Props {
+  parentPosts?: ParentPostOption[];
+  selectedParentId?: number | null;
+  fieldName?: string;
+  searchPlaceholder?: string;
+  noParentLabel?: string;
+  selectPlaceholder?: string;
+  compact?: boolean;
+}
+
+const {
+  parentPosts = [],
+  selectedParentId = null,
+  fieldName = "parent_id",
+  searchPlaceholder = "Buscar post...",
+  noParentLabel = "Sem pai",
+  selectPlaceholder = "Selecione um post pai",
+  compact = false,
+} = Astro.props;
+
+const parentPostsJson = JSON.stringify(parentPosts);
+const initialParentId = selectedParentId ?? "";
+const inputClass = compact
+  ? "input input-bordered input-sm w-full flex items-center cursor-pointer"
+  : "input input-bordered w-full flex items-center cursor-pointer";
+---
+
+<div
+  class="dropdown w-full parent-post-dropdown-field"
+  data-parent-posts={parentPostsJson}
+  data-initial-parent-id={initialParentId}
+  :class="{ 'dropdown-open': parentDropdownOpen }"
+  x-on:click.outside="parentDropdownOpen = false"
+  x-data="parentPostDropdownField"
+>
+  <input type="hidden" name={fieldName} :value="selectedParentId ?? ''" />
+  <label tabindex="0" class={inputClass} @click="toggleDropdown()">
+    <span x-show="selectedParent" class="flex-1 flex flex-col min-w-0 text-left">
+      <span class="truncate font-medium text-sm" x-text="selectedParent ? selectedParent.title : selectPlaceholder"></span>
+      <span
+        class="truncate text-xs text-base-content/60 font-mono"
+        x-text="selectedParent ? (selectedParent.post_type_slug + ' · ' + selectedParent.slug) : ''"
+      ></span>
+    </span>
+    <span x-show="!selectedParent" class="flex-1 text-base-content/50 text-sm">
+      {selectPlaceholder}
+    </span>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      class="h-5 w-5 shrink-0"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+    </svg>
+  </label>
+  <div
+    tabindex="0"
+    class="dropdown-content bg-base-100 rounded-box z-[9999] w-full border border-base-300 p-2 shadow-lg mt-1 max-h-96 overflow-y-auto"
+    x-show="parentDropdownOpen"
+    x-transition
+    @click.stop
+  >
+    <div class="w-full mb-2">
+      <input
+        type="text"
+        placeholder={searchPlaceholder}
+        class="input input-bordered input-sm w-full"
+        x-model="parentSearch"
+        @click.stop
+        @keydown.escape="parentDropdownOpen = false"
+      />
+    </div>
+    <div class="flex flex-col gap-1">
+      <a
+        href="#"
+        @click.prevent="clearParent()"
+        class="rounded px-2 py-2 text-sm hover:bg-base-200 transition-colors text-base-content/70"
+      >
+        {noParentLabel}
+      </a>
+      <template x-for="item in filteredParentPosts" :key="item.id">
+        <a
+          href="#"
+          @click.prevent="selectParent(item.id)"
+          class="flex flex-col gap-0.5 rounded px-2 py-2 hover:bg-base-200 transition-colors"
+        >
+          <span class="font-medium text-sm truncate" x-text="item.title"></span>
+          <span
+            class="text-xs text-base-content/60 font-mono truncate"
+            x-text="item.post_type_slug + ' · ' + item.slug"
+          ></span>
+        </a>
+      </template>
+    </div>
+    <div
+      x-show="filteredParentPosts.length === 0 && parentSearch.trim() !== ''"
+      class="text-base-content/50 text-sm py-2 px-4 text-center"
+    >
+      Nenhum post encontrado
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("alpine:init", () => {
+    const win = window as Window & { __parentPostDropdownFieldRegistered?: boolean };
+    if (win.__parentPostDropdownFieldRegistered) return;
+    win.__parentPostDropdownFieldRegistered = true;
+
+    (window.Alpine as { data: (name: string, fn: () => unknown) => void }).data(
+      "parentPostDropdownField",
+      () => ({
+        selectedParentId: null as number | null,
+        parentSearch: "",
+        parentDropdownOpen: false,
+        parentPosts: [] as {
+          id: number;
+          title: string;
+          slug: string;
+          post_type_slug: string;
+        }[],
+        selectPlaceholder: "Selecione um post pai",
+        init() {
+          const el = (this as unknown as { $el: HTMLElement }).$el;
+          const raw = el.dataset["parentPosts"] ?? "[]";
+          try {
+            this.parentPosts = JSON.parse(raw);
+          } catch {
+            this.parentPosts = [];
+          }
+          const initial = el.dataset["initialParentId"];
+          if (initial !== undefined && initial !== "") {
+            const n = parseInt(initial, 10);
+            this.selectedParentId = Number.isNaN(n) ? null : n;
+          }
+        },
+        get filteredParentPosts() {
+          if (!this.parentSearch.trim()) return this.parentPosts;
+          const search = this.parentSearch.toLowerCase();
+          return this.parentPosts.filter(
+            (item) =>
+              item.title.toLowerCase().includes(search) ||
+              item.slug.toLowerCase().includes(search) ||
+              item.post_type_slug.toLowerCase().includes(search),
+          );
+        },
+        get selectedParent() {
+          if (this.selectedParentId == null) return null;
+          return this.parentPosts.find((p) => p.id === this.selectedParentId) ?? null;
+        },
+        selectParent(parentId: number) {
+          this.selectedParentId = parentId;
+          this.parentSearch = "";
+          this.parentDropdownOpen = false;
+        },
+        clearParent() {
+          this.selectedParentId = null;
+          this.parentSearch = "";
+          this.parentDropdownOpen = false;
+        },
+        toggleDropdown() {
+          this.parentDropdownOpen = !this.parentDropdownOpen;
+        },
+      }),
+    );
+  });
+</script>

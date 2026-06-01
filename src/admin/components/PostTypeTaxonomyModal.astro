@@ -1,0 +1,210 @@
+---
+/**
+ * Modal para criar tipo de taxonomia customizado (registry taxonomyType).
+ * Traduções: idiomas fixos do admin (pt_BR, es_ES, en_US) + site_locales (settings).
+ */
+import { db } from "../../db/index.ts";
+import {
+  localeCodeFlag,
+  resolveCategoryTranslationLocales,
+} from "../../utils/admin-locales.ts";
+import { t, type Locale } from "../../i18n/index.ts";
+
+interface Props {
+  locale: string;
+}
+
+const { locale } = Astro.props;
+const currentLocale = locale as Locale;
+
+const translationLocales = await resolveCategoryTranslationLocales(db);
+---
+
+<input type="checkbox" id="post-type-taxonomy-modal-toggle" class="modal-toggle" />
+<div class="modal overflow-visible" role="dialog" aria-labelledby="post-type-taxonomy-modal-title">
+  <div class="modal-box max-w-lg overflow-visible">
+    <h3 id="post-type-taxonomy-modal-title" class="font-semibold text-lg mb-4">
+      {t(currentLocale, "admin.postTypes.addCategory")}
+    </h3>
+    <div id="post-type-taxonomy-modal-error" class="min-h-6 text-error text-sm"></div>
+    <form
+      id="post-type-taxonomy-form"
+      class="flex flex-col gap-4"
+      hx-post="/api/taxonomy-types"
+      hx-swap="none"
+    >
+      <input type="hidden" name="locale" value={locale} />
+
+      <div class="form-control">
+        <label for="taxonomy-type-key" class="label py-0">
+          <span class="label-text">{t(currentLocale, "admin.postTypes.categoryName")}</span>
+        </label>
+        <input
+          type="text"
+          id="taxonomy-type-key"
+          name="key"
+          required
+          class="input input-bordered w-full input-sm"
+          placeholder="genero"
+        />
+        <p class="text-xs text-base-content/50 mt-1">
+          {t(currentLocale, "admin.postTypes.categoryKeyHint")}
+        </p>
+      </div>
+
+      <div>
+        <p class="label-text font-medium mb-2">
+          {t(currentLocale, "admin.postTypes.translationsSection")}
+        </p>
+        {translationLocales.length === 0 ? (
+          <p class="text-sm text-warning">
+            {t(currentLocale, "admin.postTypes.noTranslationLocales")}
+          </p>
+        ) : (
+          <div id="taxonomy-type-translation-rows" class="flex flex-col gap-2">
+            {translationLocales.map((loc) => (
+              <div
+                class="taxonomy-type-translation-row grid grid-cols-[minmax(0,11rem)_1fr] gap-2 items-end"
+                data-locale-id={loc.id}
+              >
+                <div class="form-control min-w-0">
+                  <span class="label-text text-xs mb-1 block">
+                    {t(currentLocale, "admin.postTypes.translationLocale")}
+                  </span>
+                  <input type="hidden" name="translation_locale_id[]" value={loc.id} />
+                  <div
+                    class="input input-bordered input-sm w-full flex items-center gap-2 bg-base-200/40 cursor-default"
+                    aria-readonly="true"
+                  >
+                    <span aria-hidden="true">{localeCodeFlag(loc.locale_code)}</span>
+                    <span class="truncate text-sm">{loc.language}</span>
+                  </div>
+                  <span class="text-[10px] text-base-content/50 mt-0.5 block">
+                    {loc.locale_code}
+                  </span>
+                </div>
+                <div class="form-control min-w-0">
+                  <label class="label py-0">
+                    <span class="label-text text-xs">
+                      {t(currentLocale, "admin.postTypes.translationValue")}
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    name="translation_value[]"
+                    class="input input-bordered input-sm w-full"
+                    placeholder={t(currentLocale, "admin.postTypes.translationValuePlaceholder")}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <p class="text-xs text-base-content/50 mt-2">
+          {t(currentLocale, "admin.postTypes.translationValueHint")}
+        </p>
+      </div>
+
+      <div class="modal-action mt-2">
+        <button type="submit" class="btn btn-primary btn-sm">
+          {t(currentLocale, "admin.taxonomy.addButton")}
+        </button>
+        <label for="post-type-taxonomy-modal-toggle" class="btn btn-ghost btn-sm">
+          {t(currentLocale, "admin.content.cancel")}
+        </label>
+      </div>
+    </form>
+  </div>
+  <label class="modal-backdrop" for="post-type-taxonomy-modal-toggle">
+    {t(currentLocale, "admin.taxonomy.modalClose")}
+  </label>
+</div>
+
+<script>
+  import { appendTaxonomyTypeCheckbox } from "../../shared/scripts/post-type-form.ts";
+
+  function closeTaxonomyModal() {
+    const toggle = document.getElementById("post-type-taxonomy-modal-toggle") as HTMLInputElement | null;
+    if (toggle) toggle.checked = false;
+  }
+
+  function showTaxonomyModalError(message: string) {
+    const err = document.getElementById("post-type-taxonomy-modal-error");
+    if (err) err.innerHTML = `<p class="text-error text-sm">${message}</p>`;
+    const toggle = document.getElementById("post-type-taxonomy-modal-toggle") as HTMLInputElement | null;
+    if (toggle) toggle.checked = true;
+  }
+
+  function resetTaxonomyModalForm() {
+    const form = document.getElementById("post-type-taxonomy-form") as HTMLFormElement | null;
+    form?.reset();
+    const err = document.getElementById("post-type-taxonomy-modal-error");
+    if (err) err.innerHTML = "";
+    document
+      .querySelectorAll<HTMLInputElement>('#taxonomy-type-translation-rows input[name="translation_value[]"]')
+      .forEach((input) => {
+        input.value = "";
+      });
+  }
+
+  function handleTaxonomyTypeAdded(detail: { type?: string; label?: string }) {
+    if (!detail?.type) return;
+    appendTaxonomyTypeCheckbox(detail.type, detail.label ?? detail.type);
+    closeTaxonomyModal();
+    resetTaxonomyModalForm();
+  }
+
+  function parseHtmxTrigger(header: string | null): Record<string, unknown> | null {
+    if (!header) return null;
+    try {
+      return JSON.parse(header) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  document.body.addEventListener("taxonomy-type-added", (ev: Event) => {
+    handleTaxonomyTypeAdded((ev as CustomEvent<{ type?: string; label?: string }>).detail ?? {});
+  });
+
+  const taxonomyForm = document.getElementById("post-type-taxonomy-form");
+  taxonomyForm?.addEventListener("htmx:afterRequest", (ev: Event) => {
+    const evt = ev as CustomEvent & {
+      detail?: { successful?: boolean; elt?: HTMLElement; xhr?: XMLHttpRequest };
+    };
+    const detail = evt.detail;
+    if (detail?.elt?.id !== "post-type-taxonomy-form") return;
+
+    if (!detail.successful) {
+      try {
+        const data = JSON.parse(detail.xhr?.responseText ?? "{}") as { error?: string };
+        showTaxonomyModalError(
+          typeof data.error === "string" ? data.error : "Erro ao adicionar categoria.",
+        );
+      } catch {
+        showTaxonomyModalError("Erro ao adicionar categoria.");
+      }
+      return;
+    }
+
+    const trigger = parseHtmxTrigger(detail.xhr?.getResponseHeader("HX-Trigger") ?? null);
+    const added = trigger?.["taxonomy-type-added"] as { type?: string; label?: string } | undefined;
+
+    if (added?.type) {
+      handleTaxonomyTypeAdded(added);
+      return;
+    }
+
+    try {
+      const data = JSON.parse(detail.xhr?.responseText ?? "{}") as {
+        success?: boolean;
+        item?: { type: string; label: string };
+      };
+      if (data.success && data.item) {
+        handleTaxonomyTypeAdded(data.item);
+      }
+    } catch {
+      // ignore
+    }
+  });
+</script>

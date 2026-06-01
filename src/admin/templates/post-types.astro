@@ -1,0 +1,573 @@
+---
+/**
+ * Template da página "Post Types" em Settings: lista tipos de post e formulário para criar/editar.
+ * Meta schema é editado como formulário estruturado (key, type, default) em vez de JSON bruto.
+ */
+import AdminLayout from "../layouts/AdminLayout.astro";
+import AdminFormContainer from "../components/admin/AdminFormContainer.astro";
+import AdminFormActions from "../components/admin/AdminFormActions.astro";
+import TranslationLocalesCollapse from "../components/admin/TranslationLocalesCollapse.astro";
+import DataList from "../components/DataList.astro";
+import IconPickerDropdown from "../components/IconPickerDropdown.astro";
+import Collapse from "../components/Collapse.astro";
+import PostTypeTaxonomyModal from "../components/PostTypeTaxonomyModal.astro";
+import { db } from "../../db/index.ts";
+import { t, type Locale } from "../../i18n/index.ts";
+import type { MenuItem } from "../../utils/menu.ts";
+import type { MetaSchemaItem } from "../../db/schema/meta_schema.ts";
+import { DEFAULT_ICON, isValidLineMdIcon } from "../../utils/line-md-icons.ts";
+import { resolveCategoryTranslationLocales } from "../../utils/admin-locales.ts";
+import {
+  filterTaxonomyTypesForUi,
+  type TaxonomyTypeListItem,
+} from "../../core/services/taxonomy-type-registry.ts";
+
+export interface PostTypeRow {
+  id: number;
+  slug: string;
+  name: string;
+  meta_schema: unknown;
+  created_at: number | null;
+  updated_at: number | null;
+}
+
+/** Valores de tradução do nome do post type por locale (namespace postType, key = slug). */
+export interface PostTypeTranslations {
+  pt_BR: string;
+  es_ES: string;
+  en_US: string;
+}
+
+export interface Props {
+  locale: string;
+  menuItems: MenuItem[];
+  currentUser: { email: string; name: string };
+  items: PostTypeRow[];
+  pageLength?: number;
+  /** Quando em edição, o registro sendo editado */
+  editRecord: PostTypeRow | null;
+  /** Valores do post de menu (tabela posts) quando em edição; preenche o formulário */
+  menuPostMetaValues?: Record<string, unknown> | null;
+  /** Traduções do nome do post type (PT_BR, ES, EN_US) quando em edição */
+  postTypeTranslations?: PostTypeTranslations | null;
+  /** Post types que não têm show_in_menu = true (para checkbox "post_types" no meta schema) */
+  postTypesNotInMenu?: { id: number; slug: string; name: string }[];
+  taxonomyTypesList?: TaxonomyTypeListItem[];
+}
+
+function parseMetaSchema(meta: unknown): MetaSchemaItem[] {
+  if (Array.isArray(meta)) return meta as MetaSchemaItem[];
+  if (typeof meta === "string") {
+    try {
+      const parsed = JSON.parse(meta) as unknown;
+      return Array.isArray(parsed) ? (parsed as MetaSchemaItem[]) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function getMetaByKey(items: MetaSchemaItem[], key: string): MetaSchemaItem | undefined {
+  return items.find((i) => i.key === key);
+}
+
+function getFixedMetaInitial(meta: unknown, values?: Record<string, unknown> | null) {
+  const arr = parseMetaSchema(meta);
+  const v = values ?? {};
+  const showInMenu = (v["show_in_menu"] as boolean) ?? (getMetaByKey(arr, "show_in_menu")?.default as boolean) ?? false;
+  const menuOrder = (v["menu_order"] as number) ?? (getMetaByKey(arr, "menu_order")?.default as number) ?? 0;
+  const menuOptions = v["menu_options"] ?? getMetaByKey(arr, "menu_options")?.default;
+  const menuOptionsDisplay = Array.isArray(menuOptions) ? (menuOptions as string[]).join(",") : "new,list";
+  const iconRaw = (v["icon"] as string) ?? (getMetaByKey(arr, "icon")?.default as string) ?? "";
+  const icon = isValidLineMdIcon(iconRaw) ? iconRaw : DEFAULT_ICON;
+  const postThumbnail = (v["post_thumbnail"] as boolean) ?? (getMetaByKey(arr, "post_thumbnail")?.default as boolean) ?? false;
+  const postTypesVal = v["post_types"] ?? getMetaByKey(arr, "post_types")?.default;
+  const postTypesSelected = Array.isArray(postTypesVal) ? (postTypesVal as string[]) : [];
+  const taxonomyVal = v["taxonomy"] ?? getMetaByKey(arr, "taxonomy")?.default;
+  const taxonomySelected = Array.isArray(taxonomyVal) ? (taxonomyVal as string[]) : [];
+  return { showInMenu, menuOrder, menuOptionsDisplay, icon, postThumbnail, postTypesSelected, taxonomySelected };
+}
+
+const {
+  locale,
+  menuItems,
+  currentUser,
+  items,
+  editRecord,
+  menuPostMetaValues,
+  postTypeTranslations,
+  postTypesNotInMenu = [],
+  taxonomyTypesList = [],
+} = Astro.props;
+const currentLocale = locale as Locale;
+const isEdit = editRecord != null;
+const pageLength = Astro.props.pageLength ?? 10;
+
+const initialSlug = editRecord?.slug ?? "";
+const initialName = editRecord?.name ?? "";
+const fixedInitial = getFixedMetaInitial(editRecord?.meta_schema ?? null, menuPostMetaValues);
+const taxonomySelectedUi = filterTaxonomyTypesForUi(fixedInitial.taxonomySelected);
+
+function taxonomyTypeLabel(item: TaxonomyTypeListItem): string {
+  if (item.isBuiltin) {
+    const key = `taxonomy.type.${item.type}`;
+    const translated = t(currentLocale, key);
+    return translated !== key ? translated : item.type;
+  }
+  return item.label;
+}
+const defaultTranslations = { pt_BR: "", es_ES: "", en_US: "" };
+const initialTranslations = postTypeTranslations ?? defaultTranslations;
+const translationLocales = await resolveCategoryTranslationLocales(db);
+const translationValuesByCode: Record<string, string> = {
+  pt_BR: initialTranslations.pt_BR,
+  es_ES: initialTranslations.es_ES,
+  en_US: initialTranslations.en_US,
+};
+
+const formAction = isEdit ? `/api/post-types/${editRecord!.id}` : "/api/post-types";
+const listUrl = `/admin/${locale}/settings?page=post_types`;
+
+const listColumns = [
+  { key: "name", label: t(currentLocale, "admin.settings.name") },
+  { key: "slug", label: t(currentLocale, "admin.taxonomy.formSlug") },
+];
+const listItems = items.map((row) => ({
+  id: row.id,
+  name: row.name,
+  slug: row.slug,
+}));
+const deleteConfirmMessage =
+  t(currentLocale, "admin.postTypes.deleteConfirm") ||
+  "Se apagar o post type todos os posts associados serão deletados.";
+---
+
+<AdminLayout
+  title={t(currentLocale, "menu.option.post_types") || "Post Types"}
+  locale={locale}
+  menuItems={menuItems}
+  user={currentUser}
+>
+  <div class="p-6 flex flex-col gap-6">
+    <div class="flex flex-wrap items-center gap-2 justify-between">
+      <h2 class="text-xl font-semibold">{t(currentLocale, "menu.option.post_types") || "Post Types"}</h2>
+    </div>
+
+    <div class="grid gap-6 lg:grid-cols-2">
+      <AdminFormContainer>
+        <h3 class="font-medium mb-3">
+          {isEdit
+            ? t(currentLocale, "admin.content.editTitle", { type: editRecord?.name ?? "" })
+            : t(currentLocale, "admin.postTypes.new") || "Novo tipo de post"}
+        </h3>
+        <div id="post-types-form-error" class="min-h-6"></div>
+        <form
+          id="post-types-form"
+          method="post"
+          action={formAction}
+          class="flex flex-col gap-4"
+          hx-target="#post-types-form-error"
+          hx-swap="innerHTML"
+          hx-post={isEdit ? undefined : "/api/post-types"}
+          hx-put={isEdit ? formAction : undefined}
+          data-is-edit={String(isEdit)}
+        >
+          {isEdit && <input type="hidden" name="slug" value={initialSlug} />}
+          <div class="form-control">
+            <label for="post-type-name" class="label">
+              <span class="label-text">{t(currentLocale, "admin.postTypes.name") || "Nome"}</span>
+            </label>
+            <input
+              type="text"
+              id="post-type-name"
+              required
+              class="input input-bordered w-full"
+              value={initialName}
+              name="name"
+            />
+          </div>
+          <div class="form-control">
+            <label for="post-type-slug" class="label">
+              <span class="label-text">{t(currentLocale, "admin.content.slug")}</span>
+            </label>
+            <input
+              type="text"
+              id="post-type-slug"
+              required
+              class="input input-bordered w-full"
+              value={initialSlug}
+              name={isEdit ? undefined : "slug"}
+              disabled={isEdit}
+            />
+            {isEdit && (
+              <p class="text-xs text-base-content/60 mt-1">
+                {t(currentLocale, "admin.postTypes.slugReadonly") || "Slug não pode ser alterado na edição."}
+              </p>
+            )}
+          </div>
+          <input type="hidden" name="meta_schema" id="meta_schema_value" value="[]" />
+          <input type="hidden" name="meta_values" id="meta_values_value" value="{}" />
+
+          <div class="flex flex-col gap-3">
+            <TranslationLocalesCollapse
+              title={t(currentLocale, "admin.postTypes.panel.languages")}
+              infoText={t(currentLocale, "admin.postTypes.panel.languagesInfo")}
+              locales={translationLocales}
+              noLocalesMessage={t(currentLocale, "admin.postTypes.noTranslationLocales")}
+              localeLabel={t(currentLocale, "admin.postTypes.translationLocale")}
+              valueLabel={t(currentLocale, "admin.postTypes.translationValue")}
+              valuePlaceholder={initialName}
+              valueHint={t(currentLocale, "admin.postTypes.translationValueHint")}
+              valuesByCode={translationValuesByCode}
+            />
+
+            <Collapse
+              title={t(currentLocale, "admin.postTypes.panel.views")}
+              infoText={t(currentLocale, "admin.postTypes.panel.viewsInfo")}
+              arrow={true}
+              overflowVisible={true}
+            >
+              <div class="space-y-3 pt-1">
+                <label class="label cursor-pointer justify-start gap-2 py-0">
+                  <input
+                    type="checkbox"
+                    id="fixed-show-in-menu"
+                    class="checkbox checkbox-sm checkbox-primary"
+                    data-fixed-show-in-menu
+                    checked={fixedInitial.showInMenu}
+                  />
+                  <span class="label-text">{t(currentLocale, "admin.postTypes.showInMenu")}</span>
+                </label>
+                <div
+                  id="show-in-menu-extra"
+                  class="ms-4 flex flex-col gap-2 border-l-2 border-base-300 pl-3"
+                  data-visible={String(fixedInitial.showInMenu)}
+                >
+                  <div class="form-control">
+                    <label for="fixed-menu-order" class="label py-0">
+                      <span class="label-text text-sm">{t(currentLocale, "admin.postTypes.menuOrder")}</span>
+                    </label>
+                    <input
+                      type="number"
+                      id="fixed-menu-order"
+                      class="input input-bordered input-sm w-24"
+                      data-fixed-menu-order
+                      value={fixedInitial.menuOrder}
+                    />
+                  </div>
+                  <div class="form-control">
+                    <label for="fixed-menu-options" class="label py-0">
+                      <span class="label-text text-sm">{t(currentLocale, "admin.postTypes.menuOptions")}</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="fixed-menu-options"
+                      class="input input-bordered input-sm w-full font-mono"
+                      data-fixed-menu-options
+                      value={fixedInitial.menuOptionsDisplay}
+                      placeholder="new,list"
+                    />
+                  </div>
+                  <div class="form-control">
+                    <label for="fixed-icon" class="label py-0">
+                      <span class="label-text text-sm">{t(currentLocale, "admin.postTypes.icon")}</span>
+                    </label>
+                    <IconPickerDropdown
+                      selectedIcon={fixedInitial.icon}
+                      searchPlaceholder={t(currentLocale, "admin.postTypes.iconSearch")}
+                      emptyMessage={t(currentLocale, "admin.postTypes.iconSearchEmpty")}
+                      listHint={t(currentLocale, "admin.postTypes.iconSearchHint")}
+                    />
+                  </div>
+                </div>
+
+                <label class="label cursor-pointer justify-start gap-2 py-0">
+                  <input
+                    type="checkbox"
+                    id="fixed-post-thumbnail"
+                    class="checkbox checkbox-sm checkbox-primary"
+                    data-fixed-post-thumbnail
+                    checked={fixedInitial.postThumbnail}
+                  />
+                  <span class="label-text">{t(currentLocale, "admin.postTypes.postThumbnail")}</span>
+                </label>
+
+                {postTypesNotInMenu.length > 0 && (
+                  <div class="form-control border-t border-base-300 pt-3">
+                    <p class="label-text font-medium text-sm mb-2">
+                      {t(currentLocale, "admin.postTypes.postTypesLabel")}
+                    </p>
+                    <div class="flex flex-wrap gap-3">
+                      {postTypesNotInMenu.map((pt) => (
+                        <label class="label cursor-pointer justify-start gap-2 py-0">
+                          <input
+                            type="checkbox"
+                            class="checkbox checkbox-sm checkbox-primary fixed-post-types-cb"
+                            data-fixed-post-type-slug={pt.slug}
+                            checked={fixedInitial.postTypesSelected.includes(pt.slug)}
+                          />
+                          <span class="label-text text-sm">{pt.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Collapse>
+
+            <Collapse
+              title={t(currentLocale, "admin.postTypes.panel.categorization")}
+              infoText={t(currentLocale, "admin.postTypes.panel.categorizationInfo")}
+              arrow={true}
+              overflowVisible={true}
+            >
+              <div class="flex flex-col gap-3 pt-1">
+                <button
+                  type="button"
+                  id="post-type-add-category-btn"
+                  class="btn btn-outline btn-sm w-fit"
+                  data-slug-required={t(currentLocale, "admin.postTypes.slugRequiredForCategory")}
+                >
+                  {t(currentLocale, "admin.postTypes.addCategory")}
+                </button>
+                <div id="taxonomy-type-list" class="flex flex-wrap gap-3">
+                  {taxonomyTypesList.map((item) => (
+                    <label class="label cursor-pointer justify-start gap-2 py-0">
+                      <input
+                        type="checkbox"
+                        class="checkbox checkbox-sm checkbox-primary fixed-taxonomy-cb"
+                        data-fixed-taxonomy-type={item.type}
+                        checked={taxonomySelectedUi.includes(item.type)}
+                      />
+                      <span class="label-text text-sm">{taxonomyTypeLabel(item)}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </Collapse>
+          </div>
+
+          <AdminFormActions
+            submitLabel={isEdit ? t(currentLocale, "admin.content.saveEdit") : t(currentLocale, "admin.content.saveNew")}
+            cancelHref={listUrl}
+            cancelLabel={t(currentLocale, "admin.content.cancel")}
+          />
+        </form>
+        <PostTypeTaxonomyModal locale={locale} />
+      </AdminFormContainer>
+
+      <div>
+        <h3 class="font-medium mb-3">{t(currentLocale, "admin.list.title")}</h3>
+        <DataList
+          columns={listColumns}
+          items={listItems}
+          emptyMessage={t(currentLocale, "admin.list.noItems")}
+          emptyColspan={3}
+          pageLength={pageLength}
+          dtInfo={t(currentLocale, "admin.list.dtInfo")}
+          dtInfoEmpty={t(currentLocale, "admin.list.dtInfoEmpty")}
+          dtInfoFiltered={t(currentLocale, "admin.list.dtInfoFiltered")}
+          dtLengthMenu={t(currentLocale, "admin.list.dtLengthMenu")}
+          dtSearch={t(currentLocale, "admin.list.dtSearch")}
+          dtZeroRecords={t(currentLocale, "admin.list.dtZeroRecords")}
+          dtPaginatePrevious={t(currentLocale, "admin.list.previous")}
+          dtPaginateNext={t(currentLocale, "admin.list.next")}
+          editLabel={t(currentLocale, "admin.list.edit")}
+          deleteLabel={t(currentLocale, "admin.list.delete")}
+          actionsColumnLabel={t(currentLocale, "admin.list.actions")}
+          actionConfig={{
+            editLinkTemplate: `/admin/${locale}/settings?page=post_types&edit={id}`,
+            deletePathTemplate: `/api/post-types/{id}`,
+            deleteConfirm: deleteConfirmMessage,
+          }}
+        />
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  #show-in-menu-extra[data-visible="false"] {
+    display: none;
+  }
+
+  /* Dropdowns (ícone, locale) não devem ser cobertos por collapses abaixo no DOM */
+  #post-types-form .collapse-wrapper,
+  #post-types-form .collapse.overflow-visible,
+  #post-types-form .collapse.overflow-visible > .collapse-content {
+    overflow: visible;
+  }
+
+  #post-types-form .collapse-wrapper {
+    position: relative;
+    z-index: 0;
+  }
+
+  /* Painel com dropdown aberto fica acima dos collapses seguintes (ex.: Categorização) */
+  #post-types-form .collapse-wrapper:has(.dropdown.dropdown-open),
+  #post-types-form .collapse-wrapper:has(.dropdown:focus-within) {
+    z-index: 100;
+  }
+
+  #post-types-form .dropdown {
+    position: relative;
+    z-index: 1;
+  }
+
+  #post-types-form .dropdown.dropdown-open,
+  #post-types-form .dropdown:focus-within {
+    z-index: 110;
+  }
+
+  #post-types-form .dropdown .dropdown-content {
+    z-index: 500;
+  }
+</style>
+
+<script>
+  import {
+    initPostTypeSlugFromName,
+    initPostTypeTaxonomyMenuSync,
+    syncMenuOptionsFromTaxonomies,
+  } from "../../shared/scripts/post-type-form.ts";
+
+  (function () {
+    function init() {
+      initPostTypeSlugFromName();
+      initPostTypeTaxonomyMenuSync();
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+
+  (function () {
+    const showInMenuCheck = document.getElementById("fixed-show-in-menu") as HTMLInputElement | null;
+    const showInMenuExtra = document.getElementById("show-in-menu-extra");
+    function toggleShowInMenuExtra() {
+      if (showInMenuExtra) showInMenuExtra.setAttribute("data-visible", showInMenuCheck?.checked ? "true" : "false");
+      if (showInMenuCheck?.checked) syncMenuOptionsFromTaxonomies();
+    }
+    showInMenuCheck?.addEventListener("change", toggleShowInMenuExtra);
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", toggleShowInMenuExtra);
+    } else {
+      toggleShowInMenuExtra();
+    }
+
+    function buildMetaSchemaFromFields() {
+      const arr: { key: string; type: string; default?: unknown }[] = [];
+
+      const showInMenu = (document.querySelector("[data-fixed-show-in-menu]") as HTMLInputElement)?.checked ?? false;
+      arr.push({ key: "show_in_menu", type: "boolean", default: showInMenu });
+
+      if (showInMenu) {
+        const menuOrderEl = document.querySelector("[data-fixed-menu-order]") as HTMLInputElement | null;
+        const menuOrder = menuOrderEl ? Number(menuOrderEl.value) || 0 : 0;
+        arr.push({ key: "menu_order", type: "number", default: menuOrder });
+
+        const menuOptionsEl = document.querySelector("[data-fixed-menu-options]") as HTMLInputElement | null;
+        const menuOptionsStr = menuOptionsEl?.value?.trim() ?? "new,list";
+        const menuOptions = menuOptionsStr.split(",").map((s) => s.trim()).filter(Boolean);
+        arr.push({ key: "menu_options", type: "array", default: menuOptions });
+
+        const iconEl = document.querySelector("[data-fixed-icon]") as HTMLInputElement | null;
+        const icon = iconEl?.value?.trim() ?? "line-md:document";
+        arr.push({ key: "icon", type: "string", default: icon });
+      }
+
+      const postThumbnail = (document.querySelector("[data-fixed-post-thumbnail]") as HTMLInputElement)?.checked ?? false;
+      arr.push({ key: "post_thumbnail", type: "boolean", default: postThumbnail });
+
+      const postTypesChecked = document.querySelectorAll(".fixed-post-types-cb:checked");
+      const postTypesSlugs = Array.from(postTypesChecked)
+        .map((el) => (el as HTMLElement).dataset["fixedPostTypeSlug"])
+        .filter(Boolean) as string[];
+      arr.push({ key: "post_types", type: "array", default: postTypesSlugs });
+
+      const taxonomyChecked = document.querySelectorAll(".fixed-taxonomy-cb:checked");
+      const taxonomyTypes = Array.from(taxonomyChecked)
+        .map((el) => (el as HTMLElement).dataset["fixedTaxonomyType"])
+        .filter(Boolean) as string[];
+      arr.push({ key: "taxonomy", type: "array", default: taxonomyTypes });
+
+      const schemaHidden = document.getElementById("meta_schema_value") as HTMLInputElement;
+      if (schemaHidden) schemaHidden.value = JSON.stringify(arr);
+
+      const metaValues: Record<string, unknown> = {};
+      metaValues["show_in_menu"] = showInMenu;
+      if (showInMenu) {
+        metaValues["menu_order"] = (document.querySelector("[data-fixed-menu-order]") as HTMLInputElement)?.value ? Number((document.querySelector("[data-fixed-menu-order]") as HTMLInputElement).value) || 0 : 0;
+        const menuOptEl = document.querySelector("[data-fixed-menu-options]") as HTMLInputElement | null;
+        metaValues["menu_options"] = menuOptEl?.value?.trim() ? menuOptEl.value.split(",").map((s) => s.trim()).filter(Boolean) : ["new", "list"];
+        metaValues["icon"] = (document.querySelector("[data-fixed-icon]") as HTMLInputElement | null)?.value?.trim() || "line-md:document";
+      }
+      metaValues["post_thumbnail"] = postThumbnail;
+      const postTypesCheckedForValues = document.querySelectorAll(".fixed-post-types-cb:checked");
+      metaValues["post_types"] = Array.from(postTypesCheckedForValues)
+        .map((el) => (el as HTMLElement).dataset["fixedPostTypeSlug"])
+        .filter(Boolean);
+      const taxonomyCheckedForValues = document.querySelectorAll(".fixed-taxonomy-cb:checked");
+      metaValues["taxonomy"] = Array.from(taxonomyCheckedForValues)
+        .map((el) => (el as HTMLElement).dataset["fixedTaxonomyType"])
+        .filter(Boolean);
+      const valuesHidden = document.getElementById("meta_values_value") as HTMLInputElement;
+      if (valuesHidden) valuesHidden.value = JSON.stringify(metaValues);
+    }
+
+    const form = document.getElementById("meta_schema_value")?.closest("form");
+    form?.addEventListener("submit", buildMetaSchemaFromFields);
+    form?.addEventListener("htmx:configRequest", buildMetaSchemaFromFields);
+
+    const slugRequiredMsg =
+      document.getElementById("post-type-add-category-btn")?.getAttribute("data-slug-required") ?? "";
+
+    document.getElementById("post-type-add-category-btn")?.addEventListener("click", () => {
+      const slugInput = document.getElementById("post-type-slug") as HTMLInputElement | null;
+      const slugHidden = form?.querySelector('input[name="slug"]') as HTMLInputElement | null;
+      const slug = (slugInput?.value ?? slugHidden?.value ?? "").trim();
+      if (!slug) {
+        if (slugRequiredMsg) alert(slugRequiredMsg);
+        return;
+      }
+      const toggle = document.getElementById("post-type-taxonomy-modal-toggle") as HTMLInputElement | null;
+      if (toggle) toggle.checked = true;
+    });
+
+    document.body.addEventListener("htmx:afterRequest", (ev: Event) => {
+      const evt = ev as CustomEvent & { detail?: { successful?: boolean; target?: HTMLElement; trigger?: HTMLElement; xhr?: { status?: number; responseText?: string; responseURL?: string } } };
+      const detail = evt.detail;
+      if (!detail?.successful && detail?.xhr?.status === 400) {
+        try {
+          const data = JSON.parse(detail?.xhr?.responseText ?? "{}") as { error?: string };
+          const err = typeof data?.error === "string" ? data.error : "Erro ao salvar.";
+          const isDeletePostType = detail?.trigger?.getAttribute?.("hx-delete")?.includes("/api/post-types/");
+          if (isDeletePostType) {
+            alert(err);
+            return;
+          }
+          const errorEl = document.getElementById("post-types-form-error");
+          if (errorEl) errorEl.innerHTML = `<p class="text-error text-sm">${err}</p>`;
+        } catch {
+          const errorEl = document.getElementById("post-types-form-error");
+          if (errorEl) errorEl.textContent = "Erro ao salvar.";
+        }
+      } else if (detail?.successful) {
+        const trigger = detail?.trigger;
+        const form = trigger?.closest?.("form") ?? (trigger as HTMLFormElement | null);
+        const hxPost = form?.getAttribute?.("hx-post");
+        const hxPut = form?.getAttribute?.("hx-put");
+        const isCreatePostType = hxPost === "/api/post-types";
+        const isEditPostType = hxPut?.startsWith?.("/api/post-types/");
+        const targetId = detail?.target?.id;
+        const wantsRefresh = (detail?.xhr as XMLHttpRequest | undefined)?.getResponseHeader?.("HX-Refresh") === "true";
+        if (isCreatePostType || isEditPostType || targetId === "post-types-form-error" || wantsRefresh) {
+          window.location.reload();
+        }
+      }
+    });
+  })();
+</script>

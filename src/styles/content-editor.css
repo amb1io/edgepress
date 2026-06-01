@@ -24,3 +24,21 @@
 .language-accordion input[type="radio"]:checked ~ .collapse-content {
   min-height: 400px;
 }
+
+.content-editor-wrapper .edgepress-bn-button {
+  transition: filter 0.15s ease-in-out;
+}
+
+.content-editor-wrapper .edgepress-bn-button:hover {
+  filter: brightness(0.95);
+}
+
+.content-editor-wrapper .edgepress-bn-button .bn-inline-content {
+  min-width: 3ch;
+  text-align: center;
+}
+
+.content-editor-wrapper .edgepress-bn-button .bn-inline-content a {
+  color: inherit;
+  text-decoration: none;
+}

@@ -7,15 +7,19 @@ import HeaderMobile from "../partials/headermobile.astro";
 import "../hummingbird/63079d99e9879542ce19a76281c87570.css";
 import "../hummingbird/7f1f6b7a9da76e8640ee8a310a283b73.css";
 import "../hummingbird/amb1.css";
+import { getLanguageFromUrl } from "../i18n/utils";
+
 const { slug } = Astro.params;
 const { isFixed, page, footerStyle } = Astro.props;
+const themeLang = getLanguageFromUrl(Astro.url);
+const htmlLang = themeLang === "en" ? "en-US" : "pt-BR";
 let url = Astro.request.url;
 if (slug) {
   url = url.replace(`/${slug}`, "");
 }
 ---
 
-<html lang="pt-BR">
+<html lang={htmlLang}>
   <head>
     <meta
       name="description"

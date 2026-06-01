@@ -1,4 +1,4 @@
-import { themeContentGateway } from "../../../../lib/services/theme-content-gateway.ts";
+import { themeContentGateway } from "../../../../core/services/theme-content-gateway.ts";
 
 export const slugify = (value: string, separator: string = "-"): string => {
   return value

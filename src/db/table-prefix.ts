@@ -1,6 +1,6 @@
 /**
- * Prefixo de tabelas EdgePress (estilo WordPress `$table_prefix`).
- * Todas as tabelas do CMS usam este prefixo no SQLite/D1.
+ * Prefixo das tabelas no banco (estilo `wp_` do WordPress).
+ * Nomes físicos: `edp_posts`. APIs e rotas usam o nome lógico: `posts`.
  */
 export const TABLE_PREFIX = "edp_" as const;
 

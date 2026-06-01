@@ -2,22 +2,57 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { existsSync, readFileSync } from "node:fs";
 import { defineConfig, sessionDrivers } from "astro/config";
 import tailwindcss from "@tailwindcss/vite";
 
 import alpinejs from "@astrojs/alpinejs";
+import sitemap from "@astrojs/sitemap";
 
 import cloudflare from "@astrojs/cloudflare";
 import react from "@astrojs/react";
 import icon from "astro-icon";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-const shimDebug = path.resolve(root, "src/lib/shim-debug.ts");
-const shimAsyncHooks = path.resolve(root, "src/lib/shim-node-async-hooks.ts");
+const patchPagesWrangler = path.join(root, "scripts/patch-pages-wrangler.mjs");
+const shimDebug = path.resolve(root, "src/utils/shim-debug.ts");
+const shimAsyncHooks = path.resolve(root, "src/utils/shim-node-async-hooks.ts");
 const reactRoot = path.resolve(root, "node_modules/react");
 const reactDomRoot = path.resolve(root, "node_modules/react-dom");
 
+const siteOrigin =
+  process.env.SITE_URL?.trim() ||
+  process.env.BETTER_AUTH_URL?.trim() ||
+  "http://localhost:4321";
+
+function loadSitemapCustomPages() {
+  const jsonPath = path.join(root, "src/generated/sitemap-urls.json");
+  if (!existsSync(jsonPath)) return [];
+  try {
+    const data = JSON.parse(readFileSync(jsonPath, "utf8"));
+    return Array.isArray(data) ? data.filter((u) => typeof u === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+const sitemapCustomPages = loadSitemapCustomPages();
+
+const SITEMAP_EXCLUDED_PREFIXES = ["/admin", "/api", "/login", "/setup", "/themes"];
+
+function shouldIncludeInSitemap(page) {
+  try {
+    const pathname = new URL(page, "https://placeholder.local").pathname;
+    return !SITEMAP_EXCLUDED_PREFIXES.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    );
+  } catch {
+    return false;
+  }
+}
+
 export default defineConfig({
+  site: siteOrigin,
   adapter: cloudflare({
     sessionKVBindingName: "CACHE",
     platformProxy: {
@@ -47,7 +82,7 @@ export default defineConfig({
     // invalidar chunks em node_modules/.vite/deps_ssr durante reload ("file does not exist"
     // / "Module is undefined"). Mantém drizzle/auth/libsql fora do dep optimizer.
     optimizeDeps: {
-      entries: ["src/components/BlockNoteEditor.tsx"],
+      entries: ["src/components/admin/BlockNoteEditor.tsx"],
       include: [
         "react",
         "react-dom",
@@ -97,6 +132,17 @@ export default defineConfig({
     ssr: {
       optimizeDeps: {
         include: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
+        // Mesmo exclude do optimizeDeps raiz: evita deps_ssr corrompidos com drizzle no workerd.
+        exclude: [
+          "drizzle-orm",
+          "drizzle-orm/d1",
+          "drizzle-orm/sqlite-core",
+          "drizzle-orm/libsql",
+          "better-auth",
+          "better-auth/adapters/drizzle",
+          "@libsql/client",
+          "@noble/hashes",
+        ],
       },
     },
   },
@@ -107,5 +153,9 @@ export default defineConfig({
       experimentalDisableStreaming: true,
     }),
     icon(),
+    sitemap({
+      customPages: sitemapCustomPages,
+      filter: (page) => shouldIncludeInSitemap(page),
+    }),
   ],
 });

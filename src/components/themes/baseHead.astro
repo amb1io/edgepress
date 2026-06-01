@@ -1,0 +1,194 @@
+---
+import { createEdgepressContent } from "../../core/services/edgepress-content.ts";
+import { stripHtml } from "../../core/services/json-ld-service.ts";
+import JsonLdScript from "./JsonLdScript.astro";
+
+type SeoPayload = {
+  title?: string;
+  description?: string;
+  canonical?: string;
+};
+
+type MediaItem = {
+  id?: number;
+  meta_values?: Record<string, unknown>;
+};
+
+type PostPayload = {
+  title?: string;
+  excerpt?: string | null;
+  body?: string | null;
+  seo?: SeoPayload | null;
+  json_ld?: Record<string, unknown>[] | null;
+  post_type_slug?: string;
+  media?: MediaItem[];
+  meta_values?: Record<string, unknown>;
+};
+
+type Props = {
+  /** Aceita id numérico ou slug (preferido). */
+  pageId?: number | string;
+  /** Chave lógica de tradução (meta `translation_key`); use com `locale`. */
+  pageKey?: string;
+  pageSlug?: string;
+  /** Locale do conteúdo (ex.: pt-br, es, en). Usado com `pageKey`. */
+  locale?: string;
+
+  /** Default: "posts" (onde vivem page/post). */
+  table?: string;
+
+  /**
+   * Status para busca quando `table="posts"`.
+   * Default: "published"
+   */
+  status?: "published" | "draft" | "archived" | (string & {});
+
+  /** Fallback do title quando o conteúdo não tiver SEO/title. */
+  fallbackTitle?: string;
+
+  /** Força canonical (absoluto ou relativo). Se vazio, usa `seo.canonical` ou `Astro.url`. */
+  canonical?: string;
+
+  /** Força imagem OG/Twitter. Se vazio, tenta inferir via media/meta_values. */
+  image?: string;
+
+  /** Permite sobrescrever o site name no OG. */
+  siteName?: string;
+
+  /**
+   * Se `true`, falha o render quando não encontrar o conteúdo.
+   * Default: true (loga e estoura erro para debug).
+   */
+  required?: boolean;
+};
+
+const {
+  pageId,
+  pageKey,
+  pageSlug,
+  table = "posts",
+  status = "published",
+  locale = "pt-br",
+  fallbackTitle = "",
+  canonical: canonicalOverride,
+  image: imageOverride,
+  siteName,
+  required = true,
+} = Astro.props as Props;
+
+const pageKeyTrimmed = (pageKey ?? "").toString().trim();
+const idOrSlug = (pageSlug ?? pageId ?? pageKeyTrimmed).toString().trim();
+if (!idOrSlug) {
+  throw new Error("baseHead.astro: passe `pageKey`, `pageSlug` ou `pageId`.");
+}
+
+const resolveByTranslationKey = Boolean(pageKeyTrimmed) && table === "posts";
+
+const content = createEdgepressContent(Astro.locals as App.Locals, {
+  baseUrl: Astro.url.origin,
+});
+
+let data: unknown = null;
+try {
+  data = await content.getItem(table, idOrSlug, {
+    ...(table === "posts"
+      ? { status, locale, resolve: resolveByTranslationKey ? "translation_key" : "slug" }
+      : {}),
+  });
+} catch (err) {
+  const e = err as { message?: string; stack?: string; status?: number; detail?: unknown };
+  console.error("[edgepress][baseHead] Falha ao carregar conteúdo para head", {
+    table,
+    idOrSlug,
+    status: table === "posts" ? status : undefined,
+    url: Astro.url.href,
+    message: e?.message,
+    statusCode: e?.status,
+    detail: e?.detail,
+    stack: e?.stack,
+  });
+  if (required) throw err;
+  data = null;
+}
+
+const post = (data ?? {}) as PostPayload;
+const seo = (post.seo ?? null) as SeoPayload | null;
+
+function resolveCanonical(candidate: string | undefined | null): string {
+  const v = String(candidate ?? "").trim();
+  if (!v) return Astro.url.href;
+  if (/^https?:\/\//i.test(v)) return v;
+  return new URL(v.startsWith("/") ? v : `/${v}`, Astro.url.origin).href;
+}
+
+function resolveOgImageFromMedia(): string | undefined {
+  const media = post.media ?? [];
+  const metaValues = post.meta_values ?? {};
+  const thumbIdRaw = metaValues["post_thumbnail_id"];
+  const thumbId =
+    typeof thumbIdRaw === "number"
+      ? thumbIdRaw
+      : typeof thumbIdRaw === "string"
+        ? parseInt(thumbIdRaw, 10)
+        : NaN;
+
+  for (const item of media) {
+    const id = item.id;
+    if (thumbId && !Number.isNaN(thumbId) && id !== thumbId) continue;
+
+    const meta = item.meta_values ?? {};
+    const path =
+      (typeof meta["attachment_path"] === "string" && meta["attachment_path"]) ||
+      (typeof meta["attachment_file"] === "string" && meta["attachment_file"]) ||
+      "";
+    if (!path) continue;
+
+    if (/^https?:\/\//i.test(path)) return path;
+    const normalized = path.startsWith("/") ? path : `/uploads/${path.replace(/^uploads\//, "")}`;
+    return new URL(`/api/media${normalized}`, Astro.url.origin).href;
+  }
+
+  return undefined;
+}
+
+const rawTitle = String((seo?.title ?? post.title ?? fallbackTitle) ?? "").trim();
+const rawDescription = String(
+  (seo?.description ?? post.excerpt ?? post.body ?? "") ?? "",
+).trim();
+
+const title = rawTitle || fallbackTitle || " ";
+const description = stripHtml(rawDescription).slice(0, 300);
+const canonicalUrl = resolveCanonical(canonicalOverride ?? seo?.canonical ?? null);
+
+const ogImage =
+  (imageOverride && resolveCanonical(imageOverride)) ||
+  resolveOgImageFromMedia();
+
+const ogType = String(post.post_type_slug ?? "") === "post" ? "article" : "website";
+---
+<head>
+  <title>{title}</title>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  {description ? <meta name="description" content={description} /> : null}
+  <link rel="canonical" href={canonicalUrl} />
+
+  <meta property="og:type" content={ogType} />
+  <meta property="og:title" content={title} />
+  {description ? <meta property="og:description" content={description} /> : null}
+  <meta property="og:url" content={canonicalUrl} />
+  {siteName ? <meta property="og:site_name" content={siteName} /> : null}
+  {ogImage ? <meta property="og:image" content={ogImage} /> : null}
+
+  <meta name="twitter:card" content={ogImage ? "summary_large_image" : "summary"} />
+  <meta name="twitter:title" content={title} />
+  {description ? <meta name="twitter:description" content={description} /> : null}
+  {ogImage ? <meta name="twitter:image" content={ogImage} /> : null}
+
+  <JsonLdScript graphs={(post.json_ld ?? null) as Record<string, unknown>[] | null} />
+
+  <slot />
+</head>
+

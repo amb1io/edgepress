@@ -1,0 +1,78 @@
+---
+import { Image } from "astro:assets";
+import { createEdgepressContent } from "../../core/services/edgepress-content.ts";
+import { resolveBaseProp } from "./base-prop-utils.ts";
+
+type Props = {
+  /** Chave do settings que contém o logo. Default: "company_logo" */
+  logoKey?: string;
+  /** Chave do settings que contém o nome do site. Default: "site_name" */
+  siteNameKey?: string;
+  /** Classe opcional no wrapper */
+  className?: string;
+  /** Alt opcional. Default: site_name */
+  alt?: string;
+  /** Largura do logo (necessário para Image quando unoptimized). Default: 160 */
+  width?: number;
+  /** Altura do logo (necessário para Image quando unoptimized). Default: 48 */
+  height?: number;
+};
+
+const {
+  logoKey = "company_logo",
+  siteNameKey = "site_name",
+  className,
+  alt,
+  width = 160,
+  height = 48,
+} = Astro.props as Props;
+
+const [logoSetting, siteNameSetting] = await Promise.all([
+  resolveBaseProp({
+    locals: Astro.locals as App.Locals,
+    url: Astro.url,
+    postType: "settings",
+    table: "settings",
+    idOrSlug: logoKey,
+  }),
+  resolveBaseProp({
+    locals: Astro.locals as App.Locals,
+    url: Astro.url,
+    postType: "settings",
+    table: "settings",
+    idOrSlug: siteNameKey,
+  }),
+]);
+
+const siteName = siteNameSetting.value || "Site";
+const logoRaw = logoSetting.value;
+
+const content = createEdgepressContent(Astro.locals as App.Locals, { baseUrl: Astro.url.origin });
+
+function resolveLogoSrc(raw: string): string {
+  const v = raw.trim();
+  if (!v) return "";
+  if (/^https?:\/\//i.test(v)) return v;
+  if (v.startsWith("/api/media/")) return v;
+  if (/^\d+$/.test(v)) return content.getMediaUrl(parseInt(v, 10));
+  const path = v.replace(/^\/+/, "");
+  return `/api/media/${path}`;
+}
+
+// `company_logo` pode ser um id numérico de media, uma URL absoluta, ou um path (uploads/...).
+const logoSrc = resolveLogoSrc(logoRaw || "");
+---
+
+{logoSrc ? (
+  <div class={className}>
+    <Image
+      src={logoSrc}
+      alt={alt ?? siteName}
+      title={siteName}
+      width={width}
+      height={height}
+      unoptimized
+    />
+  </div>
+) : null}
+

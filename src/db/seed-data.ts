@@ -21,23 +21,35 @@ export interface RoleCapabilityRow {
   capability: string;
 }
 
-/** Locales necessários para traduções (en_US, es_ES, pt_BR). */
+import { ADMIN_DB_LOCALE_CODES } from "../utils/admin-locale-constants.ts";
+
+/** Locales necessários para traduções do admin (espelham ADMIN_DB_LOCALE_CODES). */
 export const REQUIRED_LOCALES: LocaleRow[] = [
-  { locale_code: "en_US", language: "English (US)", hello_world: "Hello World", country: "United States", timezone: "UTC-5" },
-  { locale_code: "es_ES", language: "Spanish (Spain)", hello_world: "Hola Mundo", country: "Spain", timezone: "UTC+1" },
   { locale_code: "pt_BR", language: "Portuguese (Brazil)", hello_world: "Olá Mundo", country: "Brazil", timezone: "UTC-3" },
+  { locale_code: "es_ES", language: "Spanish (Spain)", hello_world: "Hola Mundo", country: "Spain", timezone: "UTC+1" },
+  { locale_code: "en_US", language: "English (US)", hello_world: "Hello World", country: "United States", timezone: "UTC-5" },
 ];
+
+/** Garante que os códigos do seed batem com o admin (type-check em build). */
+export const REQUIRED_LOCALE_CODES = ADMIN_DB_LOCALE_CODES;
+
+/**
+ * Códigos de locale duplicados (variantes) → locale canônico único por idioma principal.
+ * Usado para migrar FKs e remover linhas extras em `locales`.
+ */
+export const LOCALE_CODE_ALIASES: Record<string, string> = {
+  en: "en_US",
+  "en-GB": "en_US",
+  "pt-BR": "pt_BR",
+  "pt-PT": "pt_BR",
+  es: "es_ES",
+  "es-MX": "es_ES",
+  "fr-CA": "fr",
+};
 
 /** Todos os locales (idiomas/países) + obrigatórios para i18n. Usado no seed e no SQL remoto. */
 export const FULL_LOCALES: LocaleRow[] = [
-  { language: "English", hello_world: "Hello World", locale_code: "en", country: "United States", timezone: "UTC-5" },
-  { language: "English", hello_world: "Hello World", locale_code: "en-GB", country: "United Kingdom", timezone: "UTC+0" },
-  { language: "Portuguese", hello_world: "Olá Mundo", locale_code: "pt-BR", country: "Brazil", timezone: "UTC-3" },
-  { language: "Portuguese", hello_world: "Olá Mundo", locale_code: "pt-PT", country: "Portugal", timezone: "UTC+0" },
-  { language: "Spanish", hello_world: "Hola Mundo", locale_code: "es", country: "Spain", timezone: "UTC+1" },
-  { language: "Spanish", hello_world: "Hola Mundo", locale_code: "es-MX", country: "Mexico", timezone: "UTC-6" },
   { language: "French", hello_world: "Bonjour le monde", locale_code: "fr", country: "France", timezone: "UTC+1" },
-  { language: "French", hello_world: "Bonjour le monde", locale_code: "fr-CA", country: "Canada", timezone: "UTC-5" },
   { language: "German", hello_world: "Hallo Welt", locale_code: "de", country: "Germany", timezone: "UTC+1" },
   { language: "Italian", hello_world: "Ciao mondo", locale_code: "it", country: "Italy", timezone: "UTC+1" },
   { language: "Japanese", hello_world: "こんにちは世界", locale_code: "ja", country: "Japan", timezone: "UTC+9" },
@@ -124,12 +136,36 @@ export const MENU_CONFIG: MenuConfigRow[] = [
   { typeSlug: "themes", menu_options: ["list", "new"], menu_order: 5, icon: "line-md:paint-drop-twotone" },
   { typeSlug: "user", menu_options: ["list", "new"], menu_order: 6, icon: "line-md:account" },
   { typeSlug: "translations_languages", menu_options: ["list", "new"], menu_order: 7, icon: "line-md:chat-round-dots" },
-  { typeSlug: "settings", menu_options: ["post_types", "list", "new", "cache"], menu_order: 8, icon: "line-md:cog" },
+  {
+    typeSlug: "post_type",
+    menu_options: ["post_types", "post_type_taxonomies"],
+    menu_order: 8,
+    icon: "line-md:document-list",
+  },
+  { typeSlug: "settings", menu_options: ["list", "new", "cache"], menu_order: 9, icon: "line-md:cog" },
 ];
 
 /** Post types padrão (slug, name, meta_schema). Re-exportado de default-post-types para centralizar dados de seed. */
 export { DEFAULT_POST_TYPES, META_ONLY_POST_TYPE_SLUGS } from "./default-post-types.ts";
 export type { DefaultPostTypeRow } from "./default-post-types.ts";
+
+/** Post types com custom fields habilitados e bloco SEO automático no admin. */
+export const POST_TYPES_WITH_CUSTOM_FIELDS = ["post", "page"] as const;
+
+/** Template global de custom field SEO (post tipo custom_fields, sem parent). */
+export const SEO_CUSTOM_FIELD_TEMPLATE = {
+  title: "SEO",
+  slug: "template-seo",
+  meta_values: {
+    template: true,
+    field_type: ["text", "text", "text"],
+    fields: [
+      { name: "Título SEO", value: "", type: "text" },
+      { name: "Descrição SEO", value: "", type: "text" },
+      { name: "URL Canônica", value: "", type: "text" },
+    ],
+  },
+} as const;
 
 /** Linha para tabela settings. */
 export interface SettingsRow {
@@ -141,9 +177,12 @@ export interface SettingsRow {
 /** Settings iniciais (setup_done=N até concluir /setup). */
 export const DEFAULT_SETTINGS_ROWS: SettingsRow[] = [
   { name: "site_name", value: "demo site", autoload: true },
+  { name: "site_url", value: "", autoload: true },
   { name: "site_description", value: "demo_description", autoload: true },
   { name: "setup_done", value: "N", autoload: true },
   { name: "default_posttype", value: "post", autoload: true },
   { name: "default_taxonomies", value: "category,tag", autoload: true },
+  { name: "site_locales", value: "", autoload: true },
   { name: "active_theme", value: "2026", autoload: true },
+  { name: "datalist_pagination", value: "10", autoload: true },
 ];

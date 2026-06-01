@@ -9,7 +9,18 @@ import {
   translations,
   translationsLanguages,
 } from "./schema.ts";
-import { ROLE_CAPABILITY_ROWS, FULL_LOCALES, DEFAULT_POST_TYPES, META_ONLY_POST_TYPE_SLUGS, MENU_CONFIG, TAXONOMY_SEED_ROWS, DEFAULT_SETTINGS_ROWS } from "./seed-data.ts";
+import { deduplicateLocales } from "./deduplicate-locales.ts";
+import {
+  ROLE_CAPABILITY_ROWS,
+  FULL_LOCALES,
+  DEFAULT_POST_TYPES,
+  META_ONLY_POST_TYPE_SLUGS,
+  MENU_CONFIG,
+  TAXONOMY_SEED_ROWS,
+  DEFAULT_SETTINGS_ROWS,
+  POST_TYPES_WITH_CUSTOM_FIELDS,
+  SEO_CUSTOM_FIELD_TEMPLATE,
+} from "./seed-data.ts";
 import enTranslations from "../i18n/languages/en.json";
 import esTranslations from "../i18n/languages/es.json";
 import ptBrTranslations from "../i18n/languages/pt_br.json";
@@ -67,6 +78,42 @@ export async function runSeed(db: any): Promise<void> {
   const now = Date.now();
 
   const typeIds = await ensurePostTypesFromDefaults(db);
+
+  for (const slug of POST_TYPES_WITH_CUSTOM_FIELDS) {
+    const pt = DEFAULT_POST_TYPES.find((p) => p.slug === slug);
+    if (pt) {
+      await db
+        .update(postTypes)
+        .set({ meta_schema: pt.meta_schema, updated_at: now })
+        .where(eq(postTypes.slug, slug));
+    }
+  }
+
+  const customFieldsTypeIdForTemplate = typeIds["custom_fields"];
+  if (customFieldsTypeIdForTemplate) {
+    const [existingSeoTemplate] = await db
+      .select({ id: posts.id })
+      .from(posts)
+      .where(
+        and(
+          eq(posts.post_type_id, customFieldsTypeIdForTemplate),
+          eq(posts.slug, SEO_CUSTOM_FIELD_TEMPLATE.slug),
+        ),
+      )
+      .limit(1);
+
+    if (!existingSeoTemplate) {
+      await db.insert(posts).values({
+        post_type_id: customFieldsTypeIdForTemplate,
+        title: SEO_CUSTOM_FIELD_TEMPLATE.title,
+        slug: SEO_CUSTOM_FIELD_TEMPLATE.slug,
+        status: "published",
+        meta_values: JSON.stringify(SEO_CUSTOM_FIELD_TEMPLATE.meta_values),
+        created_at: now,
+        updated_at: now,
+      });
+    }
+  }
 
   // Taxonomias: Categoria (raiz), Uncategorized (filha), Tag. Fonte: seed-data.ts
   const nowTax = Date.now();
@@ -350,7 +397,22 @@ export async function runSeed(db: any): Promise<void> {
     }
   }
 
-  // Tema padrão (template default 2026): garante que exista um post "themes" com slug 2026 e ativo.
+  const envSiteUrl = (process.env.SITE_URL ?? "").trim();
+  if (envSiteUrl) {
+    const [siteUrlRow] = await db
+      .select({ value: settings.value })
+      .from(settings)
+      .where(eq(settings.name, "site_url"))
+      .limit(1);
+    if (!siteUrlRow?.value?.trim()) {
+      await db
+        .update(settings)
+        .set({ value: envSiteUrl })
+        .where(eq(settings.name, "site_url"));
+    }
+  }
+
+  // Tema padrão showcase (slug 2026): post "themes" ativo para o site público.
   const themesTypeId = typeIds["themes"];
   if (themesTypeId) {
     const [existingTheme2026] = await db
@@ -362,7 +424,7 @@ export async function runSeed(db: any): Promise<void> {
     if (!existingTheme2026) {
       await db.insert(posts).values({
         post_type_id: themesTypeId,
-        title: "Tema 2026",
+        title: "Edgepress Showcase 2026",
         slug: "2026",
         status: "published",
         meta_values: JSON.stringify({
@@ -453,5 +515,10 @@ export async function runSeed(db: any): Promise<void> {
         updated_at: now,
       });
     }
+  }
+
+  const { removed } = await deduplicateLocales(db);
+  if (removed.length > 0) {
+    console.log(`Locales duplicados removidos: ${removed.join(", ")}`);
   }
 }

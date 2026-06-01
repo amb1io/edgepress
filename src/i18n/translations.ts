@@ -28,16 +28,16 @@ export const defaultLocale: Locale = "pt-br";
 
 export const locales: Locale[] = ["en", "es", "pt-br"];
 
-// Mapeamento de locales para locale_code da tabela
+import { ADMIN_URL_TO_DB_LOCALE } from "../utils/admin-locale-constants.ts";
+
+// Mapeamento de locales para locale_code da tabela (alinhado a ADMIN_DB_LOCALE_CODES)
 const LOCALE_MAP: Record<string, string> = {
-  en: "en_US",
+  ...ADMIN_URL_TO_DB_LOCALE,
   "en-US": "en_US",
-  "en_US": "en_US",
-  es: "es_ES",
+  en_US: "en_US",
   "es-ES": "es_ES",
-  "es_ES": "es_ES",
-  "pt-br": "pt_BR",
-  "pt_BR": "pt_BR",
+  es_ES: "es_ES",
+  pt_BR: "pt_BR",
   "pt-BR": "pt_BR",
 };
 

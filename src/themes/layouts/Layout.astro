@@ -1,0 +1,38 @@
+---
+import "../../assets/app.css";
+
+interface Props {
+  title?: string;
+  /**
+   * URL de script (ex: htmx) para inserir no head.
+   * Aceita `?url` imports do Vite.
+   */
+  headScript?: string;
+  lang?: string;
+  htmlClass?: string;
+  bodyClass?: string;
+}
+
+const {
+  title = "Edgepress",
+  headScript,
+  lang = "pt-BR",
+  htmlClass,
+  bodyClass,
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang={lang} class={htmlClass}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    {headScript ? <script src={headScript}></script> : null}
+    <slot name="head" />
+  </head>
+  <body class={bodyClass}>
+    <slot />
+  </body>
+</html>
+

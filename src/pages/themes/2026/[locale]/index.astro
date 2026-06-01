@@ -1,42 +1,126 @@
 ---
-import Theme2026Layout from "../../../../layouts/Theme2026Layout.astro";
-import { db } from "../../../../db/index.ts";
-import { getTableNames } from "../../../../lib/db-utils.ts";
-
-const localeParam = Astro.params["locale"];
-const locale = typeof localeParam === "string" && localeParam.length > 0 ? localeParam : "pt-br";
-
-const tables = (await getTableNames(db)).sort((a, b) => a.localeCompare(b));
-const basePath = `/themes/2026/${locale}`;
+import BaseHead from "../../../../components/themes/baseHead.astro";
+import Header from "../parts/header.astro";
+import BaseBody from "../../../../components/themes/baseBody.astro";
+import "../../../../assets/app.css";
+import "../theme.css";
+const locale = String(Astro.params["locale"] ?? "").trim();
+const htmlLang = locale.startsWith("pt")
+  ? "pt-BR"
+  : locale.startsWith("es")
+    ? "es"
+    : "en";
+const currentThemePath = locale ? `/${locale}` : "/";
 ---
 
-<Theme2026Layout title={`Tabelas — ${locale.toUpperCase()}`} basePath={basePath}>
-  <div class="max-w-3xl mx-auto space-y-6">
-    <div class="flex items-baseline justify-between gap-2">
-      <h1 class="text-3xl font-bold text-base-content">Tabelas do banco</h1>
-      <span class="text-sm text-base-content/60">{tables.length} tabelas encontradas</span>
-    </div>
+<!doctype html>
+<html lang={htmlLang}>
+  <BaseHead pageKey="hello-world" locale={locale} />
+  <body class="bg-white font-sans text-slate-900 antialiased">
+    <Header locale={locale} currentThemePath={currentThemePath} />
+    <main class="mx-auto w-full max-w-5xl px-6 py-12">
+      <section class="border-b border-slate-200">
+        <BaseBody pageKey="hello-world" locale={locale} />
+      </section>
 
-    {tables.length === 0 ? (
-      <p class="text-base-content/70">Nenhuma tabela de usuário encontrada.</p>
-    ) : (
-      <ul class="grid gap-4 sm:grid-cols-2">
-        {tables.map((table) => (
-          <li class="card bg-base-100 shadow border border-base-300">
-            <div class="card-body">
-              <h2 class="card-title text-lg break-all">
-                <a href={`${basePath}/${table}`} class="link link-hover">
-                  {table}
-                </a>
-              </h2>
-              <p class="text-sm text-base-content/70">
-                Ver registros da tabela <code class="px-1 rounded bg-base-200">{table}</code>.
-              </p>
-            </div>
-          </li>
-        ))}
-      </ul>
-    )}
-  </div>
-</Theme2026Layout>
+      <!-- <section id="ultimos-posts" class="py-12">
+        <div class="mb-8 flex items-end justify-between gap-4">
+          <div>
+            <h2 class="text-3xl font-bold tracking-tight text-slate-900">
+              Latest
+            </h2>
+            <p class="mt-2 text-slate-600">
+              Últimos conteúdos publicados no blog.
+            </p>
+          </div>
+          <a
+            href="/posts"
+            class="text-sm font-semibold text-slate-700 underline-offset-4 hover:underline"
+          >
+            All Posts
+          </a>
+        </div>
+        <PostList
+          locale={locale}
+          postType="post"
+          order="desc"
+          variant="starter"
+        />
+      </section>
 
+      <section
+        class="rounded-2xl border border-slate-200 bg-slate-50 px-6 py-8 sm:px-8"
+      >
+        <h3 class="text-2xl font-semibold tracking-tight text-slate-900">
+          Subscribe to the newsletter
+        </h3>
+        <p class="mt-2 text-slate-600">
+          Receba novidades e artigos recentes direto no seu e-mail.
+        </p>
+        <form
+          class="mt-6 flex flex-col gap-3 sm:flex-row"
+          action="#"
+          method="post"
+        >
+          <input
+            type="email"
+            name="email"
+            placeholder="Email address"
+            class="w-full rounded-md border border-slate-300 bg-white px-4 py-2.5 text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none"
+          />
+          <button
+            type="submit"
+            class="inline-flex items-center justify-center rounded-md bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
+          >
+            Sign up
+          </button>
+        </form>
+      </section> -->
+    </main>
+
+    <footer class="border-t border-slate-200 py-8">
+      <div
+        class="mx-auto flex w-full max-w-5xl flex-col gap-2 px-6 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <span>&copy; 2026 Meu Blog. Todos os direitos reservados.</span>
+        <span>
+          Desenvolvido com{" "}
+          <a href="https://astro.build/" class="underline"> Astro </a>{" "}
+          e
+          <a href="https://tailwindcss.com/" class="underline">
+            Tailwind CSS
+          </a>
+          .
+        </span>
+      </div>
+    </footer>
+  </body>
+</html>
+
+<style>
+  :global(.starter-nav ul) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    align-items: center;
+  }
+
+  :global(.starter-nav a) {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: rgb(51 65 85);
+    transition: color 0.2s ease;
+  }
+
+  :global(.starter-nav a:hover) {
+    color: rgb(15 23 42);
+  }
+
+  :global(.starter-nav li) {
+    list-style: none;
+  }
+
+  :global(.theme-meta p) {
+    margin: 0;
+  }
+</style>
