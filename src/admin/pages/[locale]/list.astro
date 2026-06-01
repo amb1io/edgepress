@@ -1,0 +1,239 @@
+---
+import AdminLayout from "../../../admin/layouts/AdminLayout.astro";
+import DataList from "../../../admin/components/DataList.astro";
+import { db } from "../../../db/index.ts";
+import { getListItems } from "../../../utils/list-items.ts";
+import { getMenuItems } from "../../../utils/menu.ts";
+import { getTableList, TABLE_DELETE_TEMPLATE } from "../../../utils/list-table-dynamic.ts";
+import { t, locales, defaultLocale } from "../../../i18n/index.ts";
+import { getSourceKind } from "../../../utils/content-source.ts";
+import { ensureTranslationsLoaded } from "../../../utils/i18n-helpers.ts";
+import { formatColumnLabel } from "../../../utils/list-utils.ts";
+import { DATA_LIST_CLIENT_FETCH_LIMIT } from "../../../admin/components/data-list-page-length.ts";
+import { settings } from "../../../db/schema.ts";
+import { eq } from "drizzle-orm";
+
+const locale = Astro.params["locale"] ?? defaultLocale;
+if (!locales.includes(locale as "en" | "es" | "pt-br")) {
+  return Astro.redirect(`/admin/${defaultLocale}`);
+}
+
+await ensureTranslationsLoaded(locale);
+
+const currentUser = Astro.locals.user;
+if (!currentUser) {
+  return new Response("Unauthorized", { status: 401 });
+}
+
+const { getRoleFromUser, canAccessRoute, filterMenuItemsByRole, canDelete, isAuthorRole } = await import("../../../utils/permissions.ts");
+const roleId = getRoleFromUser(currentUser);
+const pathname = Astro.url.pathname;
+const allowed = await canAccessRoute(db, roleId, pathname);
+if (!allowed) {
+  return new Response("Forbidden", { status: 403 });
+}
+
+const allMenuItems = await getMenuItems(db);
+const menuItems = await filterMenuItemsByRole(db, allMenuItems, roleId);
+const userCanDelete = await canDelete(db, roleId);
+
+const layoutUser = {
+  email: (currentUser as { email?: string }).email ?? "",
+  name: (currentUser as { name?: string }).name ?? "",
+  image: (currentUser as { image?: string | null | undefined }).image ?? null,
+};
+
+let datalistPageLength = 10;
+try {
+  const [row] = await db
+    .select({ value: settings.value })
+    .from(settings)
+    .where(eq(settings.name, "datalist_pagination"))
+    .limit(1);
+  const n = row?.value ? parseInt(String(row.value), 10) : NaN;
+  if (!Number.isNaN(n) && n > 0) datalistPageLength = n;
+} catch {
+  // ignore missing settings table/row
+}
+
+const type = Astro.url.searchParams.get("type") ?? "post";
+const status = Astro.url.searchParams.get("status") ?? undefined;
+
+const sourceKind = await getSourceKind(db, type);
+const loadFromTable = sourceKind === "table";
+
+function formatDate(ts: number | null) {
+  if (ts == null) return "—";
+  const loc = locale === "pt-br" ? "pt-BR" : locale === "es" ? "es" : "en";
+  return new Date(ts).toLocaleString(loc);
+}
+
+let listColumns: { key: string; label: string; sortable?: boolean }[];
+let listItems: Record<string, unknown>[];
+let listEmptyColspan: number;
+let deletePathTemplate: string;
+
+if (loadFromTable) {
+  const tableResult = await getTableList(db, type, {
+    limit: DATA_LIST_CLIENT_FETCH_LIMIT,
+    page: 1,
+  });
+
+  listColumns = tableResult.columns.map((col) => ({
+    key: col,
+    label: formatColumnLabel(col),
+  }));
+
+  listItems = tableResult.items.map((i) => {
+    const formatted: Record<string, unknown> = { ...i };
+    for (const key of Object.keys(formatted)) {
+      if (key.endsWith("_at") || key.endsWith("At") || key === "expires_at") {
+        const val = formatted[key];
+        if (typeof val === "number") {
+          formatted[key] = formatDate(val);
+        }
+      }
+    }
+    return formatted;
+  });
+
+  listEmptyColspan = listColumns.length + 1;
+  deletePathTemplate = TABLE_DELETE_TEMPLATE[type] || "";
+} else {
+  const listResult = await getListItems(db, {
+    type,
+    ...(status !== undefined && status !== "" ? { status } : {}),
+    limit: DATA_LIST_CLIENT_FETCH_LIMIT,
+    page: 1,
+    ...(isAuthorRole(roleId) && (currentUser as { id?: string })?.id
+      ? { authorId: (currentUser as { id: string }).id }
+      : {}),
+  });
+
+  listColumns = [
+    { key: "title", label: t(locale, "admin.list.titleColumn") },
+    { key: "language", label: t(locale, "admin.list.language"), sortable: false },
+    { key: "order", label: t(locale, "admin.list.order"), sortable: false },
+    { key: "categories", label: t(locale, "admin.list.categories"), sortable: false },
+    { key: "tags", label: t(locale, "admin.list.tags"), sortable: false },
+    { key: "author", label: t(locale, "admin.list.author") },
+    { key: "status", label: t(locale, "admin.list.status") },
+    { key: "created_at", label: t(locale, "admin.list.createdAt") },
+    { key: "updated_at", label: t(locale, "admin.list.updatedAt") },
+  ];
+  listItems = listResult.items.map((i) => ({
+    ...i,
+    language: (i as { language?: string })["language"] || "—",
+    order: (i as { order?: string })["order"] || "—",
+    categories: (i as { categories?: string })["categories"] || "—",
+    tags: (i as { tags?: string })["tags"] || "—",
+    author: (i as { author?: string })["author"] || "—",
+    status: (i as { status?: string })["status"] ?? "—",
+    created_at: formatDate((i as { created_at?: number })["created_at"] ?? null),
+    updated_at: formatDate((i as { updated_at?: number })["updated_at"] ?? null),
+  }));
+  listEmptyColspan = listColumns.length + 1;
+  deletePathTemplate = "/api/posts/{id}";
+}
+
+const TRANSLATION_ACTION_EXCLUDED_TYPES = new Set([
+  "attachment",
+  "custom_fields",
+  "translations_languages",
+  "themes",
+  "user",
+]);
+const showAddTranslationAction =
+  !loadFromTable && !TRANSLATION_ACTION_EXCLUDED_TYPES.has(type);
+const addTranslationPathTemplate = showAddTranslationAction
+  ? `/api/posts/{id}/duplicate-translation?admin_locale=${locale}`
+  : undefined;
+---
+
+<AdminLayout title={t(locale, "admin.list.title")} locale={locale} menuItems={menuItems} user={layoutUser}>
+  <div class="list-page-content p-6 overflow-x-auto h-full min-h-full flex flex-col">
+    <div class="flex-1 min-h-0">
+      <DataList
+      columns={listColumns}
+      items={listItems}
+      emptyMessage={t(locale, "admin.list.noItems")}
+      emptyColspan={listEmptyColspan}
+      pageLength={datalistPageLength}
+      actionsColumnLabel={t(locale, "admin.list.actions")}
+      editLabel={t(locale, "admin.list.edit")}
+      deleteLabel={t(locale, "admin.list.delete")}
+      dtInfo={t(locale, "admin.list.dtInfo")}
+      dtInfoEmpty={t(locale, "admin.list.dtInfoEmpty")}
+      dtInfoFiltered={t(locale, "admin.list.dtInfoFiltered")}
+      dtLengthMenu={t(locale, "admin.list.dtLengthMenu")}
+      dtSearch={t(locale, "admin.list.dtSearch")}
+      dtZeroRecords={t(locale, "admin.list.dtZeroRecords")}
+      dtPaginatePrevious={t(locale, "admin.list.previous")}
+      dtPaginateNext={t(locale, "admin.list.next")}
+        {...(userCanDelete && deletePathTemplate
+          ? {
+              actionConfig: {
+                editLinkTemplate: `/admin/${locale}/content?post_type=${type}&action=edit&id={id}`,
+                deletePathTemplate,
+                deleteConfirm: t(locale, "admin.list.deleteConfirm"),
+                duplicatePathTemplate: `/api/posts/{id}/duplicate`,
+                ...(addTranslationPathTemplate
+                  ? { addTranslationPathTemplate }
+                  : {}),
+              },
+              ...(addTranslationPathTemplate
+                ? { addTranslationLabel: t(locale, "admin.list.addTranslation") }
+                : {}),
+            }
+          : {
+              actionConfig: {
+                editLinkTemplate: `/admin/${locale}/content?post_type=${type}&action=edit&id={id}`,
+                duplicatePathTemplate: `/api/posts/{id}/duplicate`,
+                ...(addTranslationPathTemplate
+                  ? { addTranslationPathTemplate }
+                  : {}),
+                deleteConfirm: t(locale, "admin.list.deleteConfirm"),
+              },
+              ...(addTranslationPathTemplate
+                ? { addTranslationLabel: t(locale, "admin.list.addTranslation") }
+                : {}),
+            })}
+      />
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .list-page-content {
+    justify-content: flex-start !important;
+    align-items: stretch !important;
+    align-content: flex-start !important;
+  }
+
+  .list-page-content > .flex-1 {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    min-height: 0;
+  }
+
+  .list-page-content :global(.data-list-wrapper) {
+    height: 100%;
+    margin-top: 0 !important;
+  }
+
+  .list-page-content :global(.dt-container) {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-content: flex-start;
+    margin-top: 0 !important;
+  }
+
+  .list-page-content :global(.dt-layout-row.dt-layout-table) {
+    flex: 1;
+    min-height: 0;
+  }
+</style>

@@ -1,0 +1,34 @@
+---
+import { Image } from "astro:assets";
+import { resolvePostThumbnailSrc, type PostMediaItem } from "./post-thumbnail-utils.ts";
+
+type Props = {
+  metaValues?: Record<string, unknown>;
+  media?: PostMediaItem[];
+  alt?: string;
+  width?: number;
+  height?: number;
+  className?: string;
+};
+
+const {
+  metaValues,
+  media,
+  alt = "",
+  width = 400,
+  height = 225,
+  className,
+} = Astro.props as Props;
+
+const src = resolvePostThumbnailSrc(metaValues, media, Astro.url.origin);
+---
+
+{src ? (
+  <figure class={className}>
+    <Image src={src} alt={alt} width={width} height={height} unoptimized class="w-full h-auto object-cover" />
+  </figure>
+) : (
+  <figure class={`bg-base-200 flex items-center justify-center ${className ?? ""}`}>
+    <span class="text-base-content/40 text-sm">Sem imagem</span>
+  </figure>
+)}

@@ -1,0 +1,168 @@
+---
+/**
+ * Dropdown customizado para ícones line-md: preview SVG + nome, com busca.
+ */
+import { LINE_MD_ICONS, DEFAULT_ICON, lineMdIconSvgUrl } from "../../utils/line-md-icons.ts";
+
+export interface Props {
+  selectedIcon?: string;
+  inputId?: string;
+  searchPlaceholder?: string;
+  emptyMessage?: string;
+  listHint?: string;
+}
+
+const {
+  selectedIcon = DEFAULT_ICON,
+  inputId = "fixed-icon",
+  searchPlaceholder = "Buscar ícone...",
+  emptyMessage = "Nenhum ícone encontrado",
+  listHint = "Mostrando os primeiros resultados. Digite para buscar em todos os ícones.",
+} = Astro.props;
+
+const initialIcon = selectedIcon || DEFAULT_ICON;
+const iconsJson = JSON.stringify(LINE_MD_ICONS);
+const initialIconUrl = lineMdIconSvgUrl(initialIcon);
+const listLimit = 80;
+---
+
+<div
+  class="dropdown w-full icon-picker-dropdown"
+  :class="{ 'dropdown-open': iconDropdownOpen }"
+  x-on:click.outside="iconDropdownOpen = false"
+  x-data="iconPickerDropdown"
+>
+  <input
+    type="hidden"
+    id={inputId}
+    data-fixed-icon
+    x-model="selectedIcon"
+  />
+  <button
+    type="button"
+    tabindex="0"
+    class="input input-bordered input-sm w-full flex items-center gap-2 cursor-pointer text-left font-normal h-auto min-h-9 py-1.5"
+    @click="toggleDropdown()"
+    :aria-expanded="iconDropdownOpen"
+    aria-haspopup="listbox"
+  >
+    <img
+      :src="iconUrl(selectedIcon)"
+      alt=""
+      class="size-5 shrink-0 object-contain"
+      width="20"
+      height="20"
+      loading="lazy"
+    />
+    <span class="flex-1 min-w-0 font-mono text-sm truncate" x-text="selectedIcon"></span>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      class="h-4 w-4 shrink-0 opacity-60"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+    </svg>
+  </button>
+  <div
+    tabindex="0"
+    role="listbox"
+    class="dropdown-content bg-base-100 rounded-box z-500 w-full min-w-[min(100%,20rem)] border border-base-300 p-2 shadow-lg mt-1"
+    x-show="iconDropdownOpen"
+    x-transition
+    @click.stop
+  >
+    <input
+      type="search"
+      class="input input-bordered input-sm w-full mb-2"
+      placeholder={searchPlaceholder}
+      x-model="iconSearch"
+      @keydown.escape="iconDropdownOpen = false"
+      @click.stop
+    />
+    <p
+      class="text-xs text-base-content/50 px-1 mb-2"
+      x-show="!iconSearch.trim() && icons.length > listLimit"
+      x-text="listHint"
+    ></p>
+    <ul class="max-h-64 overflow-y-auto flex flex-col gap-0.5">
+      <template x-for="icon in filteredIcons" :key="icon">
+        <li>
+          <button
+            type="button"
+            role="option"
+            class="w-full flex items-center gap-2 py-1.5 px-2 rounded hover:bg-base-200 transition-colors text-left"
+            :class="{ 'bg-primary/10 ring-1 ring-primary/30': icon === selectedIcon }"
+            @click="selectIcon(icon)"
+          >
+            <img
+              :src="iconUrl(icon)"
+              alt=""
+              class="size-5 shrink-0 object-contain"
+              width="20"
+              height="20"
+              loading="lazy"
+            />
+            <span class="font-mono text-sm truncate" x-text="icon"></span>
+          </button>
+        </li>
+      </template>
+    </ul>
+    <p
+      x-show="filteredIcons.length === 0"
+      class="text-base-content/50 text-sm py-3 px-2 text-center"
+      x-text="emptyMessage"
+    ></p>
+  </div>
+</div>
+
+<script
+  define:vars={{
+    initialIcon,
+    initialIconUrl,
+    iconsJson,
+    listLimit,
+    listHint,
+    emptyMessage,
+  }}
+>
+  document.addEventListener("alpine:init", () => {
+    window.Alpine.data("iconPickerDropdown", () => {
+      const icons = JSON.parse(iconsJson);
+      return {
+        selectedIcon: initialIcon,
+        iconSearch: "",
+        iconDropdownOpen: false,
+        icons,
+        listLimit,
+        listHint,
+        emptyMessage,
+        get filteredIcons() {
+          const search = this.iconSearch.trim().toLowerCase();
+          let list = this.icons;
+          if (search) {
+            list = list.filter((icon) => icon.toLowerCase().includes(search));
+          }
+          return list.slice(0, this.listLimit);
+        },
+        iconUrl(iconId) {
+          if (!iconId || !String(iconId).includes(":")) return initialIconUrl;
+          const idx = String(iconId).indexOf(":");
+          const prefix = iconId.slice(0, idx);
+          const name = iconId.slice(idx + 1);
+          return `https://api.iconify.design/${prefix}/${encodeURIComponent(name)}.svg`;
+        },
+        selectIcon(icon) {
+          this.selectedIcon = icon;
+          this.iconSearch = "";
+          this.iconDropdownOpen = false;
+        },
+        toggleDropdown() {
+          this.iconDropdownOpen = !this.iconDropdownOpen;
+        },
+      };
+    });
+  });
+</script>

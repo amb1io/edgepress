@@ -1,0 +1,75 @@
+---
+import { createEdgepressContent } from "../../core/services/edgepress-content.ts";
+import BlockNoteReadonly from "./BlockNoteReadonly.tsx";
+
+type BaseBodyData = {
+  body?: string | null;
+  body_blocks?: string | null;
+};
+
+type Props = {
+  pageId?: number | string;
+  /** Chave lógica de tradução (meta `translation_key`); use com `locale`. */
+  pageKey?: string;
+  pageSlug?: string;
+  table?: string;
+  status?: "published" | "draft" | "archived" | (string & {});
+  locale?: string;
+  className?: string;
+  htmlClassName?: string;
+  required?: boolean;
+};
+
+const {
+  pageId,
+  pageKey,
+  pageSlug,
+  table = "posts",
+  status = "published",
+  locale = "pt-br",
+  className = "block-editor-content max-w-3xl",
+  htmlClassName = "block-editor-content max-w-3xl text-lg leading-relaxed text-slate-700",
+  required = true,
+} = Astro.props as Props;
+
+console.log("locale", locale);
+
+const pageKeyTrimmed = (pageKey ?? "").toString().trim();
+const idOrSlug = (pageSlug ?? pageId ?? pageKeyTrimmed).toString().trim();
+if (!idOrSlug) {
+  throw new Error("baseBody.astro: passe `pageKey`, `pageSlug` ou `pageId`.");
+}
+
+const content = createEdgepressContent(Astro.locals as App.Locals, {
+  baseUrl: Astro.url.origin,
+});
+
+const resolveByTranslationKey = Boolean(pageKeyTrimmed) && table === "posts";
+
+let data: BaseBodyData | null = null;
+try {
+  data = (await content.getItem(table, idOrSlug, {
+    ...(table === "posts" ? { status, locale, resolve: resolveByTranslationKey ? "translation_key" : "slug" } : {}),
+  })) as BaseBodyData;
+} catch (err) {
+  if (required) throw err;
+  data = null;
+}
+
+const body = String(data?.body ?? "").trim();
+const bodyBlocks = String(data?.body_blocks ?? "").trim();
+const hasBlockNoteBlocks = bodyBlocks !== "";
+---
+
+{
+  hasBlockNoteBlocks ? (
+    <BlockNoteReadonly
+      client:only="react"
+      bodyBlocks={bodyBlocks}
+      locale={locale}
+      className={className}
+    />
+  ) : body ? (
+    <div class={htmlClassName} set:html={body} />
+  ) : null
+}

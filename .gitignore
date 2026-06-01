@@ -9,6 +9,9 @@ node_modules/
 /public/**
 !/public/.assetsignore
 
+# Generated at prebuild (sitemap customPages)
+src/generated/
+
 # Build output
 /dist
 /dist-ssr

@@ -158,6 +158,9 @@ for (const config of MENU_CONFIG) {
   lines.push(
     `INSERT OR IGNORE INTO ${T("posts")} (post_type_id, title, slug, status, meta_values, created_at, updated_at) SELECT (SELECT id FROM ${T("post_types")} WHERE slug='${typeSlug}' LIMIT 1), '${title}', '${slug}', 'published', '${metaValues}', ${SEED_TS}, ${SEED_TS} WHERE NOT EXISTS (SELECT 1 FROM ${T("posts")} WHERE slug='${slug}');`
   );
+  lines.push(
+    `UPDATE ${T("posts")} SET meta_values='${metaValues}', updated_at=${SEED_TS} WHERE slug='${slug}';`
+  );
 }
 lines.push("");
 

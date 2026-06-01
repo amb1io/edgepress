@@ -1,0 +1,83 @@
+---
+/**
+ * Collapse com variante checkbox (daisyUI).
+ * Requer clique para abrir/fechar. Aceita slot para o corpo.
+ * @see https://daisyui.com/components/collapse/
+ */
+import { Icon } from "astro-icon/components";
+
+interface Props {
+  title: string;
+  infoText?: string;
+  defaultOpen?: boolean;
+  arrow?: boolean;
+  /** Permite que dropdowns filhos ultrapassem o painel (overflow visible) */
+  overflowVisible?: boolean;
+  class?: string;
+  deletar?: boolean;
+  onDelete?: string;
+}
+
+const {
+  title,
+  infoText,
+  defaultOpen = false,
+  arrow = false,
+  overflowVisible = false,
+  class: className = "",
+  deletar = false,
+  onDelete,
+} = Astro.props;
+
+const collapseClasses = [
+  "collapse",
+  "bg-base-100",
+  "border",
+  "border-base-300",
+  arrow ? "collapse-arrow" : "",
+  className,
+]
+  .filter(Boolean)
+  .join(" ");
+
+const overflowClass = overflowVisible ? "overflow-visible" : "";
+---
+
+<div
+  class="collapse-wrapper"
+  x-data="{ visible: true }"
+  x-show="visible"
+  x-transition
+>
+  <div class={`${collapseClasses} ${overflowClass}`.trim()}>
+    <input type="checkbox" checked={defaultOpen || undefined} />
+    <div class="collapse-title font-semibold flex items-center gap-2 min-h-0 py-[15px]">
+      <span class="flex-1 min-w-0">{title}</span>
+      {infoText && (
+        <div class="tooltip tooltip-left shrink-0 z-20" data-tip={infoText}>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-circle"
+            aria-label="Informação"
+            @click.stop
+          >
+            <span class="text-base font-serif leading-none" aria-hidden="true">i</span>
+          </button>
+        </div>
+      )}
+      {deletar && (
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs btn-circle shrink-0 relative z-10"
+          aria-label="Remover"
+          @click.stop={onDelete ? onDelete : "visible = false"}
+        >
+          <Icon name="line-md:close" size={18} aria-hidden="true" />
+        </button>
+      )}
+    </div>
+    <div class={`collapse-content ${overflowClass}`.trim()}>
+      <slot />
+    </div>
+  </div>
+</div>

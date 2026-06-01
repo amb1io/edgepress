@@ -1,0 +1,70 @@
+---
+import Collapse from "../Collapse.astro";
+import { localeCodeFlag, type CategoryTranslationLocale } from "../../../utils/admin-locales.ts";
+
+interface Props {
+  title: string;
+  infoText?: string;
+  locales: CategoryTranslationLocale[];
+  noLocalesMessage: string;
+  localeLabel: string;
+  valueLabel: string;
+  valuePlaceholder?: string;
+  valueHint?: string;
+  inputPrefix?: string;
+  valuesByCode?: Record<string, string>;
+}
+
+const {
+  title,
+  infoText = "",
+  locales,
+  noLocalesMessage,
+  localeLabel,
+  valueLabel,
+  valuePlaceholder = "",
+  valueHint = "",
+  inputPrefix = "translation_",
+  valuesByCode = {},
+} = Astro.props;
+---
+
+<Collapse title={title} infoText={infoText} arrow={true} defaultOpen={true} overflowVisible={true}>
+  {locales.length === 0 ? (
+    <p class="text-sm text-warning">{noLocalesMessage}</p>
+  ) : (
+    <div class="flex flex-col gap-2 pt-1">
+      {locales.map((loc) => (
+        <div class="grid grid-cols-[minmax(0,11rem)_1fr] gap-2 items-end">
+          <div class="form-control min-w-0">
+            <span class="label-text text-xs mb-1 block">{localeLabel}</span>
+            <input type="hidden" name="translation_locale_id[]" value={loc.id} />
+            <div
+              class="input input-bordered input-sm w-full flex items-center gap-2 bg-base-200/40 cursor-default"
+              aria-readonly="true"
+            >
+              <span aria-hidden="true">{localeCodeFlag(loc.locale_code)}</span>
+              <span class="truncate text-sm">{loc.language}</span>
+            </div>
+            <span class="text-[10px] text-base-content/50 mt-0.5 block">
+              {loc.locale_code}
+            </span>
+          </div>
+          <div class="form-control min-w-0">
+            <label class="label py-0">
+              <span class="label-text text-xs">{valueLabel}</span>
+            </label>
+            <input
+              type="text"
+              name={`${inputPrefix}${loc.locale_code}`}
+              class="input input-bordered input-sm w-full"
+              value={valuesByCode[loc.locale_code] ?? ""}
+              placeholder={valuePlaceholder}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+  {valueHint ? <p class="text-xs text-base-content/50 mt-2">{valueHint}</p> : null}
+</Collapse>

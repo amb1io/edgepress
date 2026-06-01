@@ -1,0 +1,129 @@
+---
+/**
+ * Dropdown reutilizável para namespaces de tradução.
+ * - Busca namespaces existentes na tabela `translations`
+ * - Comportamento semelhante ao `LocaleDropdown`, mas lista vertical (1 coluna)
+ */
+import { db } from "../db/index.ts";
+import { translations as translationsTable } from "../db/schema.ts";
+
+export interface Props {
+  /** Namespace selecionado inicialmente (opcional) */
+  selectedNamespace?: string | null;
+  /** Nome do campo hidden que será enviado no formulário */
+  fieldName?: string;
+  /** Se true, o campo é obrigatório */
+  required?: boolean;
+}
+
+const { selectedNamespace = null, fieldName = "namespace", required = false } = Astro.props;
+
+const namespaces = await db
+  .select({ namespace: translationsTable.namespace })
+  .from(translationsTable)
+  .groupBy(translationsTable.namespace)
+  .orderBy(translationsTable.namespace);
+
+const options = namespaces
+  .map((r) => String(r.namespace ?? "").trim())
+  .filter(Boolean);
+
+const initialNamespace = selectedNamespace ?? "";
+---
+
+<div
+  class="dropdown w-full"
+  :class="{ 'dropdown-open': nsDropdownOpen }"
+  x-on:click.outside="nsDropdownOpen = false"
+  x-data="namespaceDropdown"
+>
+  <input type="hidden" name={fieldName} x-model="selectedNamespace" {required} />
+  <label
+    tabindex="0"
+    class="input input-bordered w-full flex items-center cursor-pointer"
+    @click="toggleDropdown()"
+  >
+    <span x-show="selectedNamespace && selectedNamespace.trim() !== ''" class="flex-1 truncate">
+      <span x-text="selectedNamespace"></span>
+    </span>
+    <span x-show="!selectedNamespace || selectedNamespace.trim() === ''" class="flex-1 text-base-content/50">
+      Selecione um namespace
+    </span>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      class="h-5 w-5 shrink-0"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+    </svg>
+  </label>
+
+  <div
+    tabindex="0"
+    class="dropdown-content bg-base-100 rounded-box z-10 w-full border border-base-300 p-2 shadow-lg mt-1 max-h-96 overflow-y-auto"
+    x-show="nsDropdownOpen"
+    x-transition
+  >
+    <div class="w-full mb-2">
+      <input
+        type="text"
+        placeholder="Buscar namespace..."
+        class="input input-bordered input-sm w-full"
+        x-model="nsSearch"
+        @click.stop
+        @keydown.escape="nsDropdownOpen = false"
+      />
+    </div>
+
+    <div class="grid grid-cols-1 gap-1">
+      <template x-for="ns in filteredNamespaces" :key="ns">
+        <a
+          href="#"
+          @click.prevent="selectNamespace(ns)"
+          class="py-2 px-2 rounded hover:bg-base-200 transition-colors text-sm font-medium"
+        >
+          <span x-text="ns"></span>
+        </a>
+      </template>
+    </div>
+
+    <div x-show="filteredNamespaces.length === 0" class="text-base-content/50 text-sm py-2 px-4 text-center">
+      Nenhum namespace encontrado
+    </div>
+  </div>
+</div>
+
+<script
+  define:vars={{
+    initialNamespace,
+    namespacesData: JSON.stringify(options),
+  }}
+>
+  document.addEventListener("alpine:init", () => {
+    window.Alpine.data("namespaceDropdown", () => {
+      const namespaces = JSON.parse(namespacesData);
+      return {
+        selectedNamespace: initialNamespace,
+        nsSearch: "",
+        nsDropdownOpen: false,
+        namespaces,
+        get filteredNamespaces() {
+          const search = this.nsSearch.trim().toLowerCase();
+          if (!search) return this.namespaces;
+          return this.namespaces.filter((ns) => String(ns).toLowerCase().includes(search));
+        },
+        selectNamespace(ns) {
+          this.selectedNamespace = String(ns);
+          this.nsSearch = "";
+          this.nsDropdownOpen = false;
+        },
+        toggleDropdown() {
+          this.nsDropdownOpen = !this.nsDropdownOpen;
+        },
+      };
+    });
+  });
+</script>
+

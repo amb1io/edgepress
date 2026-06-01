@@ -18,6 +18,7 @@ import { posts, postRelations } from "./schema/post.ts";
 import { taxonomies, taxonomyRelations } from "./schema/taxonomies.ts";
 import { postsTaxonomies, postsTaxonomiesRelations } from "./schema/posts_taxonomies.ts";
 import { postsMedia, postsMediaRelations } from "./schema/posts_media.ts";
+import { seoMetadata, seoMetadataRelations } from "./schema/seo_metadata.ts";
 import { settings } from "./schema/settings.ts";
 import { roleCapability } from "./schema/role_capability.ts";
 import { locales } from "./schema/locales.ts";
@@ -33,7 +34,7 @@ import {
 export { defaultMetaSchema, buildMetaSchema, type MetaSchemaItem } from "./schema/meta_schema.ts";
 
 // Export tables
-export { postTypes, posts, taxonomies, postsTaxonomies, postsMedia, settings, roleCapability, locales, translations, translationsLanguages };
+export { postTypes, posts, taxonomies, postsTaxonomies, postsMedia, seoMetadata, settings, roleCapability, locales, translations, translationsLanguages };
 
 // Export relations
 export {
@@ -42,6 +43,7 @@ export {
   taxonomyRelations,
   postsTaxonomiesRelations,
   postsMediaRelations,
+  seoMetadataRelations,
   localesRelations,
   translationsRelations,
   translationsLanguagesRelations,

@@ -1,0 +1,273 @@
+---
+/**
+ * Template para o post_type "translations_languages" (formulário baseado na tabela translations e translations_languages).
+ * Campos: namespace, key, translation, locale_id.
+ */
+import AdminLayout from "../layouts/AdminLayout.astro";
+import { db } from "../../db/index.ts";
+import {
+  translations as translationsTable,
+  locales as localesTable,
+  translationsLanguages as translationsLanguagesTable,
+} from "../../db/schema.ts";
+import { eq } from "drizzle-orm";
+import { t, type Locale } from "../../i18n/index.ts";
+import type { MenuItem } from "../../utils/menu.ts";
+import LocaleDropdown from "../../components/LocaleDropdown.astro";
+import NamespaceDropdown from "../../components/NamespaceDropdown.astro";
+
+export interface Props {
+  locale: string;
+  postTypeSlug: string;
+  action: string;
+  idParam: string | null;
+  menuItems: MenuItem[];
+  /** Usuário logado (para header) */
+  currentUser: { email: string; name: string };
+}
+
+const { locale, postTypeSlug, action, idParam, menuItems, currentUser } =
+  Astro.props;
+const currentLocale = locale as Locale;
+const isEdit = action === "edit";
+
+const pageTitle =
+  action === "new"
+    ? t(currentLocale, "admin.content.newTitle", {
+        type: t(currentLocale, "postType.translations_languages"),
+      })
+    : t(currentLocale, "admin.content.editTitle", {
+        type: t(currentLocale, "postType.translations_languages"),
+      });
+
+let editTranslation: {
+  id: number;
+  namespace: string;
+  key: string;
+  locale_id: number | null;
+  translation_value: string | null;
+} | null = null;
+
+if (action === "edit" && idParam) {
+  const idParamNum = parseInt(idParam, 10);
+  if (!isNaN(idParamNum)) {
+    // Primeiro, tentar buscar em translations_languages (caso o ID seja dessa tabela)
+    const [translationLangRow] = await db
+      .select({
+        id: translationsLanguagesTable.id,
+        id_translations: translationsLanguagesTable.id_translations,
+        id_locale_code: translationsLanguagesTable.id_locale_code,
+        value: translationsLanguagesTable.value,
+      })
+      .from(translationsLanguagesTable)
+      .where(eq(translationsLanguagesTable.id, idParamNum))
+      .limit(1);
+
+    if (translationLangRow) {
+      // Se encontrou em translations_languages, buscar o registro relacionado em translations
+      const [translationRow] = await db
+        .select({
+          id: translationsTable.id,
+          namespace: translationsTable.namespace,
+          key: translationsTable.key,
+        })
+        .from(translationsTable)
+        .where(eq(translationsTable.id, translationLangRow.id_translations))
+        .limit(1);
+
+      if (translationRow) {
+        editTranslation = {
+          id: translationRow.id,
+          namespace: translationRow.namespace,
+          key: translationRow.key,
+          locale_id: translationLangRow.id_locale_code,
+          translation_value: translationLangRow.value,
+        };
+      }
+    } else {
+      // Se não encontrou em translations_languages, tentar buscar diretamente em translations
+      const [row] = await db
+        .select({
+          id: translationsTable.id,
+          namespace: translationsTable.namespace,
+          key: translationsTable.key,
+        })
+        .from(translationsTable)
+        .where(eq(translationsTable.id, idParamNum))
+        .limit(1);
+      
+      if (row) {
+        // Buscar locale_id e value da primeira tradução_language relacionada (se existir)
+        const [translationLang] = await db
+          .select({
+            id_locale_code: translationsLanguagesTable.id_locale_code,
+            value: translationsLanguagesTable.value,
+          })
+          .from(translationsLanguagesTable)
+          .where(eq(translationsLanguagesTable.id_translations, row.id))
+          .limit(1);
+
+        editTranslation = {
+          id: row.id,
+          namespace: row.namespace,
+          key: row.key,
+          locale_id: translationLang?.id_locale_code ?? null,
+          translation_value: translationLang?.value ?? null,
+        };
+      }
+    }
+  }
+}
+
+const initialNamespace = editTranslation?.namespace ?? "";
+const initialKey = editTranslation?.key ?? "";
+const initialLocaleId = editTranslation?.locale_id ?? null;
+const initialTranslationValue = editTranslation?.translation_value ?? "";
+
+// Se a tradução ainda não tem idioma associado, usar o locale do admin como default.
+const adminLocaleCode =
+  locale === "pt-br" ? "pt_BR" : locale === "es" ? "es_ES" : "en_US";
+let defaultLocaleId: number | null = null;
+try {
+  const [row] = await db
+    .select({ id: localesTable.id })
+    .from(localesTable)
+    .where(eq(localesTable.locale_code, adminLocaleCode))
+    .limit(1);
+  defaultLocaleId = row?.id ?? null;
+} catch {
+  defaultLocaleId = null;
+}
+const selectedLocaleId = initialLocaleId ?? defaultLocaleId;
+---
+
+<AdminLayout title={pageTitle} locale={locale} menuItems={menuItems}>
+  <div slot="header-actions" class="flex gap-4">
+    <span class="text-sm text-base-content/70">{currentUser.email}</span>
+  </div>
+
+  <script
+    define:vars={{
+      initialNamespace,
+      initialKey,
+      initialLocaleId,
+      initialTranslationValue,
+    }}
+  >
+    document.addEventListener("alpine:init", () => {
+      window.Alpine.data("translationForm", () => {
+        return {
+          namespace: initialNamespace,
+          key: initialKey,
+          translation: initialTranslationValue,
+        };
+      });
+    });
+  </script>
+
+  <div class="p-6 max-w-2xl">
+    <div id="translation-form-error" class="min-h-6" aria-live="polite"></div>
+    <form
+      method="post"
+      action="/api/translations"
+      hx-post="/api/translations"
+      hx-target="#translation-form-error"
+      hx-swap="innerHTML"
+      x-data="translationForm"
+      class="flex flex-col gap-4 translation-form"
+    >
+      <input type="hidden" name="action" value={action} />
+      <input type="hidden" name="locale" value={locale} />
+      {
+        editTranslation && (
+          <input type="hidden" name="id" value={editTranslation.id} />
+        )
+      }
+
+      <div class="form-control">
+        <label for="translation-namespace" class="label">
+          <span class="label-text">Namespace</span>
+        </label>
+        {isEdit ? (
+          <input
+            type="text"
+            id="translation-namespace"
+            name="namespace"
+            required
+            class={`input input-bordered w-full opacity-60 bg-base-200/50 cursor-not-allowed`}
+            readonly
+            value={initialNamespace}
+          />
+        ) : (
+          <NamespaceDropdown selectedNamespace={initialNamespace} fieldName="namespace" required />
+        )}
+        <p class="text-xs text-base-content/50 mt-1">
+          Namespace da tradução (ex: admin.menu, admin.content)
+        </p>
+      </div>
+
+      <div class="form-control">
+        <label for="translation-key" class="label">
+          <span class="label-text">Key</span>
+        </label>
+        <input
+          type="text"
+          id="translation-key"
+          name="key"
+          required
+          class={`input input-bordered w-full ${isEdit ? "opacity-60 bg-base-200/50 cursor-not-allowed" : ""}`}
+          placeholder="dashboard"
+          readonly={isEdit}
+          value={initialKey}
+        />
+        <p class="text-xs text-base-content/50 mt-1">
+          Chave da tradução (ex: dashboard, saveNew)
+        </p>
+      </div>
+
+      <div class="form-control">
+        <label for="translation-value" class="label">
+          <span class="label-text">Translation</span>
+        </label>
+        <input
+          type="text"
+          id="translation-value"
+          name="translation"
+          required
+          class="input input-bordered w-full"
+          placeholder="Texto da tradução"
+          value={initialTranslationValue}
+        />
+        <p class="text-xs text-base-content/50 mt-1">
+          Texto da tradução no idioma selecionado
+        </p>
+      </div>
+
+      <div class="form-control">
+        <label for="translation-locale" class="label">
+          <span class="label-text">Language</span>
+        </label>
+        <LocaleDropdown selectedLocaleId={selectedLocaleId} fieldName="locale_id" required cols={3} />
+        <p class="text-xs text-base-content/50 mt-1">
+          Selecione o idioma para esta tradução
+        </p>
+      </div>
+
+      <div class="flex gap-2 mt-2">
+        <button type="submit" class="btn btn-primary">
+          {
+            action === "new"
+              ? t(currentLocale, "admin.content.saveNew")
+              : t(currentLocale, "admin.content.saveEdit")
+          }
+        </button>
+        <a
+          href={`/admin/${locale}/list?type=${postTypeSlug}&limit=10&page=1`}
+          class="btn btn-ghost"
+        >
+          {t(currentLocale, "admin.content.cancel")}
+        </a>
+      </div>
+    </form>
+  </div>
+</AdminLayout>

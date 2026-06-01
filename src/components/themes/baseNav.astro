@@ -1,0 +1,132 @@
+---
+import { createEdgepressContent } from "../../core/services/edgepress-content.ts";
+
+type CustomFieldRow = {
+  name?: string;
+  value?: string;
+  type?: string;
+};
+
+type CustomFieldItem = {
+  title?: string;
+  fields?: CustomFieldRow[];
+};
+
+type PostWithCustomFields = {
+  id?: number;
+  title?: string;
+  slug?: string;
+  custom_fields?: CustomFieldItem[];
+};
+
+type Props = {
+  /** Ex: "menus" */
+  postType: string;
+  /** Ex: "pt-br" */
+  locale: string;
+  /**
+   * Slug de uma taxonomia para filtrar posts (opcional).
+   * Ex: "header", "main-menu", etc.
+   */
+  taxonomySlug?: string;
+  /**
+   * Tipo da taxonomia (opcional). Se informado, filtra também pelo tipo.
+   * Ex: "category", "tag", "menu"...
+   */
+  taxonomyType?: string;
+  /** Default: "menu navigation" */
+  customFieldTitle?: string;
+  /**
+   * Status dos posts.
+   * Default: "published"
+   */
+  status?: "published" | "draft" | "archived" | (string & {});
+  /**
+   * Se `true`, falha o render quando a API/content falhar.
+   * Default: true (loga e estoura erro para debug).
+   */
+  required?: boolean;
+  /** Classe opcional para o <nav> */
+  className?: string;
+};
+
+const {
+  postType,
+  locale,
+  taxonomySlug,
+  taxonomyType,
+  customFieldTitle = "menu navigation",
+  status = "published",
+  required = true,
+  className,
+} = Astro.props as Props;
+
+const content = createEdgepressContent(Astro.locals as App.Locals, {
+  baseUrl: Astro.url.origin,
+});
+
+let list:
+  | Awaited<ReturnType<typeof content.getListWithDetails<PostWithCustomFields>>>
+  | null = null;
+try {
+  list = await content.getListWithDetails<PostWithCustomFields>("posts", {
+    limit: 500,
+    locale,
+    ...(taxonomySlug ? { filter_taxonomy_slug: taxonomySlug } : {}),
+    ...(taxonomyType ? { filter_taxonomy_type: taxonomyType } : {}),
+    filter: {
+      post_type: postType,
+      status,
+    },
+  });
+} catch (err) {
+  const e = err as { message?: string; stack?: string; status?: number; detail?: unknown };
+  console.error("[edgepress][baseNav] Falha ao carregar menu via content service", {
+    postType,
+    locale,
+    status,
+    taxonomySlug,
+    taxonomyType,
+    customFieldTitle,
+    url: Astro.url.href,
+    message: e?.message,
+    statusCode: e?.status,
+    detail: e?.detail,
+    stack: e?.stack,
+  });
+  if (required) throw err;
+  list = null;
+}
+
+const posts = ((list?.items ?? []) as unknown[]) as PostWithCustomFields[];
+
+function normalizeTitle(v: unknown): string {
+  return String(v ?? "").trim().toLowerCase();
+}
+
+function getMenuItemsFromPost(post: PostWithCustomFields): Array<{ label: string; href: string }> {
+  const blocks = Array.isArray(post.custom_fields) ? post.custom_fields : [];
+  const block = blocks.find((b) => normalizeTitle(b?.title) === normalizeTitle(customFieldTitle));
+  const rows = Array.isArray(block?.fields) ? block!.fields! : [];
+
+  return rows
+    .map((r) => ({
+      label: String(r?.name ?? "").trim(),
+      href: String(r?.value ?? "").trim(),
+    }))
+    .filter((x) => x.label !== "" && x.href !== "");
+}
+
+const items = posts.flatMap(getMenuItemsFromPost);
+---
+
+<nav class={className}>
+  <ul>
+    {items.map((item) => (
+      <li>
+        <a href={item.href}>{item.label}</a>
+      </li>
+    ))}
+  </ul>
+</nav>
+

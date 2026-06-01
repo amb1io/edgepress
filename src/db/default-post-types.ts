@@ -51,6 +51,7 @@ export const DEFAULT_POST_TYPES: DefaultPostTypeRow[] = [
   { slug: "themes", name: "Temas", meta_schema: themesMetaSchema },
   { slug: "user", name: "Usuário", meta_schema: buildMetaSchema([]) },
   { slug: "translations_languages", name: "Tradução", meta_schema: translationsMetaSchema },
+  { slug: "post_type", name: "Post Type", meta_schema: buildMetaSchema([]) },
   { slug: "settings", name: "Configurações", meta_schema: buildMetaSchema([]) },
   { slug: "dashboard", name: "Dashboard", meta_schema: buildMetaSchema([]) },
   { slug: "custom_fields", name: "Custom Fields", meta_schema: buildMetaSchema([]) },

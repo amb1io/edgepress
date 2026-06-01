@@ -1,0 +1,56 @@
+---
+import { resolveBaseProp } from "./base-prop-utils.ts";
+
+type Props = {
+  /** Ex: "pages", "menus", etc. (slug do post type no admin) */
+  postType: string;
+  /**
+   * Tabela exata para buscar.
+   * Default: "posts" (mantém o comportamento de postType dentro de posts)
+   */
+  table?: string;
+  /** Buscar por slug (opcional se `id` for informado) */
+  slug?: string;
+  /** Buscar por id (opcional se `slug` for informado) */
+  id?: number | string;
+  /** Se true, renderiza <dl><dt><dd>. Default: false */
+  showLabel?: boolean;
+  /**
+   * Se `true`, falha o render quando a busca falhar.
+   * Default: false (log e render vazio).
+   */
+  required?: boolean;
+};
+
+const {
+  postType,
+  table: tableRaw = "posts",
+  slug,
+  id,
+  showLabel = false,
+  required = true,
+} = Astro.props as Props;
+
+const idOrSlug = (slug ?? id ?? "").toString().trim();
+if (!idOrSlug) {
+  throw new Error("baseProp.astro: informe `slug` ou `id`.");
+}
+const { label, value } = await resolveBaseProp({
+  locals: Astro.locals as App.Locals,
+  url: Astro.url,
+  postType,
+  table: tableRaw,
+  idOrSlug,
+  required,
+});
+---
+
+{showLabel ? (
+  <dl>
+    <dt>{label}</dt>
+    <dd>{value}</dd>
+  </dl>
+) : (
+  <p>{value}</p>
+)}
+

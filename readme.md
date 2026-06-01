@@ -139,7 +139,7 @@ O fluxo foi dividido em dois workflows:
   Recebe `repository_dispatch` (`theme_import_requested`), baixa tema público do GitHub, empacota (`theme.zip`), publica no R2 e chama callback.
 
 - `.github/workflows/deploy-app.yml`  
-  Em `push main` (ou manual), busca pacote do tema ativo no R2, valida checksum, hidrata em `src/themes/<slug>` e só então roda `npm run build` e deploy.
+  Em `push main` (ou manual), busca pacote do tema ativo no R2, valida checksum, hidrata em `src/pages/themes/<slug>` e só então roda `npm run build` e deploy.
 
 Secrets esperados para o workflow de importação/pacote (`theme-import-dispatch.yml`):
 

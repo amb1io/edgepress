@@ -1,0 +1,27 @@
+---
+/**
+ * Componente reutilizável de dropdown de idiomas
+ * Baseado no dropdown usado em translations_languages.astro
+ */
+import LocaleDropdown from "../../components/LocaleDropdown.astro";
+
+export interface Props {
+  /** ID do locale selecionado inicialmente (opcional) */
+  selectedLocaleId?: number | null;
+  /** Nome do campo hidden que será enviado no formulário */
+  fieldName?: string;
+  /** Se true, o campo é obrigatório */
+  required?: boolean;
+  /** Quantidade de colunas na lista de idiomas (padrão: 3) */
+  cols?: number;
+}
+
+const { selectedLocaleId = null, fieldName = "id_locale_code", required = false, cols = 3 } = Astro.props;
+---
+
+<LocaleDropdown
+  selectedLocaleId={selectedLocaleId}
+  fieldName={fieldName}
+  required={required}
+  cols={cols}
+/>

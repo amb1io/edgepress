@@ -1,6 +1,7 @@
 /**
  * Copia assets estáticos do tema ativo para ./public (únicos que o Astro expõe na raiz).
- * Fonte padrão: src/pages/themes/farramedia/public (env: EDGEPRESS_THEME_PUBLIC).
+ * Fonte padrão: src/pages/themes/2026/public (se existir; tema showcase 2026).
+ * Override: EDGEPRESS_THEME_PUBLIC.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -13,8 +14,8 @@ const destDir = path.join(root, "public");
 const candidates = process.env.EDGEPRESS_THEME_PUBLIC
   ? [path.resolve(root, process.env.EDGEPRESS_THEME_PUBLIC)]
   : [
+      path.join(root, "src/pages/themes/2026/public"),
       path.join(root, "src/pages/themes/farramedia/public"),
-      path.join(root, "src/themes/farramedia/public"),
     ];
 
 const srcDir = candidates.find((p) => fs.existsSync(p));

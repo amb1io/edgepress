@@ -1,0 +1,70 @@
+@import "@blocknote/mantine/style.css";
+@import "@blocknote/core/fonts/inter.css";
+
+.block-editor-content h1 {
+  margin-bottom: 1rem;
+  font-size: 2.25rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+}
+
+.block-editor-content h2 {
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  font-size: 1.875rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.block-editor-content p {
+  margin-bottom: 1rem;
+  color: rgb(51 65 85);
+  font-size: 1.125rem;
+  line-height: 1.75;
+}
+
+.block-editor-content ul {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+  list-style-type: disc;
+}
+
+.block-editor-content ol {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+  list-style-type: decimal;
+}
+
+.block-editor-content a {
+  color: rgb(15 23 42);
+  text-decoration: underline;
+}
+
+.block-editor-content blockquote {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding-left: 1rem;
+  border-left: 4px solid rgb(203 213 225);
+  font-style: italic;
+}
+
+.block-editor-content .edgepress-bn-button {
+  margin-top: 0.25rem;
+  margin-bottom: 0.5rem;
+  transition: filter 0.15s ease-in-out;
+}
+
+.block-editor-content .edgepress-bn-button:hover {
+  filter: brightness(0.95);
+}
+
+.block-editor-content .edgepress-bn-button .bn-inline-content {
+  min-width: 3ch;
+  text-align: center;
+}
+
+.block-editor-content .edgepress-bn-button .bn-inline-content a {
+  color: inherit;
+  text-decoration: none;
+}

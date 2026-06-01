@@ -85,7 +85,7 @@ jobs:
           fi
 
           THEME_SLUG="${{ steps.theme_meta.outputs.theme_slug }}"
-          TARGET_DIR="src/themes/${THEME_SLUG}"
+          TARGET_DIR="src/pages/themes/${THEME_SLUG}"
           rm -rf "${TARGET_DIR}"
           mkdir -p "${TARGET_DIR}"
           unzip -q "${ZIP_PATH}" -d "${TARGET_DIR}"

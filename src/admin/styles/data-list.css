@@ -1,0 +1,29 @@
+/**
+ * Estilos do DataList + DataTables (importados via AdminLayout para rotas com template dinâmico).
+ */
+@import "datatables.net-dt/css/dataTables.dataTables.css";
+
+.data-list-wrapper table.dataTable {
+  width: 100% !important;
+}
+
+.data-list-wrapper .dt-layout-row {
+  margin-bottom: 0.75rem;
+}
+
+/* Garante que a área da tabela comece no topo (não centralizada verticalmente). */
+.data-list-wrapper .dt-layout-row.dt-layout-table {
+  align-items: flex-start !important;
+  align-content: flex-start !important;
+  justify-content: flex-start !important;
+}
+
+.data-list-wrapper thead th.dt-orderable-asc,
+.data-list-wrapper thead th.dt-orderable-desc {
+  cursor: pointer;
+}
+
+tr.data-list-row-fade-out {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
