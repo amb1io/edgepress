@@ -183,5 +183,7 @@
   "admin.taxonomy.editOnlyNotice": "Selecione uma taxonomia na lista para editar.",
   "admin.taxonomy.deleteConfirmCascade": "Esta ação vai deletar esta taxonomia e todos os filhos. Deseja continuar?",
   "admin.taxonomy.panel.languages": "Idiomas",
-  "admin.taxonomy.panel.languagesInfo": "Defina traduções para idiomas do admin e do site."
+  "admin.taxonomy.panel.languagesInfo": "Defina traduções para idiomas do admin e do site.",
+  "admin.list.language": "Idioma",
+  "admin.list.order": "Ordem"
 }

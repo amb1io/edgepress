@@ -112,6 +112,8 @@ if (loadFromTable) {
 
   listColumns = [
     { key: "title", label: t(locale, "admin.list.titleColumn") },
+    { key: "language", label: t(locale, "admin.list.language"), sortable: false },
+    { key: "order", label: t(locale, "admin.list.order"), sortable: false },
     { key: "categories", label: t(locale, "admin.list.categories"), sortable: false },
     { key: "tags", label: t(locale, "admin.list.tags"), sortable: false },
     { key: "author", label: t(locale, "admin.list.author") },
@@ -121,6 +123,8 @@ if (loadFromTable) {
   ];
   listItems = listResult.items.map((i) => ({
     ...i,
+    language: (i as { language?: string })["language"] || "—",
+    order: (i as { order?: string })["order"] || "—",
     categories: (i as { categories?: string })["categories"] || "—",
     tags: (i as { tags?: string })["tags"] || "—",
     author: (i as { author?: string })["author"] || "—",
@@ -147,8 +151,9 @@ const addTranslationPathTemplate = showAddTranslationAction
 ---
 
 <AdminLayout title={t(locale, "admin.list.title")} locale={locale} menuItems={menuItems} user={layoutUser}>
-  <div class="p-6 overflow-x-auto">
-    <DataList
+  <div class="list-page-content p-6 overflow-x-auto h-full min-h-full flex flex-col">
+    <div class="flex-1 min-h-0">
+      <DataList
       columns={listColumns}
       items={listItems}
       emptyMessage={t(locale, "admin.list.noItems")}
@@ -165,34 +170,70 @@ const addTranslationPathTemplate = showAddTranslationAction
       dtZeroRecords={t(locale, "admin.list.dtZeroRecords")}
       dtPaginatePrevious={t(locale, "admin.list.previous")}
       dtPaginateNext={t(locale, "admin.list.next")}
-      {...(userCanDelete && deletePathTemplate
-        ? {
-            actionConfig: {
-              editLinkTemplate: `/admin/${locale}/content?post_type=${type}&action=edit&id={id}`,
-              deletePathTemplate,
-              deleteConfirm: t(locale, "admin.list.deleteConfirm"),
-              duplicatePathTemplate: `/api/posts/{id}/duplicate`,
+        {...(userCanDelete && deletePathTemplate
+          ? {
+              actionConfig: {
+                editLinkTemplate: `/admin/${locale}/content?post_type=${type}&action=edit&id={id}`,
+                deletePathTemplate,
+                deleteConfirm: t(locale, "admin.list.deleteConfirm"),
+                duplicatePathTemplate: `/api/posts/{id}/duplicate`,
+                ...(addTranslationPathTemplate
+                  ? { addTranslationPathTemplate }
+                  : {}),
+              },
               ...(addTranslationPathTemplate
-                ? { addTranslationPathTemplate }
+                ? { addTranslationLabel: t(locale, "admin.list.addTranslation") }
                 : {}),
-            },
-            ...(addTranslationPathTemplate
-              ? { addTranslationLabel: t(locale, "admin.list.addTranslation") }
-              : {}),
-          }
-        : {
-            actionConfig: {
-              editLinkTemplate: `/admin/${locale}/content?post_type=${type}&action=edit&id={id}`,
-              duplicatePathTemplate: `/api/posts/{id}/duplicate`,
+            }
+          : {
+              actionConfig: {
+                editLinkTemplate: `/admin/${locale}/content?post_type=${type}&action=edit&id={id}`,
+                duplicatePathTemplate: `/api/posts/{id}/duplicate`,
+                ...(addTranslationPathTemplate
+                  ? { addTranslationPathTemplate }
+                  : {}),
+                deleteConfirm: t(locale, "admin.list.deleteConfirm"),
+              },
               ...(addTranslationPathTemplate
-                ? { addTranslationPathTemplate }
+                ? { addTranslationLabel: t(locale, "admin.list.addTranslation") }
                 : {}),
-              deleteConfirm: t(locale, "admin.list.deleteConfirm"),
-            },
-            ...(addTranslationPathTemplate
-              ? { addTranslationLabel: t(locale, "admin.list.addTranslation") }
-              : {}),
-          })}
-    />
+            })}
+      />
+    </div>
   </div>
 </AdminLayout>
+
+<style>
+  .list-page-content {
+    justify-content: flex-start !important;
+    align-items: stretch !important;
+    align-content: flex-start !important;
+  }
+
+  .list-page-content > .flex-1 {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    min-height: 0;
+  }
+
+  .list-page-content :global(.data-list-wrapper) {
+    height: 100%;
+    margin-top: 0 !important;
+  }
+
+  .list-page-content :global(.dt-container) {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-content: flex-start;
+    margin-top: 0 !important;
+  }
+
+  .list-page-content :global(.dt-layout-row.dt-layout-table) {
+    flex: 1;
+    min-height: 0;
+  }
+</style>

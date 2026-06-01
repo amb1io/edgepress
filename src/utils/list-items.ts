@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray, like, ne, sql } from "drizzle-orm";
 import {
+  locales,
   postTypes,
   posts,
   postsTaxonomies,
@@ -12,6 +13,8 @@ import type { Database } from "./types/database.ts";
 export type ListItem = {
   id: number;
   title: string;
+  language: string;
+  order: string;
   categories: string;
   tags: string;
   author: string;
@@ -167,6 +170,8 @@ export async function getListItems(
     .select({
       id: posts.id,
       title: posts.title,
+      language: locales.language,
+      order: sql<string>`COALESCE(CAST(json_extract(${posts.meta_values}, '$.order') AS TEXT), '')`,
       status: posts.status,
       created_at: posts.created_at,
       updated_at: posts.updated_at,
@@ -175,6 +180,7 @@ export async function getListItems(
     .from(posts)
     .innerJoin(postTypes, eq(posts.post_type_id, postTypes.id))
     .leftJoin(user, eq(posts.author_id, user.id))
+    .leftJoin(locales, eq(posts.id_locale_code, locales.id))
     .where(whereClause);
 
   const [countResult] = await db
@@ -182,6 +188,7 @@ export async function getListItems(
     .from(posts)
     .innerJoin(postTypes, eq(posts.post_type_id, postTypes.id))
     .leftJoin(user, eq(posts.author_id, user.id))
+    .leftJoin(locales, eq(posts.id_locale_code, locales.id))
     .where(whereClause);
 
   const total = Number(countResult?.count ?? 0);
@@ -222,6 +229,8 @@ export async function getListItems(
   const items: ListItem[] = rows.map((r) => ({
     id: r.id,
     title: r.title ?? "",
+    language: r.language ?? "",
+    order: r.order ?? "",
     categories: (categoriesByPost[r.id] ?? []).join(", "),
     tags: (tagsByPost[r.id] ?? []).join(", "),
     author: r.author ?? "",
