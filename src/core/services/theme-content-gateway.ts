@@ -45,6 +45,16 @@ function escapeSqlLiteral(value: string): string {
   return value.replace(/'/g, "''");
 }
 
+/**
+ * Match slugs like `{slug}-pt-br` without SQL LIKE.
+ * In SQLite, `_` in LIKE is a single-char wildcard; long slugs (many hyphens/underscores)
+ * trigger "LIKE or GLOB pattern too complex" on D1.
+ */
+function sqlSlugPrefixMatch(column: string, escapedSlug: string): string {
+  if (!escapedSlug) return "0";
+  return `instr(${column}, '${escapedSlug}-') = 1`;
+}
+
 function localeToLegacyLang(localeCode: string | null, metaLanguage?: string): string[] {
   const normalizedMeta = metaLanguage?.toLowerCase().replace(/[_-]/g, "");
   if (normalizedMeta === "ptbr" || normalizedMeta === "br") return ["br"];
@@ -302,7 +312,7 @@ export class ThemeContentGateway {
         AND (
           p.slug = '${safeSlug}'
           OR json_extract(p.meta_values, '$.slug') = '${safeSlug}'
-          OR p.slug LIKE '${safeSlug}-%'
+          OR ${sqlSlugPrefixMatch("p.slug", safeSlug)}
         )
       ORDER BY p.updated_at DESC
       LIMIT ${Math.min(1000, Math.max(1, limit))}
@@ -320,7 +330,7 @@ export class ThemeContentGateway {
       ? `AND (
           p.slug = '${escapeSqlLiteral(slugEq)}'
           OR json_extract(p.meta_values, '$.slug') = '${escapeSqlLiteral(slugEq)}'
-          OR p.slug LIKE '${escapeSqlLiteral(slugEq)}-%'
+          OR ${sqlSlugPrefixMatch("p.slug", escapeSqlLiteral(slugEq))}
         )`
       : "";
 
@@ -447,7 +457,7 @@ export class ThemeContentGateway {
         AND (
           t.slug = '${safeCategory}-pt-br'
           OR t.slug = '${safeCategory}-en-us'
-          OR t.slug LIKE '${safeCategory}-%'
+          OR ${sqlSlugPrefixMatch("t.slug", safeCategory)}
         )
         AND (
           pt.slug = 'jobs'
