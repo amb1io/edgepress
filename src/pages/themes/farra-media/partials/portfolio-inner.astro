@@ -233,11 +233,7 @@ function getVideoID(vimeoUrl: string) {
                 }
               </h3>
             </header>
-            <div class="elementor-widget-container">
-              <p>
-                {body}
-              </p>
-            </div>
+            <div class="elementor-widget-container" set:html={body ?? ""} />
             <ul class="ficha-tecnica">
               {
                 fichaTecnica
