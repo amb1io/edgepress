@@ -1,0 +1,20 @@
+---
+import { t, type Locale } from "../../i18n/index.ts";
+
+export interface Props {
+  locale: string;
+}
+
+const { locale } = Astro.props;
+const currentLocale = locale as Locale;
+---
+
+<div class="p-6 max-w-4xl">
+  <div class="card bg-base-100 shadow min-h-[12rem]">
+    <div class="card-body items-center justify-center text-center">
+      <p class="text-base-content/60 text-lg">
+        {t(currentLocale, "admin.dashboard.comingSoon")}
+      </p>
+    </div>
+  </div>
+</div>

@@ -9,6 +9,7 @@
   "admin.signOut": "Cerrar sesión",
   "admin.welcome.title": "Bienvenido al panel",
   "admin.welcome.authenticatedAs": "Has iniciado sesión como {name}.",
+  "admin.dashboard.comingSoon": "Próximamente novedades...",
   "admin.list.title": "Lista",
   "admin.list.filter": "Filtrar",
   "admin.list.filterSubmit": "Filtrar",

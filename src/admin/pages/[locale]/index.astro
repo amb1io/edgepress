@@ -1,5 +1,6 @@
 ---
 import AdminLayout from "../../../admin/layouts/AdminLayout.astro";
+import DashboardTemplate from "../../../admin/templates/dashboard.astro";
 import { t, locales, defaultLocale } from "../../../i18n/index.ts";
 import { db } from "../../../db/index.ts";
 import { getMenuItems } from "../../../utils/menu.ts";
@@ -35,19 +36,6 @@ const menuItems = await filterMenuItemsByRole(db, allMenuItems, roleId);
   menuItems={menuItems}
   user={user}
 >
-  <div class="p-6 max-w-4xl">
-    <div class="card bg-base-100 shadow">
-      <div class="card-body">
-        <h2 class="card-title">{t(locale, "admin.welcome.title")}</h2>
-        <p>
-          {
-            t(locale, "admin.welcome.authenticatedAs", {
-              name: user.name ?? user.email,
-            })
-          }
-        </p>
-      </div>
-    </div>
-  </div>
+  <DashboardTemplate locale={locale} />
 </AdminLayout>
 

@@ -9,6 +9,7 @@
   "admin.signOut": "Sair",
   "admin.welcome.title": "Bem-vindo ao painel",
   "admin.welcome.authenticatedAs": "Você está autenticado como {name}.",
+  "admin.dashboard.comingSoon": "Em breve novidades...",
   "admin.list.title": "Lista",
   "admin.list.filter": "Filtrar",
   "admin.list.filterSubmit": "Filtrar",

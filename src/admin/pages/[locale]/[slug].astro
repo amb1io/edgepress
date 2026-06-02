@@ -3,7 +3,8 @@
  * Rota dinâmica admin/[slug].
  * - Se a URL tiver o parâmetro "domain", carrega o template src/templates/{domain}.astro
  *   (ex.: admin/post?domain=taxonomies&type=category → templates/taxonomies.astro).
- * - Caso contrário, redireciona: post/page → list; dashboard → admin; settings → settings.
+ * - slug `dashboard` → templates/dashboard.astro
+ * - Caso contrário, redireciona: post/page → list; settings → settings.
  */
 import { locales, defaultLocale, t } from "../../../i18n/index.ts";
 import { db } from "../../../db/index.ts";
@@ -31,6 +32,9 @@ let TemplateComponent: Awaited<
 >["default"] | null = null;
 if (domain === "taxonomies") {
   TemplateComponent = (await import("../../../admin/templates/taxonomies.astro"))
+    .default;
+} else if (slug === "dashboard") {
+  TemplateComponent = (await import("../../../admin/templates/dashboard.astro"))
     .default;
 }
 
@@ -67,9 +71,6 @@ if (TemplateComponent) {
   if (slug === "post" || slug === "page") {
     return Astro.redirect(`/admin/${locale}/list?type=${slug}&limit=10&page=1`);
   }
-  if (slug === "dashboard") {
-    return Astro.redirect(`/admin/${locale}`);
-  }
   if (slug === "settings") {
     return Astro.redirect(`/admin/${locale}/settings?page=general`);
   }
@@ -78,15 +79,30 @@ if (TemplateComponent) {
 
 const scope = Astro.url.searchParams.get("scope") ?? "";
 const pageTitle =
-  domain === "taxonomies" && scope === "all"
-    ? t(locale, "menu.option.post_type_taxonomies")
-    : domain === "taxonomies" && type
-      ? t(locale, "taxonomy.type." + type)
-      : slug ?? "Admin";
+  slug === "dashboard"
+    ? t(locale, "admin.menu.dashboard")
+    : domain === "taxonomies" && scope === "all"
+      ? t(locale, "menu.option.post_type_taxonomies")
+      : domain === "taxonomies" && type
+        ? t(locale, "taxonomy.type." + type)
+        : slug ?? "Admin";
 ---
 
 {
-  TemplateComponent && domain && (
+  TemplateComponent && slug === "dashboard" && (
+    <AdminLayout
+      title={pageTitle}
+      locale={locale}
+      menuItems={menuItems}
+      user={user}
+    >
+      <TemplateComponent locale={locale} />
+    </AdminLayout>
+  )
+}
+
+{
+  TemplateComponent && domain && slug !== "dashboard" && (
     <AdminLayout
       title={pageTitle}
       locale={locale}

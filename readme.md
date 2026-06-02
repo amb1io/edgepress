@@ -1,25 +1,91 @@
 # Edgepress
 
-CMS inspirado no WordPress que roda na **edge** (Cloudflare). Conteúdo dinâmico, autenticação, i18n, taxonomias, mídia em R2 e cache em KV.
+**Version:** `0.0.1` · A WordPress-inspired CMS that runs on the **edge** (Cloudflare Workers).
+
+Edgepress provides content management, a full admin panel, public themes, i18n, taxonomies, R2 media storage, KV caching, and REST APIs for reads and writes — all in a single Astro SSR deploy on Cloudflare.
 
 ## Stack
 
-- **[Astro](https://astro.build)** (SSR) + **[Cloudflare Workers](https://workers.cloudflare.com/)**
-- **D1** (SQLite) + **Drizzle ORM** — banco de dados
-- **KV** — cache para leituras (settings, i18n, conteúdo)
-- **R2** — armazenamento de mídia (uploads)
-- **[Better Auth](https://www.better-auth.com/)** — autenticação (email/senha, roles)
-- **HTMX** + **Alpine.js** — interatividade no admin
-- **BlockNote** + **Uppy** — editor de conteúdo e upload de imagens
-- **Tailwind CSS** + **DaisyUI** — estilos
+| Layer | Technology |
+|-------|------------|
+| Framework | [Astro 6](https://astro.build) (SSR) + [@astrojs/cloudflare](https://docs.astro.build/en/guides/integrations-guide/cloudflare/) |
+| Runtime | Cloudflare Workers (`nodejs_compat`) |
+| Database | **D1** (SQLite) + **Drizzle ORM** |
+| Cache / sessions | **KV** (`CACHE`) |
+| Media | **R2** (`MEDIA_BUCKET`) |
+| Auth | [Better Auth](https://www.better-auth.com/) (email/password, roles, KV sessions) |
+| Admin UI | **HTMX** + **Alpine.js** + **Tailwind CSS 4** + **DaisyUI** |
+| Editor | **BlockNote** (React) + **Uppy** (uploads) |
+| Email | **Resend** (password recovery) |
+| Tests | **Vitest** |
 
-## Pré-requisitos
+## Features
 
-- **Node.js** 18+
-- **npm** ou **pnpm**
-- **Wrangler** (incluído como dependência)
+### Content and data model
 
-## Instalação
+- **Configurable post types** (`post`, `page`, `attachment`, `user`, `themes`, `settings`, etc.) with dynamic `meta_schema` (custom fields, taxonomies, thumbnail, menu).
+- **Posts and pages** with status, slug, author, hierarchy (parent), duplication, and cross-locale duplication.
+- **Taxonomies** (categories, tags, and custom types) linked to posts via `posts_taxonomies`.
+- **Custom fields** stored in `meta_values`, including integrated SEO blocks.
+- **SEO:** metadata (`seo_metadata`), canonical URLs, Open Graph via custom fields; **JSON-LD** (Article, WebPage, BreadcrumbList).
+- **Sitemap** generated at build time (`@astrojs/sitemap`) with public URLs collected from published posts.
+
+### Internationalization
+
+- **Admin** locales: `pt-br`, `en`, `es` (URLs `/admin/{locale}/...`).
+- **Public theme** locales: `pt_BR`, `en_US`, `es_ES` (URLs `/themes/{slug}/{locale}/...`).
+- UI translations (KV/DB) and **linked posts** via `translation_key`.
+- Language management in the admin (`translations_languages`).
+
+### Admin panel
+
+- Initial setup at `/{locale}/setup` (first admin user + `site_name` / `site_description`).
+- Dashboard, DataTables listings, HTMX forms, BlockNote editor, media library (Uppy → R2).
+- **Roles:** `0` admin · `1` editor · `2` author · `3` reader (lower number = more privilege).
+- User, settings, KV cache, themes, post types, and translation management.
+
+### Public themes
+
+- Themes under `src/pages/themes/{slug}/` with automatic rewrites: friendly URLs (`/about`) map to the active theme (`active_theme` in settings).
+- Default fallback theme: `2026`.
+- **GitHub theme import:** GitHub Actions dispatch → package in R2 → callback → deploy hydrates the theme before build (workflows in `.github/workflows/`).
+
+### REST API (`/api/*`)
+
+Public reads use KV cache for visitors; authenticated users query D1 directly.
+
+| Area | Main endpoints |
+|------|----------------|
+| Settings | `GET/POST/PATCH /api/settings`, `GET/PUT/DELETE /api/settings/[id]` |
+| Content | `GET /api/content/[tableOrSlug]`, `GET /api/content/[table]/[id]` |
+| Posts | `POST /api/posts`, `PUT/DELETE /api/posts/[id]`, duplicate, duplicate translation |
+| i18n | `GET /api/i18n/[locale]` |
+| Taxonomies | `POST /api/taxonomies` |
+| Users | `POST /api/users`, `PUT/DELETE /api/users/[id]` |
+| Translations (admin) | `GET/POST /api/translations`, `PUT/DELETE /api/translations/[id]` |
+| Media | `POST /api/upload`, `GET /api/media/list` |
+| Themes | import callback, active package for CI |
+| Auth | Better Auth at `/api/auth/*` |
+| Utilities | `GET /api/kv-test`, `GET /api/kv-list` |
+
+### Security
+
+- **CSRF:** origin validation (Better Auth + middleware on sensitive APIs).
+- **Configurable rate limiting:** login, registration, upload, and general API (via env).
+- **URL validation** on redirects (open-redirect protection).
+- Setup, session, and admin route protection middleware.
+
+### Plugins
+
+- `src/plugins/` is reserved for future extensions (no plugin runtime yet).
+
+## Prerequisites
+
+- Node.js 18+
+- npm or pnpm
+- Cloudflare account (D1, KV, R2) for deployment
+
+## Installation
 
 ```bash
 git clone https://github.com/amb1io/edgepress.git
@@ -27,178 +93,110 @@ cd edgepress
 npm install
 ```
 
-### Variáveis de ambiente
-
-1. Copie o exemplo e ajuste:
-   ```bash
-   cp .env.example .env.local
-   ```
-2. Para desenvolvimento com Wrangler, use **`.dev.vars`** (não é commitado). Exemplo:
-   ```
-   BETTER_AUTH_SECRET=seu_secret_min_32_chars
-   BETTER_AUTH_URL=http://localhost:8787
-   BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:8787
-   RESEND_API_KEY=re_xxx
-   RESEND_FROM=Edgepress <noreply@seudominio.com>
-   ```
-3. Em produção, configure os **Secrets** no dashboard do Cloudflare (Workers/Pages) ou via `wrangler secret put`.
-
-Consulte `.env.example` para todas as opções (rate limits, Resend, etc.).
-
-### Cloudflare (D1, KV, R2)
-
-O projeto usa **`wrangler.toml`** com:
-
-- **D1**: bancos `edgepress` (produção) e opcionais `edgepress-dev` / `edgepress-dev-1` (desenvolvimento).
-- **KV**: namespace `edgepress_cache`.
-- **R2**: bucket `edgepress-media`.
-
-Crie os recursos no [Cloudflare Dashboard](https://dash.cloudflare.com/) (D1, KV, R2) e preencha os `database_id` e `id` no `wrangler.toml` conforme sua conta. O arquivo pode ser versionado; segredos ficam em `.dev.vars` ou em Secrets.
-
-## Desenvolvimento
+### Environment variables
 
 ```bash
-# Gera tipos do Wrangler, build e sobe o dev server (porta 8787)
+cp .env.example .env.local
+```
+
+For `wrangler dev`, also use **`.dev.vars`** (not committed):
+
+```env
+BETTER_AUTH_SECRET=          # min. 32 characters
+BETTER_AUTH_URL=http://localhost:8787
+BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:8787
+RESEND_API_KEY=
+RESEND_FROM=Edgepress <noreply@yourdomain.com>
+SITE_URL=http://localhost:8787
+```
+
+In production, set secrets in the Cloudflare dashboard or via `wrangler secret put`. See `.env.example` for all options (rate limits, theme import, etc.).
+
+### Cloudflare resources (`wrangler.toml`)
+
+| Binding | Purpose |
+|---------|---------|
+| `DB` (D1) | Primary database, migrations in `./drizzle` |
+| `CACHE` (KV) | Read cache and Astro sessions |
+| `MEDIA_BUCKET` (R2) | Uploads and attachments |
+
+Update `database_id`, KV `id`, and bucket name for your account.
+
+## Development
+
+```bash
+# Build + Wrangler dev (port 8787)
 npm run dev
 ```
 
-- **Admin:** após o primeiro deploy/setup, acesse `/{locale}/admin` (ex.: `http://localhost:8787/pt-br/admin`).
-- **Setup inicial:** na primeira vez, você será redirecionado para `/{locale}/setup` para criar o primeiro usuário e concluir a configuração.
+| Command | Description |
+|---------|-------------|
+| `npm run dev:astro` | Astro dev without Wrangler (faster UI iteration) |
+| `npm run dev:reset` | Clears `.wrangler`, migrates, seeds, builds, and starts dev |
+| `npm run test` | Vitest |
+| `npm run db:studio` | Drizzle Studio (local) |
 
-Outros scripts úteis:
+- **Admin:** `http://localhost:8787/pt-br/admin` (after setup).
+- **Setup:** automatic redirect to `/pt-br/setup` on first run.
 
-| Script              | Descrição                                                                  |
-| ------------------- | -------------------------------------------------------------------------- |
-| `npm run dev:astro` | Apenas Astro dev server (sem Wrangler; útil para UI).                      |
-| `npm run dev:reset` | Limpa `.wrangler`, gera migrações, aplica local, seed, build e sobe o dev. |
-| `npm run test`      | Roda os testes (Vitest).                                                   |
-
-## Banco de dados
-
-### Migrações (Drizzle + D1)
+### Database
 
 ```bash
-# Gera arquivos de migração a partir do schema
-npm run db:generate
-
-# Aplica migrações no D1 local (dev)
-npm run db:migrate:local
-
-# Aplica migrações no D1 remoto (produção)
-npm run db:migrate:remote
+npm run db:generate          # generate Drizzle migrations
+npm run db:migrate:local     # apply to local D1
+npm run db:seed              # local seed
+npm run db:migrate:remote    # production
+npm run db:seed:remote       # remote seed (generated SQL)
+npm run db:seed:remote:dev   # remote seed (dev D1)
 ```
 
-Para ambientes de desenvolvimento remoto há também `db:migrate:remote:dev`, `db:baseline:remote` e `db:baseline:remote:dev` (veja `package.json`).
-
-### Seed
+## Build and deploy
 
 ```bash
-# Seed no banco local (SQLite em .wrangler/state)
-npm run db:seed
-# ou
-npm run seed
-
-# Gera o SQL de seed para uso remoto
-npm run db:seed:generate-sql
-
-# Aplica seed no D1 remoto (produção)
-npm run db:seed:remote
-
-# Aplica seed no D1 remoto de dev
-npm run db:seed:remote:dev
-```
-
-### Drizzle Studio
-
-```bash
-npm run db:studio
-```
-
-Abre o Drizzle Studio para inspecionar/editar dados (conexão local).
-
-## Build e deploy
-
-```bash
-# Build para Cloudflare Workers
 npm run build
 ```
 
-Para CI ou deploy com migrações e seed no D1 remoto:
+Output goes to `./dist/server` with static assets in `./dist/client` (see `wrangler.toml`).
+
+```bash
+npm run deploy          # production
+npm run deploy:preview  # preview/staging (--env preview)
+```
+
+Configure secrets with `wrangler secret put` (e.g. `BETTER_AUTH_SECRET`, `RESEND_API_KEY`). Public vars live in `[vars]` / `[env.preview.vars]`.
+
+For a pipeline with migrations/seed:
 
 ```bash
 npm run build:seed
 ```
 
-Deploy manual após o build:
+### CI: themes and deploy
 
-```bash
-npm run deploy          # production (vars do top-level do wrangler.toml)
-npm run deploy:preview  # preview/staging (--env preview)
-```
+1. **`theme-import-dispatch.yml`** — downloads a public theme from GitHub, packages it, uploads to R2, and calls the callback.
+2. **`deploy-app.yml`** — hydrates the active theme from R2, validates checksum, runs `npm run build`, and deploys with `wrangler deploy`.
 
-O Worker usa `dist/server/entry.mjs` com assets estáticos em `dist/client` (ver `wrangler.toml`). Configure secrets com `wrangler secret put` (ex.: `BETTER_AUTH_SECRET`, `RESEND_API_KEY`). Variáveis públicas ficam em `[vars]` / `[env.preview.vars]`.
+Required secrets are documented in the workflows and in `.env.example` (`THEME_IMPORT_*`, `THEME_PACKAGE_*`, R2 and Cloudflare credentials).
 
-### Importação de tema via GitHub + R2
-
-O fluxo foi dividido em dois workflows:
-
-- `.github/workflows/theme-import-dispatch.yml`  
-  Recebe `repository_dispatch` (`theme_import_requested`), baixa tema público do GitHub, empacota (`theme.zip`), publica no R2 e chama callback.
-
-- `.github/workflows/deploy-app.yml`  
-  Em `push main` (ou manual), busca pacote do tema ativo no R2, valida checksum, hidrata em `src/pages/themes/<slug>` e só então roda `npm run build` e deploy.
-
-Secrets esperados para o workflow de importação/pacote (`theme-import-dispatch.yml`):
-
-- `THEME_IMPORT_CALLBACK_URL` (ex.: `https://seu-dominio.com/api/themes/import-callback`)
-- `THEME_IMPORT_CALLBACK_SECRET` (deve bater com `THEME_IMPORT_CALLBACK_SECRET` no Edgepress)
-- `R2_ACCOUNT_ID`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_BUCKET`
-
-Secrets esperados para o workflow de deploy do app (`deploy-app.yml`):
-
-- `THEME_PACKAGE_METADATA_URL` (endpoint seguro, ex.: `/api/themes/active-package`)
-- `THEME_PACKAGE_METADATA_SECRET` (deve bater com `THEME_PACKAGE_METADATA_SECRET` no Edgepress)
-- `R2_ACCOUNT_ID`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_BUCKET`
-- `CLOUDFLARE_API_TOKEN` (para deploy)
-- `CLOUDFLARE_ACCOUNT_ID` (para deploy)
-
-Variáveis esperadas no runtime do Edgepress:
-
-- `THEME_IMPORT_DISPATCH_REPO` (formato `owner/repo`)
-- `THEME_IMPORT_GITHUB_TOKEN`
-- `THEME_IMPORT_EVENT_TYPE` (opcional; default `theme_import_requested`)
-- `THEME_IMPORT_CALLBACK_SECRET`
-- `THEME_PACKAGE_METADATA_SECRET`
-
-## Estrutura do projeto (resumo)
+## Project structure
 
 ```
 ├── src/
-│   ├── pages/          # Rotas Astro e API (/api/*)
-│   ├── components/     # Componentes React (BlockNote, etc.)
-│   ├── lib/            # Serviços, auth, utils, validadores
-│   ├── db/             # Schema Drizzle, seed, migrations
-│   ├── i18n/           # Locales e traduções (en, es, pt-br)
-│   ├── middleware.ts   # Setup, auth, CSRF
-│   └── scripts/        # Lógica client-side (content form, post-type form)
-├── drizzle/            # Migrações D1 e seed SQL
-├── docs/
-│   └── API_DOC.md      # Documentação das APIs
-├── wrangler.toml     # Config Cloudflare (D1, KV, R2)
-├── .env.example        # Exemplo de variáveis
-└── .dev.vars           # Segredos locais (não versionado)
+│   ├── pages/           # Astro routes, themes, and /api/*
+│   ├── admin/           # Admin templates and components
+│   ├── api/endpoints/   # REST handlers
+│   ├── core/services/   # Domain logic (themes, SEO, sitemap, taxonomies…)
+│   ├── db/              # Drizzle schema, seed, migrations
+│   ├── i18n/            # Locales and translations
+│   ├── middleware.ts    # Setup, auth, CSRF, theme rewrites
+│   └── plugins/         # Future extensions
+├── drizzle/             # Migration SQL and remote seed
+├── scripts/             # Build, seed, sitemap, theme sync
+├── .github/workflows/   # Theme import and deploy
+├── wrangler.toml
+└── .env.example
 ```
 
-## Documentação da API
-
-Detalhes de autenticação, roles, cache, endpoints de conteúdo, traduções, upload e auth: **[docs/API_DOC.md](docs/API_DOC.md)**.
-
-## Licença
+## License
 
 ISC · [Amb1.io](https://amb1.io)
