@@ -343,7 +343,11 @@ export class ThemeContentGateway {
           OR json_extract(p.meta_values, '$.legacy_posttype') = '${safeType}'
         )
         ${slugFilter}
-      ORDER BY CAST(json_extract(p.meta_values, '$.order') AS INTEGER) DESC, p.title ASC
+      ORDER BY ${
+        safeType === "jobs"
+          ? "p.created_at DESC"
+          : "CAST(json_extract(p.meta_values, '$.order') AS INTEGER) DESC, p.title ASC"
+      }
       LIMIT ${limit}
     `);
   }
@@ -465,7 +469,7 @@ export class ThemeContentGateway {
           OR json_extract(p.meta_values, '$.legacy_posttype') = 'jobs'
         )
         ${localeSqlFilter(lang)}
-      ORDER BY CAST(json_extract(p.meta_values, '$.order') AS INTEGER) DESC, p.updated_at DESC
+      ORDER BY p.created_at DESC
       LIMIT 500
     `);
   }

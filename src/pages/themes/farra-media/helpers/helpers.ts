@@ -117,7 +117,7 @@ export const GetJobs = async (params: any) => {
   const slug = params?.slug;
   if (!slug) return [];
   const posts = await themeContentGateway.getJobBySlug(slug, params?.lang);
-  return sortByOrderDesc(posts.map((post) => TagsFormat(post)));
+  return sortByCreatedDesc(posts.map((post) => TagsFormat(post)));
 };
 
 export const GetPosts = async (params: any) => {
@@ -177,19 +177,37 @@ function postOrderValue(post: { order?: unknown }): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
+function createdAtValue(post: { created_at?: unknown; createdOn?: unknown }): number {
+  const raw = post.created_at ?? post.createdOn ?? 0;
+  const parsed = Number(raw);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 /** Ordena posts pelo meta `order` (maior → menor). */
 export function sortByOrderDesc<
-  T extends { order?: unknown; title?: unknown; created_at?: unknown },
+  T extends { order?: unknown; title?: unknown; created_at?: unknown; createdOn?: unknown },
 >(posts: T[]): T[] {
   return [...posts].sort((a, b) => {
     const orderA = postOrderValue(a);
     const orderB = postOrderValue(b);
     if (orderA !== orderB) return orderB - orderA;
 
-    const createdA = Number(a.created_at ?? 0);
-    const createdB = Number(b.created_at ?? 0);
+    const createdA = createdAtValue(a);
+    const createdB = createdAtValue(b);
     if (createdA !== createdB) return createdB - createdA;
 
+    return String(a.title ?? "").localeCompare(String(b.title ?? ""));
+  });
+}
+
+/** Ordena posts pela data de criação (mais recente → mais antigo). */
+export function sortByCreatedDesc<
+  T extends { created_at?: unknown; createdOn?: unknown; title?: unknown },
+>(posts: T[]): T[] {
+  return [...posts].sort((a, b) => {
+    const createdA = createdAtValue(a);
+    const createdB = createdAtValue(b);
+    if (createdA !== createdB) return createdB - createdA;
     return String(a.title ?? "").localeCompare(String(b.title ?? ""));
   });
 }
@@ -348,7 +366,8 @@ export const GetContent = async (
     posts = posts.filter((post: any) => matchesPostType(post, postType));
   }
 
-  return sortByOrderDesc(posts.map((post: any) => TagsFormat(post)));
+  const formatted = posts.map((post: any) => TagsFormat(post));
+  return postType === "jobs" ? sortByCreatedDesc(formatted) : sortByOrderDesc(formatted);
 };
 
 export const FilterPost = async (post: any, lang: any, postType: any) => {
