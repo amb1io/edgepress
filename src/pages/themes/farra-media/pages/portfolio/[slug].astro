@@ -1,10 +1,9 @@
 ---
 import Page from "../../partials/portfolio-inner.astro";
 import {
-  GetCategoriesPost,
-  GetCategories,
   GetPosts,
   TagsFormat,
+  getPostCategoriesForDisplay,
   matchesLanguageForPost,
 } from "../../helpers/helpers";
 import { themeRouteParam, themeRedirect } from "../../helpers/route";
@@ -23,13 +22,7 @@ posts = posts.filter((p: any) => matchesLanguageForPost(p, lang));
 let post = posts[0];
 if (post) {
   post = TagsFormat(post);
-  const postCategories = await GetCategoriesPost({
-    "filters[postId][$eq]": post.id,
-  });
-  const categories = await Promise.all(
-    postCategories.map(async (cat: any) => await GetCategories(cat.categoryId)),
-  );
-  post.categories = categories;
+  post.categories = await getPostCategoriesForDisplay(Number(post.id));
 } else {
   return themeRedirect("/trabalhos");
 }

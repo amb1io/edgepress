@@ -147,6 +147,28 @@ export const GetCategories = async (id: any = "", params: any = null) => {
   return themeContentGateway.getCategories(Number.isNaN(numericId) ? undefined : numericId);
 };
 
+export type PostCategoryDisplay = { id: number; title: string; name: string; slug: string };
+
+/** Taxonomias vinculadas ao post (para exibição no portfolio, etc.). */
+export async function getPostCategoriesForDisplay(
+  postId: number,
+): Promise<PostCategoryDisplay[]> {
+  const links = await GetCategoriesPost({ "filters[postId][$eq]": postId });
+  const categories = await Promise.all(
+    links.map(async (link) => {
+      const rows = await GetCategories(link.categoryId);
+      const row = Array.isArray(rows) ? rows[0] : rows;
+      if (!row || typeof row !== "object") return null;
+      const name = String((row as { name?: string }).name ?? "");
+      const title = String((row as { title?: string }).title ?? name);
+      const slug = String((row as { slug?: string }).slug ?? "");
+      const id = Number((row as { id?: number }).id ?? link.categoryId);
+      return { id, title, name: name || title, slug };
+    }),
+  );
+  return categories.filter((cat): cat is PostCategoryDisplay => cat != null);
+}
+
 export const GetPage = async (
   lang: string,
   postType: string,
@@ -456,7 +478,7 @@ export const GetContent = async (
   }
 
   const formatted = posts.map((post: any) => TagsFormat(post));
-  return postType === "jobs" ? sortByCreatedDesc(formatted) : sortByOrderDesc(formatted);
+  return sortByOrderDesc(formatted);
 };
 
 export const FilterPost = async (post: any, lang: any, postType: any) => {

@@ -8,6 +8,20 @@ const { id, title, body, images, videos, fichaTecnica, categories } =
   Astro.props.post ?? {};
 const { page } = Astro.props;
 
+function categoryLabel(cat: unknown): string {
+  if (cat == null) return "";
+  if (Array.isArray(cat)) return categoryLabel(cat[0]);
+  if (typeof cat === "object") {
+    const row = cat as { title?: string; name?: string };
+    return String(row.title ?? row.name ?? "").trim();
+  }
+  return "";
+}
+
+const categoryLine = Array.isArray(categories)
+  ? categories.map(categoryLabel).filter(Boolean).join(" | ")
+  : "";
+
 if (!Astro.props.post || !title) {
   return themeRedirect("/trabalhos");
 }
@@ -225,13 +239,7 @@ function getVideoID(vimeoUrl: string) {
           <div class="job-content-sticky">
             <header class="job--header">
               <h2 class="edgtf-st-title">{title}</h2>
-              <h3 class="edgtf-st-text">
-                {
-                  categories
-                    ? categories.map((cat: any) => cat.title).join(" | ")
-                    : ""
-                }
-              </h3>
+              <h3 class="edgtf-st-text">{categoryLine}</h3>
             </header>
             <div class="elementor-widget-container" set:html={body ?? ""} />
             <ul class="ficha-tecnica">
