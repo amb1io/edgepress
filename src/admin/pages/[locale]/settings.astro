@@ -51,19 +51,15 @@ try {
 }
 
 let kvItems: { key: string; valuePreview: string }[] = [];
+let kvListError: string | null = null;
 if (domain === "cache") {
-  const baseUrl = Astro.url.origin;
-  const cookie = Astro.request.headers.get("cookie") ?? "";
-  try {
-    const res = await fetch(`${baseUrl}/api/kv-list`, {
-      headers: { cookie },
-    });
-    if (res.ok) {
-      const data = (await res.json()) as { ok?: boolean; items?: { key: string; valuePreview: string }[] };
-      kvItems = data.items ?? [];
-    }
-  } catch {
-    kvItems = [];
+  const { getKvFromLocals } = await import("../../../utils/runtime-locals.ts");
+  const { listKvCacheEntries } = await import("../../../utils/kv-list-entries.ts");
+  const result = await listKvCacheEntries(getKvFromLocals(Astro.locals));
+  if (result.ok) {
+    kvItems = result.items;
+  } else {
+    kvListError = result.message;
   }
 }
 
@@ -152,6 +148,7 @@ if (showPostTypes) {
     menuItems={menuItems}
     currentUser={{ email: user.email ?? "", name: user.name ?? "" }}
     kvItems={kvItems}
+    kvListError={kvListError}
     pageLength={datalistPageLength}
   />
 ) : showPostTypes ? (

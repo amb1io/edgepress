@@ -5,68 +5,26 @@
  */
 import type { APIRoute } from "astro";
 import { requireMinRole } from "../../utils/api-auth.ts";
+import { listKvCacheEntries } from "../../utils/kv-list-entries.ts";
 import { getKvFromLocals } from "../../utils/runtime-locals.ts";
 
 export const prerender = false;
-
-const MAX_KEYS = 500;
-const VALUE_PREVIEW_LENGTH = 200;
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const authResult = await requireMinRole(request, 0, locals);
   if (authResult instanceof Response) return authResult;
 
-  const kv = getKvFromLocals(locals);
+  const result = await listKvCacheEntries(getKvFromLocals(locals));
 
-  if (!kv || typeof kv.list !== "function") {
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        message: "KV (edgepress_cache) not configured",
-      }),
-      { status: 503, headers: { "Content-Type": "application/json" } },
-    );
-  }
-
-  try {
-    const items: { key: string; valuePreview: string }[] = [];
-    let cursor: string | undefined;
-    let total = 0;
-
-    do {
-      const result = await kv.list!({ limit: 100, ...(cursor !== undefined && { cursor }) });
-      for (const { name } of result.keys) {
-        if (total >= MAX_KEYS) break;
-        let valuePreview = "—";
-        try {
-          const raw = await kv.get(name, "text");
-          if (raw != null && typeof raw === "string") {
-            valuePreview =
-              raw.length <= VALUE_PREVIEW_LENGTH
-                ? raw
-                : raw.slice(0, VALUE_PREVIEW_LENGTH) + "…";
-          }
-        } catch {
-          valuePreview = "(erro ao ler)";
-        }
-        items.push({ key: name, valuePreview });
-        total++;
-      }
-      cursor = result.list_complete ? undefined : result.cursor;
-    } while (cursor && total < MAX_KEYS);
-
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        items,
-      }),
-      { status: 200, headers: { "Content-Type": "application/json" } },
-    );
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "KV error";
-    return new Response(JSON.stringify({ ok: false, message }), {
-      status: 500,
+  if (!result.ok) {
+    return new Response(JSON.stringify({ ok: false, message: result.message }), {
+      status: result.message.includes("not configured") ? 503 : 500,
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  return new Response(JSON.stringify({ ok: true, items: result.items }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 };
