@@ -27,7 +27,17 @@ const currentLocale = locale as Locale;
 <header
   class="bg-base-100 border-b border-base-300 px-6 min-h-14 flex items-center justify-between shrink-0"
 >
-  <h1 class="text-xl font-semibold truncate">{title}</h1>
+  <div class="flex items-center gap-2 min-w-0">
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-square lg:hidden shrink-0"
+      data-admin-sidebar-mobile-open
+      aria-label={t(currentLocale, "admin.sidebar.openMenu")}
+    >
+      <Icon name="line-md:menu" size={22} aria-hidden="true" />
+    </button>
+    <h1 class="text-xl font-semibold truncate">{title}</h1>
+  </div>
   <div class="flex items-center gap-3 shrink-0">
     <div class="dropdown dropdown-end">
       <label tabindex="0" class="btn btn-ghost btn-sm">

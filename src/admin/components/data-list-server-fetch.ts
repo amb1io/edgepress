@@ -70,8 +70,8 @@ function mapDataTablesOrder(
   displayColumnKeys: string[],
   sortableColumnKeys: string[],
   columnIndexOffset: number,
-): ListOrderEntry[] {
-  const entries: ListOrderEntry[] = [];
+): DataListOrderEntry[] {
+  const entries: DataListOrderEntry[] = [];
   for (const o of order) {
     const displayIndex = o.column - columnIndexOffset;
     const column = displayColumnKeys[displayIndex];
@@ -135,13 +135,14 @@ export function createServerFetchAjax(
       options.columnIndexOffset,
     );
 
-    const serialized =
+    const effectiveOrders =
       orders.length > 0
-        ? {
-            order: orders.map((o) => o.column).join(","),
-            orderDir: orders.map((o) => o.dir).join(","),
-          }
-        : {};
+        ? orders
+        : [{ column: "created_at", dir: "desc" as const }];
+    const serialized = {
+      order: effectiveOrders.map((o) => o.column).join(","),
+      orderDir: effectiveOrders.map((o) => o.dir).join(","),
+    };
 
     void fetch(fetchConfig.url, {
       method: "POST",
@@ -153,7 +154,7 @@ export function createServerFetchAjax(
         limit,
         search,
         ...serialized,
-        ...(orders.length > 1 ? { orders } : {}),
+        ...(effectiveOrders.length > 1 ? { orders: effectiveOrders } : {}),
       }),
     })
       .then((res) => (res.ok ? res.json() : null))

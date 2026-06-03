@@ -1,6 +1,7 @@
 ---
 import "../../assets/app.css";
 import "../styles/data-list.css";
+import "../styles/admin-sidebar.css";
 import { type Locale } from "../../i18n/index.ts";
 import type { MenuItem } from "../../utils/menu.ts";
 import AdminHeader from "../components/AdminHeader.astro";
@@ -37,8 +38,9 @@ const currentLocale = locale as Locale;
   </head>
   <body class="min-h-screen bg-base-200">
     <HtmxLoader />
-    <div class="flex min-h-screen">
-      <div class="w-1/12 min-w-[200px] shrink-0" aria-hidden="true"></div>
+    <div class="admin-layout flex min-h-screen">
+      <div class="admin-layout__sidebar-spacer" aria-hidden="true"></div>
+      <div class="admin-sidebar-backdrop" data-admin-sidebar-backdrop aria-hidden="true"></div>
       <AdminSidebar locale={locale} menuItems={menuItems} />
 
       <div class="flex-1 flex flex-col min-w-0">

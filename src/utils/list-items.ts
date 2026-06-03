@@ -55,7 +55,31 @@ const SORTABLE_COLUMNS = [
   "status",
   "created_at",
   "updated_at",
+  "order",
+  "language",
+  "categories",
+  "tags",
 ] as const;
+
+const categoriesSortExpr = sql<string>`(
+  SELECT MIN(${taxonomies.name})
+  FROM ${postsTaxonomies}
+  INNER JOIN ${taxonomies} ON ${eq(postsTaxonomies.term_id, taxonomies.id)}
+  WHERE ${eq(postsTaxonomies.post_id, posts.id)}
+    AND ${taxonomies.type} != 'tag'
+)`;
+
+const tagsSortExpr = sql<string>`(
+  SELECT MIN(${taxonomies.name})
+  FROM ${postsTaxonomies}
+  INNER JOIN ${taxonomies} ON ${eq(postsTaxonomies.term_id, taxonomies.id)}
+  WHERE ${eq(postsTaxonomies.post_id, posts.id)}
+    AND ${taxonomies.type} = 'tag'
+)`;
+
+const orderMetaSortExpr = sql<number>`CAST(
+  COALESCE(NULLIF(json_extract(${posts.meta_values}, '$.order'), ''), '0') AS INTEGER
+)`;
 
 /**
  * Busca e retorna uma lista paginada de posts com suas taxonomias
@@ -94,6 +118,10 @@ export async function getListItems(
     if (column === "id") return orderFn(posts.id);
     if (column === "title") return orderFn(posts.title);
     if (column === "status") return orderFn(posts.status);
+    if (column === "order") return orderFn(orderMetaSortExpr);
+    if (column === "language") return orderFn(locales.language);
+    if (column === "categories") return orderFn(categoriesSortExpr);
+    if (column === "tags") return orderFn(tagsSortExpr);
     if (column === "created_at") return orderFn(posts.created_at);
     return orderFn(posts.updated_at);
   }

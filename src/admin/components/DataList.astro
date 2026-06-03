@@ -188,7 +188,16 @@ const dtConfig: DataListTableConfig = {
         ),
         orderUrlTemplate: toOrderUrlTemplate(serverOrder.buildOrderUrl),
       }
-    : {}),
+    : serverFetch
+      ? {
+          initialOrder: buildDataTableInitialOrder(
+            [{ column: "created_at", dir: "desc" }],
+            displayColumnKeys,
+            sortableColumnKeys,
+            columnIndexOffset,
+          ),
+        }
+      : {}),
   ...(pagination?.buildLimitUrl
     ? { limitUrlTemplate: toLimitUrlTemplate(pagination.buildLimitUrl) }
     : {}),

@@ -1,6 +1,6 @@
 ---
 /**
- * Menu lateral do admin. Extraído do AdminLayout para facilitar testes e alterações.
+ * Menu lateral do admin com drawer (recolher/expandir) e blocos colapsáveis.
  */
 import { Icon } from "astro-icon/components";
 import { t, type Locale } from "../../i18n/index.ts";
@@ -14,7 +14,6 @@ export interface Props {
 const { locale, menuItems } = Astro.props;
 const currentLocale = locale as Locale;
 
-/** Gera URLs no padrão /admin/{locale}/{menu_destination}. */
 const adminBase = (path: string) => {
   const cleaned = path.replace(/^\/+/, "");
   if (cleaned === "admin") {
@@ -27,7 +26,6 @@ const adminBase = (path: string) => {
   return `/admin/${currentLocale}/${cleaned}`;
 };
 
-/** Preserva query string em links do menu (ex: admin/content?post_type=post&action=new). */
 const menuHref = (link: string) => {
   const i = link.indexOf("?");
   if (i === -1) return adminBase(link);
@@ -35,17 +33,23 @@ const menuHref = (link: string) => {
 };
 ---
 
-<aside
-  class="fixed top-0 left-0 z-30 w-1/12 min-w-[200px] h-screen bg-base-100 border-r border-base-300 flex flex-col overflow-y-auto"
-  aria-label="Sidebar"
->
-  <div class="px-4 flex items-center min-h-14 border-b border-base-300">
-    <a href={adminBase("admin")} class="font-semibold text-lg text-primary">
+<aside id="admin-sidebar" class="admin-sidebar" aria-label={t(currentLocale, "admin.sidebar.label")}>
+  <div class="admin-sidebar__header">
+    <a href={adminBase("admin")} class="admin-sidebar__brand">
       {t(currentLocale, "admin.brand")}
     </a>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-square admin-sidebar__drawer-toggle"
+      data-admin-sidebar-drawer-toggle
+      aria-expanded="true"
+      aria-label={t(currentLocale, "admin.sidebar.toggleDrawer")}
+    >
+      <Icon name="line-md:menu-fold-left" size={20} aria-hidden="true" />
+    </button>
   </div>
-  <nav class="flex-1 p-2" aria-label="Menu admin">
-    <ul class="menu menu-lg rounded-none gap-1 bg-transparent p-0 min-w-full">
+  <nav class="admin-sidebar__nav" aria-label={t(currentLocale, "admin.sidebar.navLabel")}>
+    <ul class="admin-sidebar__sections">
       {
         menuItems.map((item) => {
           const parentName =
@@ -71,101 +75,115 @@ const menuHref = (link: string) => {
           if (parentLink !== null && !hasSubmenu) {
             return (
               <li>
-                <a
-                  href={menuHref(parentLink)}
-                  class="rounded-md gap-2 py-2 font-medium flex items-center"
-                >
-                  <Icon name={item.icon} size={20} />
-                  {parentName}
+                <a href={menuHref(parentLink)} class="admin-sidebar__single-link">
+                  <Icon name={item.icon} size={20} class="admin-sidebar__section-icon" />
+                  <span>{parentName}</span>
                 </a>
               </li>
             );
           }
-          if (parentLink !== null && hasSubmenu) {
+
+          const panelOptions =
+            hasSubmenu
+              ? submenuOptions
+              : item.menuOptions.length > 0
+                ? item.menuOptions
+                : [];
+
+          if (panelOptions.length === 0) {
+            const first = item.menuOptions[0];
+            const resolved = first
+              ? resolveMenuOption(
+                  first,
+                  item.postTypeSlug,
+                  item.postTypeName,
+                  currentLocale,
+                  t,
+                )
+              : {
+                  text: parentName,
+                  link: `admin/${item.postTypeSlug}`,
+                  icon: "line-md:document",
+                };
             return (
-              <li class="menu-item-parent">
-                <a
-                  href={menuHref(parentLink)}
-                  class="rounded-md gap-2 py-2 font-medium flex items-center"
-                >
-                  <Icon name={item.icon} size={20} />
-                  {parentName}
+              <li>
+                <a href={menuHref(resolved.link)} class="admin-sidebar__single-link">
+                  <Icon name={item.icon} size={20} class="admin-sidebar__section-icon" />
+                  <span>{resolved.text}</span>
                 </a>
-                <ul class="menu gap-1 bg-transparent p-0 pl-4 min-w-full border-l border-base-300 ml-2">
-                  {submenuOptions.map((opt) => {
-                    const resolved = resolveMenuOption(
-                      opt,
-                      item.postTypeSlug,
-                      item.postTypeName,
-                      currentLocale,
-                      t,
-                    );
-                    return (
-                      <li>
-                        <a
-                          href={menuHref(resolved.link)}
-                          class="rounded-md gap-2 text-sm"
-                        >
-                          {resolved.text}
-                        </a>
-                      </li>
-                    );
-                  })}
-                </ul>
               </li>
             );
           }
-          if (item.menuOptions.length > 0) {
-            return (
-              <li class="menu-item-parent">
-                <span class="rounded-md gap-2 py-2 font-medium text-base-content/80 flex items-center">
-                  <Icon name={item.icon} size={20} />
-                  {parentName}
-                </span>
-                <ul class="menu gap-1 bg-transparent p-0 pl-4 min-w-full border-l border-base-300 ml-2">
-                  {item.menuOptions.map((opt) => {
-                    const resolved = resolveMenuOption(
-                      opt,
-                      item.postTypeSlug,
-                      item.postTypeName,
-                      currentLocale,
-                      t,
-                    );
-                    return (
-                      <li>
-                        <a
-                          href={menuHref(resolved.link)}
-                          class="rounded-md gap-2 text-sm"
-                        >
-                          {resolved.text}
-                        </a>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </li>
-            );
-          }
-          const first = item.menuOptions[0];
-          const resolved = first
-            ? resolveMenuOption(
-                first,
-                item.postTypeSlug,
-                item.postTypeName,
-                currentLocale,
-                t,
-              )
-            : {
-                text: parentName,
-                link: `admin/${item.postTypeSlug}`,
-                icon: "line-md:document",
-              };
+
+          const firstPanelResolved = resolveMenuOption(
+            panelOptions[0],
+            item.postTypeSlug,
+            item.postTypeName,
+            currentLocale,
+            t,
+          );
+          const drawerIconHref = menuHref(firstPanelResolved.link);
+
           return (
-            <li>
-              <a href={menuHref(resolved.link)} class="rounded-md gap-2">
-                <Icon name={item.icon} size={20} />
-                {resolved.text}
-              </a>
+            <li
+              class="admin-sidebar__section"
+              data-section-slug={item.postTypeSlug}
+            >
+              <div class="admin-sidebar__section-head">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm btn-square shrink-0 min-h-0 h-8 w-8 p-0"
+                  data-admin-sidebar-section-toggle
+                  aria-expanded="true"
+                  aria-label={t(currentLocale, "admin.sidebar.toggleSection", { name: parentName })}
+                >
+                  <Icon
+                    name="line-md:chevron-down"
+                    size={18}
+                    class="admin-sidebar__section-chevron"
+                    aria-hidden="true"
+                  />
+                </button>
+                <a
+                  href={drawerIconHref}
+                  class="admin-sidebar__section-drawer-link"
+                  aria-label={firstPanelResolved.text}
+                  title={firstPanelResolved.text}
+                >
+                  <Icon name={item.icon} size={20} class="admin-sidebar__section-icon" />
+                </a>
+                {parentLink !== null ? (
+                  <a href={menuHref(parentLink)} class="admin-sidebar__section-link">
+                    <Icon name={item.icon} size={20} class="admin-sidebar__section-icon admin-sidebar__section-icon--expanded" />
+                    <span class="admin-sidebar__section-label">{parentName}</span>
+                  </a>
+                ) : (
+                  <span class="admin-sidebar__section-link text-base-content/80">
+                    <Icon name={item.icon} size={20} class="admin-sidebar__section-icon admin-sidebar__section-icon--expanded" />
+                    <span class="admin-sidebar__section-label">{parentName}</span>
+                  </span>
+                )}
+              </div>
+              <div class="admin-sidebar__section-panel">
+                <ul class="admin-sidebar__submenu">
+                  {panelOptions.map((opt) => {
+                    const resolved = resolveMenuOption(
+                      opt,
+                      item.postTypeSlug,
+                      item.postTypeName,
+                      currentLocale,
+                      t,
+                    );
+                    return (
+                      <li>
+                        <a href={menuHref(resolved.link)}>
+                          <span>{resolved.text}</span>
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             </li>
           );
         })
@@ -173,3 +191,8 @@ const menuHref = (link: string) => {
     </ul>
   </nav>
 </aside>
+
+<script>
+  import { bindAdminSidebarInit } from "./admin-sidebar.ts";
+  bindAdminSidebarInit();
+</script>

@@ -109,6 +109,25 @@ describe("getListItems", () => {
     expect(descTitle.items[0]?.title).toBe("Third Post");
   });
 
+  it("defaults to created_at desc when order is omitted", async () => {
+    const result = await getListItems(db, { type: "post", limit: 10, page: 1 });
+    const byCreatedDesc = await getListItems(db, {
+      type: "post",
+      order: "created_at",
+      orderDir: "desc",
+      limit: 10,
+      page: 1,
+    });
+    expect(result.items.map((i) => i.id)).toEqual(byCreatedDesc.items.map((i) => i.id));
+  });
+
+  it("orders by meta order column", async () => {
+    const desc = await getListItems(db, { type: "post", order: "order", orderDir: "desc", limit: 10, page: 1 });
+    const asc = await getListItems(db, { type: "post", order: "order", orderDir: "asc", limit: 10, page: 1 });
+    expect(desc.items.length).toBeGreaterThan(0);
+    expect(asc.items.length).toBeGreaterThan(0);
+  });
+
   it("filters by title (LIKE)", async () => {
     const result = await getListItems(db, { type: "post", limit: 10, page: 1, filter: { title: "Second" } });
     expect(result.total).toBe(1);
