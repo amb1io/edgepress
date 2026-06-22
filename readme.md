@@ -174,9 +174,9 @@ npm run build:seed
 ### CI: themes and deploy
 
 1. **`theme-import-dispatch.yml`** — downloads a public theme from GitHub, packages it, uploads to R2, and calls the callback.
-2. **`deploy-app.yml`** — hydrates the active theme from R2, validates checksum, runs `npm run build`, and deploys with `wrangler deploy`.
+2. **`deploy-app.yml`** — hydrates the active theme from R2, validates checksum, runs `npm run build`, and deploys with `wrangler deploy`. It is triggered automatically after a successful theme import callback (`edgepress_deploy` via `repository_dispatch`), or manually / on push to `main`.
 
-Required secrets are documented in the workflows and in `.env.example` (`THEME_IMPORT_*`, `THEME_PACKAGE_*`, R2 and Cloudflare credentials).
+Required secrets are documented in the workflows and in `.env.example` (`THEME_IMPORT_*`, `THEME_DEPLOY_EVENT_TYPE`, `THEME_PACKAGE_*`, R2 and Cloudflare credentials). Theme import and auto-deploy reuse the same `THEME_IMPORT_GITHUB_TOKEN` and `THEME_IMPORT_DISPATCH_REPO`.
 
 ## Project structure
 

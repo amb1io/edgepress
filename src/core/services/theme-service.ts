@@ -56,6 +56,7 @@ export type ThemeImportStatus =
   | "idle"
   | "importing"
   | "packaged"
+  | "deploying"
   | "ready"
   | "failed";
 
@@ -501,6 +502,7 @@ export function parseThemeImportState(metaValuesRaw: string | null): ThemeImport
   const import_status: ThemeImportStatus =
     importStatusRaw === "importing" ||
     importStatusRaw === "packaged" ||
+    importStatusRaw === "deploying" ||
     importStatusRaw === "ready" ||
     importStatusRaw === "failed"
       ? importStatusRaw
