@@ -6,9 +6,14 @@ import {
   hasValidThemePackageMeta,
   getThemeSnapshotById,
   getThemeSnapshotBySlug,
+  parseThemeImportState,
   validateThemeCanonicalMeta,
   withThemeImportState,
 } from "../../../core/services/theme-service.ts";
+import {
+  resolveThemeImportCallbackOutcome,
+  triggerWorkerDeployFromRuntime,
+} from "../../../core/services/theme-deploy-trigger.ts";
 import {
   syncThemeCache,
   syncThemeStatusCacheByPostId,
@@ -112,10 +117,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
   });
   const canActivate = success && packageValidation.valid && hasValidThemePackageMeta(candidateMeta);
 
+  const previousState = parseThemeImportState(snapshot.meta_values);
+  const { shouldTriggerDeploy, importStatus } = resolveThemeImportCallbackOutcome({
+    previousState,
+    success,
+    canActivate,
+  });
+
   const nextMetaValues = withThemeImportState(JSON.stringify(existingMeta), {
     requested_active: false,
     is_active: canActivate,
-    import_status: canActivate ? "ready" : success ? "packaged" : "failed",
+    import_status: importStatus,
     import_error: canActivate
       ? undefined
       : success
@@ -136,10 +148,21 @@ export const POST: APIRoute = async ({ request, locals }) => {
   await syncThemeStatusCacheByPostId(locals, db, snapshot.id);
   await syncThemeCache(locals, db);
 
+  if (shouldTriggerDeploy) {
+    void triggerWorkerDeployFromRuntime(locals, {
+      theme_post_id: snapshot.id,
+      theme_slug: snapshot.slug,
+      requested_by: "theme-import-callback",
+    }).catch((err) => {
+      console.error("[themes] deploy trigger failed", err);
+    });
+  }
+
   return jsonResponse({
     ok: true,
     theme_post_id: snapshot.id,
     theme_slug: snapshot.slug,
-    status: canActivate ? "ready" : success ? "packaged" : "failed",
+    status: importStatus,
+    deploy_triggered: shouldTriggerDeploy,
   });
 };

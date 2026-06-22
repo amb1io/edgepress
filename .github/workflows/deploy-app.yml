@@ -17,6 +17,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Log deploy dispatch payload
+        if: github.event_name == 'repository_dispatch'
+        run: |
+          echo "Deploy triggered via repository_dispatch"
+          echo "theme_post_id=${{ github.event.client_payload.theme_post_id }}"
+          echo "theme_slug=${{ github.event.client_payload.theme_slug }}"
+          echo "requested_by=${{ github.event.client_payload.requested_by }}"
+
       - name: Fetch active theme package metadata
         id: theme_meta
         env:
