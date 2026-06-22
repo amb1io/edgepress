@@ -104,4 +104,14 @@ describe("theme-service", () => {
     const state = parseThemeImportState(serialized);
     expect(state.import_status).toBe("packaged");
   });
+
+  it("parses deploying import status", () => {
+    const serialized = JSON.stringify({
+      import_status: "deploying",
+      requested_active: "0",
+      is_active: "1",
+    });
+    const state = parseThemeImportState(serialized);
+    expect(state.import_status).toBe("deploying");
+  });
 });
