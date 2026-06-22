@@ -1,4 +1,4 @@
-name = "farra-media"
+name = "edgepress"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
@@ -8,8 +8,8 @@ binding = "ASSETS"
 
 # Production (default): `wrangler deploy`
 [vars]
-BETTER_AUTH_URL = "https://farra.media"
-BETTER_AUTH_TRUSTED_ORIGINS = "https://farra-media.rhamses.workers.dev,https://feat-farra-theme.rhamses.workers.dev,https://farra.media"
+BETTER_AUTH_URL = "https://edgepress.amb1.workers.dev"
+BETTER_AUTH_TRUSTED_ORIGINS = "https://edgepress.amb1.workers.dev"
 RATE_LIMIT_LOGIN_MAX = "10"
 RATE_LIMIT_LOGIN_WINDOW_MIN = "5"
 RATE_LIMIT_REGISTER_MAX = "10"
@@ -20,8 +20,8 @@ RESEND_FROM = "contato@amb1.io"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "farramedia"
-database_id = "66818b1a-46bd-40f7-9ddd-4ccff677055d"
+database_name = "edgepress"
+database_id = "adf7f002-517e-4e53-8a3f-c870226ad418"
 preview_database_id = "fbe4ede5-a168-4a33-8570-4c62be8b1c94"
 migrations_dir = "./drizzle"
 
@@ -31,12 +31,12 @@ id = "00ca0b8ef45143f6aede0d5dd2d32e65"
 
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
-bucket_name = "farramedia"
+bucket_name = "edgepress-media"
 
 # Preview/staging: `wrangler deploy --env preview`
 [env.preview.vars]
-BETTER_AUTH_URL = "https://feat-farra-theme.rhamses.workers.dev"
-BETTER_AUTH_TRUSTED_ORIGINS = "https://feat-farra-theme.rhamses.workers.dev"
+BETTER_AUTH_URL = "https://edgepress.amb1.workers.dev"
+BETTER_AUTH_TRUSTED_ORIGINS = "https://edgepress.amb1.workers.dev"
 RATE_LIMIT_LOGIN_MAX = "10"
 RATE_LIMIT_LOGIN_WINDOW_MIN = "5"
 RATE_LIMIT_REGISTER_MAX = "10"
@@ -47,9 +47,8 @@ RESEND_FROM = "contato@amb1.io"
 
 [[env.preview.d1_databases]]
 binding = "DB"
-database_name = "farramedia"
-database_id = "66818b1a-46bd-40f7-9ddd-4ccff677055d"
-preview_database_id = "fbe4ede5-a168-4a33-8570-4c62be8b1c94"
+database_name = "edgepress-dev"
+database_id = "fbe4ede5-a168-4a33-8570-4c62be8b1c94"
 migrations_dir = "./drizzle"
 
 [[env.preview.kv_namespaces]]
@@ -58,7 +57,7 @@ id = "00ca0b8ef45143f6aede0d5dd2d32e65"
 
 [[env.preview.r2_buckets]]
 binding = "MEDIA_BUCKET"
-bucket_name = "farramedia-preview"
+bucket_name = "edgepress-media-preview"
 
 [observability]
 enabled = true
