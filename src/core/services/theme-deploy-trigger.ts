@@ -1,5 +1,6 @@
 import { env as cfEnv } from "cloudflare:workers";
 import type { ThemeImportState, ThemeImportStatus } from "./theme-service.ts";
+import { postRepositoryDispatch } from "./github-repository-dispatch.ts";
 
 export type DeployTriggerPayload = {
   theme_post_id: number;
@@ -66,22 +67,12 @@ export async function triggerWorkerDeployFromRuntime(
     return;
   }
 
-  const response = await fetch(`https://api.github.com/repos/${dispatchRepo}/dispatches`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "Content-Type": "application/json",
-      "User-Agent": "edgepress-theme-deploy",
-    },
-    body: JSON.stringify({
-      event_type: eventType,
-      client_payload: payload,
-    }),
+  await postRepositoryDispatch({
+    dispatchRepo,
+    token,
+    eventType,
+    clientPayload: payload,
+    userAgent: "edgepress-theme-deploy",
+    logLabel: "deploy trigger",
   });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(`GitHub deploy dispatch failed (${response.status}): ${body.slice(0, 500)}`);
-  }
 }

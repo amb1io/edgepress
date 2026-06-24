@@ -51,7 +51,7 @@ describe("theme-import-trigger", () => {
           requested_by: "user-1",
         }
       )
-    ).rejects.toThrow("GitHub dispatch failed");
+    ).rejects.toThrow("import trigger failed");
 
     fetchMock.mockRestore();
   });
