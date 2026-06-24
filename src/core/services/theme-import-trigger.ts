@@ -1,4 +1,5 @@
 import { env as cfEnv } from "cloudflare:workers";
+import { postRepositoryDispatch } from "./github-repository-dispatch.ts";
 
 type TriggerPayload = {
   theme_post_id: number;
@@ -24,22 +25,12 @@ export async function triggerThemeImportFromRuntime(
     return;
   }
 
-  const response = await fetch(`https://api.github.com/repos/${dispatchRepo}/dispatches`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "Content-Type": "application/json",
-      "User-Agent": "edgepress-theme-import",
-    },
-    body: JSON.stringify({
-      event_type: eventType,
-      client_payload: payload,
-    }),
+  await postRepositoryDispatch({
+    dispatchRepo,
+    token,
+    eventType,
+    clientPayload: payload,
+    userAgent: "edgepress-theme-import",
+    logLabel: "import trigger",
   });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(`GitHub dispatch failed (${response.status}): ${body.slice(0, 500)}`);
-  }
 }

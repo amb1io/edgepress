@@ -128,7 +128,7 @@ describe("theme-deploy-trigger", () => {
         theme_slug: "theme-a",
         requested_by: "theme-import-callback",
       })
-    ).rejects.toThrow("GitHub deploy dispatch failed");
+    ).rejects.toThrow("deploy trigger failed");
 
     fetchMock.mockRestore();
   });
@@ -151,7 +151,7 @@ describe("theme-deploy-trigger", () => {
     const body = JSON.parse(String(init.body));
     expect(body.event_type).toBe("custom_deploy");
     expect(body.client_payload).toEqual({
-      theme_post_id: 42,
+      theme_post_id: "42",
       theme_slug: "my-theme",
       requested_by: "theme-import-callback",
     });
