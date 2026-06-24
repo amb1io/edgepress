@@ -274,6 +274,13 @@ export async function POST({
         action === "edit" && existingImportState.is_active === true;
       shouldQueueThemeImport = requestedActive && !isAlreadyActive;
 
+      if (post_type === "themes" && requestedActive && !shouldQueueThemeImport) {
+        console.info(
+          "[themes] import trigger skipped: theme already active",
+          JSON.stringify({ theme_slug: slug, import_status: existingImportState.import_status })
+        );
+      }
+
       delete metaValues["is_active"];
       metaValues["requested_active"] = requestedActive ? "1" : "0";
       if (shouldQueueThemeImport) {
