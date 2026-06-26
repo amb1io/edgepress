@@ -28,7 +28,7 @@ describe("theme-service", () => {
     const supports = normalizeSupports("single,archive");
 
     expect(slug).toBe("my-theme");
-    expect(path).toBe("src/pages/themes/my-theme");
+    expect(path).toBe("themes/my-theme");
     expect(ref).toBe("develop");
     expect(subdir).toBe("packages/theme");
     expect(supports).toEqual(["single", "archive"]);
@@ -38,7 +38,7 @@ describe("theme-service", () => {
     const validation = validateThemeCanonicalMeta(
       {
         theme_slug: "theme-a",
-        theme_path: "src/pages/themes/theme-a",
+        theme_path: "themes/theme-a",
         supports: [],
       },
       { requireGithubRepoUrl: true }
@@ -51,7 +51,7 @@ describe("theme-service", () => {
     const validation = validateThemeCanonicalMeta(
       {
         theme_slug: "theme-a",
-        theme_path: "src/pages/themes/theme-a",
+        theme_path: "themes/theme-a",
         supports: [],
         github_repo_url: "https://github.com/acme/theme-a",
       },
@@ -67,7 +67,7 @@ describe("theme-service", () => {
     const validation = validateThemeCanonicalMeta(
       {
         theme_slug: "theme-a",
-        theme_path: "src/pages/themes/theme-a",
+        theme_path: "themes/theme-a",
         supports: [],
         r2_key: "themes/theme-a/v1/theme.zip",
         package_version: "v1",
