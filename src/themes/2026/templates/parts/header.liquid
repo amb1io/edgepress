@@ -1,0 +1,19 @@
+{% comment %}Partial: cabeçalho com menu primário e seletor de idioma{% endcomment %}
+<header class="site-header">
+  <div class="site-header-inner">
+    <a href="{{ site.home_url }}" class="site-brand">{{ site.title }}</a>
+    <div class="site-header-actions">
+      {% nav_menu 'primary' %}
+      <nav class="site-lang-switcher" aria-label="Language">
+        {% for item in locale_switcher %}
+          <a
+            href="{{ item.url }}"
+            class="site-lang-link{% if item.active %} is-active{% endif %}"
+            hreflang="{{ item.code }}"
+            aria-label="{{ item.label }}"
+          >{{ item.flag }}</a>
+        {% endfor %}
+      </nav>
+    </div>
+  </div>
+</header>

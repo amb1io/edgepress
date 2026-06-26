@@ -1,0 +1,20 @@
+{% layout 'layouts/base' %}
+<section class="archive">
+  <header class="archive-header">
+    <h1>{{ archive.title | default: "Arquivo" }}</h1>
+  </header>
+  <div class="post-grid">
+    {% for item in posts %}
+      <article class="post-card">
+        <h2><a href="{{ site.locale_prefix }}/{{ item.slug }}">{{ item.title }}</a></h2>
+        {% if item.excerpt %}
+          <p>{{ item.excerpt }}</p>
+        {% endif %}
+        <time>{{ item.published_at | post_date }}</time>
+      </article>
+    {% else %}
+      <p>Nenhum conteúdo publicado.</p>
+    {% endfor %}
+  </div>
+  {% pagination %}
+</section>

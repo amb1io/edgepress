@@ -14,6 +14,8 @@ import {
   getSafeTableName,
   getTableNames,
   prefixedTable,
+  stripTablePrefix,
+  TABLE_PREFIX,
   escapeIdentifier,
   VALID_TABLE_IDENTIFIER,
 } from "../../utils/db-utils.ts";
@@ -220,7 +222,7 @@ export async function getTableContentListResult(
 ): Promise<ContentListResponse> {
   const { limit, page, order, orderDir, filter: initialFilter } = mergedSearchToTableListOptions(merged, safeTable);
   let filter = initialFilter;
-  if (safeTable === "posts" && (merged["locale"] || merged["locale_id"] || merged["id_locale_code"])) {
+  if (stripTablePrefix(safeTable) === "posts" && (merged["locale"] || merged["locale_id"] || merged["id_locale_code"])) {
     filter = await resolvePostLocaleFilter(filter, merged);
   }
 
@@ -235,7 +237,7 @@ export async function getTableContentListResult(
   const result = await getTableContentWithCache({
     kv,
     db,
-    table: safeTable,
+    table: stripTablePrefix(safeTable),
     params,
   });
 
@@ -398,7 +400,9 @@ export async function getPostOrRowPayload(
   const isNumericId = /^\d+$/.test(idOrSlug);
   const idNum = isNumericId ? parseInt(idOrSlug, 10) : null;
 
-  if (safeTable === "posts") {
+  const logicalTable = stripTablePrefix(safeTable);
+
+  if (logicalTable === "posts") {
     const bySlug = !isNumericId;
     if (bySlug && resolveOptions?.resolve === "translation_key") {
       return getPostPayloadByTranslationKey(
@@ -476,8 +480,10 @@ export async function getPostOrRowPayload(
     throw new ContentBadRequestError("For this table only numeric id is supported");
   }
 
-  // safeTable é o nome lógico (ex: "settings"). No banco físico, as tabelas têm prefixo (ex: "edp_settings").
-  const physicalTable = prefixedTable(safeTable);
+  // safeTable de getSafeTableName já é físico (edp_*); aceita lógico por compatibilidade.
+  const physicalTable = safeTable.startsWith(TABLE_PREFIX)
+    ? safeTable
+    : prefixedTable(logicalTable);
   const quotedTable = `"${escapeIdentifier(physicalTable)}"`;
   const rows = await db.all(sql.raw(`SELECT * FROM ${quotedTable} WHERE "id" = ${idNum} LIMIT 1`)) as Record<
     string,

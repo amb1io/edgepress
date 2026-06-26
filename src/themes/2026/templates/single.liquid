@@ -1,0 +1,11 @@
+{% layout 'layouts/base' %}
+<article class="entry entry-single">
+  <header class="entry-header">
+    <h1>{{ post.title }}</h1>
+    <p class="entry-meta">
+      {{ post.published_at | post_date }}
+      {% if post.author_name %} · {{ post.author_name }}{% endif %}
+    </p>
+  </header>
+  {% the_content %}
+</article>

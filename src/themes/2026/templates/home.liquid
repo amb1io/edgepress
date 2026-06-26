@@ -1,0 +1,25 @@
+{% layout 'layouts/base' %}
+{% comment %}
+  Template: home
+  Variáveis: site, post (conteúdo da home), seo, menus, theme
+  Tags: {% the_content %}, {{ post.title }}, filtros |post_date, |asset
+{% endcomment %}
+<section class="hero">
+  <h1>{{ post.title | default: site.title }}</h1>
+  {% if post.excerpt %}
+    <p class="lead">{{ post.excerpt }}</p>
+  {% endif %}
+</section>
+<section class="entry">
+  {% the_content %}
+</section>
+<aside class="theme-api-demo">
+  <h2>Theme API (tutorial)</h2>
+  <ul>
+    <li><code>{% raw %}{% seo_head %}{% endraw %}</code> — meta tags padronizadas do core</li>
+    <li><code>{% raw %}{% the_content %}{% endraw %}</code> — corpo HTML sanitizado</li>
+    <li><code>{% raw %}{% nav_menu 'primary' %}{% endraw %}</code> — menu do CMS</li>
+    <li><code>{% raw %}{{ 'theme.css' | asset }}{% endraw %}</code> → {{ 'theme.css' | asset }}</li>
+    <li><code>{% raw %}{{ post.published_at | post_date }}{% endraw %}</code> → {{ post.published_at | post_date }}</li>
+  </ul>
+</aside>

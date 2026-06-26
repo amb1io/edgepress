@@ -17,7 +17,6 @@ RATE_LIMIT_REGISTER_WINDOW_MIN = "10"
 RATE_LIMIT_UPLOAD_MAX = "100"
 RATE_LIMIT_UPLOAD_WINDOW_MIN = "10"
 RESEND_FROM = "contato@amb1.io"
-THEME_IMPORT_DISPATCH_REPO = "amb1io/edgepress"
 
 [[d1_databases]]
 binding = "DB"
