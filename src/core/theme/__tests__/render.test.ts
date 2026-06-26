@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderTheme, resetLiquidForTests } from "../render.ts";
-import { defaultThemePackage } from "../../../themes-default/2026/bundle.ts";
+import { defaultThemePackage } from "../../../themes/2026/bundle.ts";
 import type { ThemeRenderContext } from "../types.ts";
 
 function baseContext(overrides: Partial<ThemeRenderContext> = {}): ThemeRenderContext {

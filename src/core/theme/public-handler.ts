@@ -5,7 +5,7 @@ import { loadThemePackage } from "./theme-package.ts";
 import { buildThemeRenderContext } from "./context.ts";
 import { renderTheme } from "./render.ts";
 import { resolvePublicRoute } from "./resolve-route.ts";
-import { defaultThemePackage } from "../../themes-default/2026/bundle.ts";
+import { defaultThemePackage } from "../../themes/2026/bundle.ts";
 
 const FALLBACK_THEME_SLUG = "2026";
 

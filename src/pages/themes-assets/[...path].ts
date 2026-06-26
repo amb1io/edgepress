@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { env as cfEnv } from "cloudflare:workers";
 
-import { defaultThemeAssets } from "../../themes-default/2026/assets-bundle.ts";
+import { defaultThemeAssets } from "../../themes/2026/assets-bundle.ts";
 
 export const prerender = false;
 

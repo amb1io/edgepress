@@ -16,7 +16,7 @@ import {
 import {
   loadDefaultThemeAssets,
   loadDefaultThemePackage,
-} from "../src/themes-default/2026/load-package.ts";
+} from "../src/themes/2026/load-package.ts";
 
 const R2_BUCKET = "edgepress-media";
 const isRemote = process.argv.includes("--remote");

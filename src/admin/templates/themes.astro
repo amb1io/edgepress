@@ -51,13 +51,7 @@ const initialAuthorId = result.initialAuthorId;
 const postId = result.post?.id ?? null;
 const postMeta = parseMetaValues(result.post?.meta_values ?? null);
 const initialIsActive = postMeta["requested_active"] === "1" || postMeta["is_active"] === "1";
-const initialGitHubRepoUrl = postMeta["github_repo_url"] ?? "";
-const initialGitHubRef = postMeta["github_ref"] ?? "main";
-const initialThemeSubdir = postMeta["theme_subdir"] ?? "";
-const initialVersion = postMeta["version"] ?? "1.0.0";
-const initialSupports = postMeta["supports"] ?? "single,archive,page";
-const initialAuthor = postMeta["author"] ?? "";
-const initialPreviewImage = postMeta["preview_image"] ?? "";
+const initialImportStatus = postMeta["import_status"] ?? "idle";
 ---
 
 <AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={currentUser}>
@@ -91,7 +85,8 @@ const initialPreviewImage = postMeta["preview_image"] ?? "";
   <AdminFormContainer>
     <form
       method="post"
-      action="/api/posts"
+      action="/api/themes/upload"
+      enctype="multipart/form-data"
       class="flex flex-col gap-4 themes-form"
       x-data="contentForm"
       data-is-edit={String(isEdit)}
@@ -152,104 +147,24 @@ const initialPreviewImage = postMeta["preview_image"] ?? "";
       </div>
 
       <div class="form-control">
-        <label for="theme-github-repo-url" class="label">
-          <span class="label-text">URL do repositório GitHub do tema</span>
+        <label for="theme-zip" class="label">
+          <span class="label-text">Arquivo do tema (.zip ou .tar.gz)</span>
         </label>
         <input
-          id="theme-github-repo-url"
-          type="url"
-          name="meta_github_repo_url"
-          class="input input-bordered w-full"
-          placeholder="https://github.com/owner/theme-repo"
-          value={initialGitHubRepoUrl}
+          id="theme-zip"
+          type="file"
+          name="theme_zip"
+          accept=".zip,.tar.gz,.tgz,application/zip,application/gzip,application/x-gzip"
+          class="file-input file-input-bordered w-full"
         />
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="form-control">
-          <label for="theme-github-ref" class="label">
-            <span class="label-text">Git ref (branch/tag)</span>
-          </label>
-          <input
-            id="theme-github-ref"
-            type="text"
-            name="meta_github_ref"
-            class="input input-bordered w-full"
-            placeholder="main"
-            value={initialGitHubRef}
-          />
-        </div>
-
-        <div class="form-control">
-          <label for="theme-subdir" class="label">
-            <span class="label-text">Subdiretório do tema (opcional)</span>
-          </label>
-          <input
-            id="theme-subdir"
-            type="text"
-            name="meta_theme_subdir"
-            class="input input-bordered w-full"
-            placeholder="packages/theme"
-            value={initialThemeSubdir}
-          />
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="form-control">
-          <label for="theme-version" class="label">
-            <span class="label-text">Versão</span>
-          </label>
-          <input
-            id="theme-version"
-            type="text"
-            name="meta_version"
-            class="input input-bordered w-full"
-            placeholder="1.0.0"
-            value={initialVersion}
-          />
-        </div>
-
-        <div class="form-control">
-          <label for="theme-author" class="label">
-            <span class="label-text">Autor</span>
-          </label>
-          <input
-            id="theme-author"
-            type="text"
-            name="meta_author"
-            class="input input-bordered w-full"
-            value={initialAuthor}
-          />
-        </div>
-      </div>
-
-      <div class="form-control">
-        <label for="theme-supports" class="label">
-          <span class="label-text">Supports (CSV)</span>
-        </label>
-        <input
-          id="theme-supports"
-          type="text"
-          name="meta_supports"
-          class="input input-bordered w-full"
-          placeholder="single,archive,page"
-          value={initialSupports}
-        />
-      </div>
-
-      <div class="form-control">
-        <label for="theme-preview-image" class="label">
-          <span class="label-text">Preview image URL</span>
-        </label>
-        <input
-          id="theme-preview-image"
-          type="url"
-          name="meta_preview_image"
-          class="input input-bordered w-full"
-          placeholder="https://..."
-          value={initialPreviewImage}
-        />
+        <p class="text-sm text-base-content/70 mt-2">
+          {isEdit
+            ? "Opcional na edição. Envie um novo pacote para reinstalar o tema."
+            : "Obrigatório ao marcar “Ativar este tema” em um tema novo."}
+          {initialImportStatus === "ready" && (
+            <span class="block mt-1">Status atual: instalado ({initialImportStatus}).</span>
+          )}
+        </p>
       </div>
 
       <p class="text-sm text-base-content/70">
