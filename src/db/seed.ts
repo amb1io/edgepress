@@ -24,8 +24,11 @@ import {
   SEO_CUSTOM_FIELD_TEMPLATE,
   SHOWCASE_ATTACHMENT,
   SHOWCASE_PAGE,
+  SHOWCASE_PAGE_EN,
   SHOWCASE_POST,
+  SHOWCASE_POST_EN,
   buildShowcasePageBodyHtml,
+  buildShowcasePageBodyHtmlEn,
 } from "./seed-data.ts";
 import enTranslations from "../i18n/languages/en.json";
 import esTranslations from "../i18n/languages/es.json";
@@ -92,8 +95,6 @@ async function ensureShowcaseHelloWorldContent(
   const postTypeId = typeIds["post"];
   if (!attachmentTypeId || !pageTypeId || !postTypeId) return;
 
-  const ptBrLocaleId = localesByCode.get(SHOWCASE_PAGE.locale_code) ?? null;
-
   const [existingAttachment] = await db
     .select({ id: posts.id })
     .from(posts)
@@ -125,82 +126,147 @@ async function ensureShowcaseHelloWorldContent(
   }
   if (!attachmentId) return;
 
-  const pageBody = buildShowcasePageBodyHtml();
-  const [existingPage] = await db
-    .select({ id: posts.id })
-    .from(posts)
-    .where(and(eq(posts.post_type_id, pageTypeId), eq(posts.slug, SHOWCASE_PAGE.slug)))
-    .limit(1);
+  type ShowcasePageRow = {
+    slug: string;
+    translation_key: string;
+    title: string;
+    excerpt: string;
+    locale_code: string;
+    body: string;
+  };
 
-  let pageId = existingPage?.id as number | undefined;
-  if (!pageId) {
-    const [insertedPage] = await db
-      .insert(posts)
-      .values({
-        post_type_id: pageTypeId,
-        id_locale_code: ptBrLocaleId,
-        title: SHOWCASE_PAGE.title,
-        slug: SHOWCASE_PAGE.slug,
-        excerpt: SHOWCASE_PAGE.excerpt,
-        body: pageBody,
-        status: "published",
-        published_at: now,
-        meta_values: JSON.stringify({
-          translation_key: SHOWCASE_PAGE.translation_key,
-          post_thumbnail_id: String(attachmentId),
-        }),
-        created_at: now,
-        updated_at: now,
-      })
-      .returning({ id: posts.id });
-    pageId = (insertedPage as { id: number } | undefined)?.id;
+  type ShowcasePostRow = {
+    slug: string;
+    translation_key: string;
+    title: string;
+    excerpt: string;
+    locale_code: string;
+    category_slug: string;
+    body_html: string;
+  };
+
+  const showcasePages: ShowcasePageRow[] = [
+    {
+      slug: SHOWCASE_PAGE.slug,
+      translation_key: SHOWCASE_PAGE.translation_key,
+      title: SHOWCASE_PAGE.title,
+      excerpt: SHOWCASE_PAGE.excerpt,
+      locale_code: SHOWCASE_PAGE.locale_code,
+      body: buildShowcasePageBodyHtml(),
+    },
+    {
+      slug: SHOWCASE_PAGE_EN.slug,
+      translation_key: SHOWCASE_PAGE_EN.translation_key,
+      title: SHOWCASE_PAGE_EN.title,
+      excerpt: SHOWCASE_PAGE_EN.excerpt,
+      locale_code: SHOWCASE_PAGE_EN.locale_code,
+      body: buildShowcasePageBodyHtmlEn(),
+    },
+  ];
+
+  for (const pageRow of showcasePages) {
+    const localeId = localesByCode.get(pageRow.locale_code) ?? null;
+    const [existingPage] = await db
+      .select({ id: posts.id })
+      .from(posts)
+      .where(and(eq(posts.post_type_id, pageTypeId), eq(posts.slug, pageRow.slug)))
+      .limit(1);
+
+    let pageId = existingPage?.id as number | undefined;
+    if (!pageId) {
+      const [insertedPage] = await db
+        .insert(posts)
+        .values({
+          post_type_id: pageTypeId,
+          id_locale_code: localeId,
+          title: pageRow.title,
+          slug: pageRow.slug,
+          excerpt: pageRow.excerpt,
+          body: pageRow.body,
+          status: "published",
+          published_at: now,
+          meta_values: JSON.stringify({
+            translation_key: pageRow.translation_key,
+            post_thumbnail_id: String(attachmentId),
+          }),
+          created_at: now,
+          updated_at: now,
+        })
+        .returning({ id: posts.id });
+      pageId = (insertedPage as { id: number } | undefined)?.id;
+    }
+    if (!pageId) continue;
+
+    const [existingMediaLink] = await db
+      .select({ post_id: postsMedia.post_id })
+      .from(postsMedia)
+      .where(and(eq(postsMedia.post_id, pageId), eq(postsMedia.media_id, attachmentId)))
+      .limit(1);
+    if (!existingMediaLink) {
+      await db.insert(postsMedia).values({ post_id: pageId, media_id: attachmentId });
+    }
   }
-  if (!pageId) return;
 
-  const [existingMediaLink] = await db
-    .select({ post_id: postsMedia.post_id })
-    .from(postsMedia)
-    .where(and(eq(postsMedia.post_id, pageId), eq(postsMedia.media_id, attachmentId)))
-    .limit(1);
-  if (!existingMediaLink) {
-    await db.insert(postsMedia).values({ post_id: pageId, media_id: attachmentId });
-  }
-
-  const [existingPost] = await db
-    .select({ id: posts.id })
-    .from(posts)
-    .where(and(eq(posts.post_type_id, postTypeId), eq(posts.slug, SHOWCASE_POST.slug)))
-    .limit(1);
-
-  let postId = existingPost?.id as number | undefined;
-  if (!postId) {
-    const [insertedPost] = await db
-      .insert(posts)
-      .values({
-        post_type_id: postTypeId,
-        id_locale_code: ptBrLocaleId,
-        title: SHOWCASE_POST.title,
-        slug: SHOWCASE_POST.slug,
-        excerpt: SHOWCASE_POST.excerpt,
-        body: SHOWCASE_POST.body_html,
-        status: "published",
-        published_at: now,
-        created_at: now,
-        updated_at: now,
-      })
-      .returning({ id: posts.id });
-    postId = (insertedPost as { id: number } | undefined)?.id;
-  }
+  const showcasePosts: ShowcasePostRow[] = [
+    {
+      slug: SHOWCASE_POST.slug,
+      translation_key: SHOWCASE_POST.translation_key,
+      title: SHOWCASE_POST.title,
+      excerpt: SHOWCASE_POST.excerpt,
+      locale_code: SHOWCASE_POST.locale_code,
+      category_slug: SHOWCASE_POST.category_slug,
+      body_html: SHOWCASE_POST.body_html,
+    },
+    {
+      slug: SHOWCASE_POST_EN.slug,
+      translation_key: SHOWCASE_POST_EN.translation_key,
+      title: SHOWCASE_POST_EN.title,
+      excerpt: SHOWCASE_POST_EN.excerpt,
+      locale_code: SHOWCASE_POST_EN.locale_code,
+      category_slug: SHOWCASE_POST_EN.category_slug,
+      body_html: SHOWCASE_POST_EN.body_html,
+    },
+  ];
 
   const categoryId = taxBySlug.get(SHOWCASE_POST.category_slug);
-  if (postId && categoryId) {
-    const [existingTaxLink] = await db
-      .select({ post_id: postsTaxonomies.post_id })
-      .from(postsTaxonomies)
-      .where(and(eq(postsTaxonomies.post_id, postId), eq(postsTaxonomies.term_id, categoryId)))
+  for (const postRow of showcasePosts) {
+    const localeId = localesByCode.get(postRow.locale_code) ?? null;
+    const [existingPost] = await db
+      .select({ id: posts.id })
+      .from(posts)
+      .where(and(eq(posts.post_type_id, postTypeId), eq(posts.slug, postRow.slug)))
       .limit(1);
-    if (!existingTaxLink) {
-      await db.insert(postsTaxonomies).values({ post_id: postId, term_id: categoryId });
+
+    let postId = existingPost?.id as number | undefined;
+    if (!postId) {
+      const [insertedPost] = await db
+        .insert(posts)
+        .values({
+          post_type_id: postTypeId,
+          id_locale_code: localeId,
+          title: postRow.title,
+          slug: postRow.slug,
+          excerpt: postRow.excerpt,
+          body: postRow.body_html,
+          status: "published",
+          published_at: now,
+          meta_values: JSON.stringify({ translation_key: postRow.translation_key }),
+          created_at: now,
+          updated_at: now,
+        })
+        .returning({ id: posts.id });
+      postId = (insertedPost as { id: number } | undefined)?.id;
+    }
+
+    if (postId && categoryId) {
+      const [existingTaxLink] = await db
+        .select({ post_id: postsTaxonomies.post_id })
+        .from(postsTaxonomies)
+        .where(and(eq(postsTaxonomies.post_id, postId), eq(postsTaxonomies.term_id, categoryId)))
+        .limit(1);
+      if (!existingTaxLink) {
+        await db.insert(postsTaxonomies).values({ post_id: postId, term_id: categoryId });
+      }
     }
   }
 }

@@ -199,7 +199,7 @@ export const SHOWCASE_ATTACHMENT = {
   alt: "Hello World",
 } as const;
 
-/** Página inicial do tema 2026 (home_content_key = translation_key). */
+/** Página inicial do tema 2026 (home_content_key = translation_key) — pt-BR. */
 export const SHOWCASE_PAGE = {
   slug: "hello-world",
   translation_key: "hello-world",
@@ -209,9 +209,20 @@ export const SHOWCASE_PAGE = {
   media_url: "/api/media/uploads/seed/hello-world.svg",
 } as const;
 
-/** Post de blog com categoria para arquivo /posts. */
+/** Página inicial — en_US. */
+export const SHOWCASE_PAGE_EN = {
+  slug: "hello-world-en",
+  translation_key: "hello-world",
+  title: "Hello World",
+  excerpt: "Demo page with an image from the media library.",
+  locale_code: "en_US",
+  media_url: "/api/media/uploads/seed/hello-world.svg",
+} as const;
+
+/** Post de blog com categoria para arquivo /posts — pt-BR. */
 export const SHOWCASE_POST = {
   slug: "hello-world-post",
+  translation_key: "hello-world-post",
   title: "Hello World",
   excerpt: "Primeiro post de demonstração com categoria Uncategorized.",
   locale_code: "pt_BR",
@@ -220,9 +231,28 @@ export const SHOWCASE_POST = {
     "<p>Este é o clássico <strong>Hello World</strong> — seu primeiro post no Edgepress.</p><p>Veja também a <a href=\"/hello-world\">página Hello World</a>.</p>",
 } as const;
 
+/** Post de blog — en_US. */
+export const SHOWCASE_POST_EN = {
+  slug: "hello-world-post-en",
+  translation_key: "hello-world-post",
+  title: "Hello World",
+  excerpt: "First demo post with Uncategorized category.",
+  locale_code: "en_US",
+  category_slug: "uncategorized",
+  body_html:
+    "<p>This is the classic <strong>Hello World</strong> — your first post on Edgepress.</p><p>See also the <a href=\"/en/hello-world-en\">Hello World page</a>.</p>",
+} as const;
+
 export function buildShowcasePageBodyHtml(): string {
   const src = SHOWCASE_PAGE.media_url;
   return `<p>Esta é a página inicial de demonstração do Edgepress.</p>
 <figure class="wp-block-image"><img src="${src}" alt="Hello World" width="800" height="400" loading="lazy" /></figure>
 <p>Use o tema Liquid <strong>2026</strong> para personalizar este layout.</p>`;
+}
+
+export function buildShowcasePageBodyHtmlEn(): string {
+  const src = SHOWCASE_PAGE_EN.media_url;
+  return `<p>This is the Edgepress demo home page.</p>
+<figure class="wp-block-image"><img src="${src}" alt="Hello World" width="800" height="400" loading="lazy" /></figure>
+<p>Customize this layout with the Liquid <strong>2026</strong> theme.</p>`;
 }
