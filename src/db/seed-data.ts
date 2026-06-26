@@ -186,3 +186,43 @@ export const DEFAULT_SETTINGS_ROWS: SettingsRow[] = [
   { name: "active_theme", value: "2026", autoload: true },
   { name: "datalist_pagination", value: "10", autoload: true },
 ];
+
+/** Mídia de demonstração (attachment + R2 em uploads/seed/hello-world.svg). */
+export const SHOWCASE_ATTACHMENT = {
+  slug: "hello-world-image",
+  title: "Hello World",
+  file: "hello-world.svg",
+  path: "/uploads/seed/hello-world.svg",
+  mime_type: "image/svg+xml",
+  width: 800,
+  height: 400,
+  alt: "Hello World",
+} as const;
+
+/** Página inicial do tema 2026 (home_content_key = translation_key). */
+export const SHOWCASE_PAGE = {
+  slug: "hello-world",
+  translation_key: "hello-world",
+  title: "Hello World",
+  excerpt: "Página de demonstração com imagem da biblioteca de mídia.",
+  locale_code: "pt_BR",
+  media_url: "/api/media/uploads/seed/hello-world.svg",
+} as const;
+
+/** Post de blog com categoria para arquivo /posts. */
+export const SHOWCASE_POST = {
+  slug: "hello-world-post",
+  title: "Hello World",
+  excerpt: "Primeiro post de demonstração com categoria Uncategorized.",
+  locale_code: "pt_BR",
+  category_slug: "uncategorized",
+  body_html:
+    "<p>Este é o clássico <strong>Hello World</strong> — seu primeiro post no Edgepress.</p><p>Veja também a <a href=\"/hello-world\">página Hello World</a>.</p>",
+} as const;
+
+export function buildShowcasePageBodyHtml(): string {
+  const src = SHOWCASE_PAGE.media_url;
+  return `<p>Esta é a página inicial de demonstração do Edgepress.</p>
+<figure class="wp-block-image"><img src="${src}" alt="Hello World" width="800" height="400" loading="lazy" /></figure>
+<p>Use o tema Liquid <strong>2026</strong> para personalizar este layout.</p>`;
+}

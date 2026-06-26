@@ -2,6 +2,8 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   postTypes,
   posts,
+  postsMedia,
+  postsTaxonomies,
   taxonomies,
   settings,
   roleCapability,
@@ -20,6 +22,10 @@ import {
   DEFAULT_SETTINGS_ROWS,
   POST_TYPES_WITH_CUSTOM_FIELDS,
   SEO_CUSTOM_FIELD_TEMPLATE,
+  SHOWCASE_ATTACHMENT,
+  SHOWCASE_PAGE,
+  SHOWCASE_POST,
+  buildShowcasePageBodyHtml,
 } from "./seed-data.ts";
 import enTranslations from "../i18n/languages/en.json";
 import esTranslations from "../i18n/languages/es.json";
@@ -71,6 +77,132 @@ export async function ensurePostTypesFromDefaults(db: any): Promise<Record<strin
   }
 
   return Object.fromEntries(bySlug) as Record<string, number>;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function ensureShowcaseHelloWorldContent(
+  db: any,
+  typeIds: Record<string, number>,
+  taxBySlug: Map<string, number>,
+  localesByCode: Map<string, number>,
+  now: number,
+): Promise<void> {
+  const attachmentTypeId = typeIds["attachment"];
+  const pageTypeId = typeIds["page"];
+  const postTypeId = typeIds["post"];
+  if (!attachmentTypeId || !pageTypeId || !postTypeId) return;
+
+  const ptBrLocaleId = localesByCode.get(SHOWCASE_PAGE.locale_code) ?? null;
+
+  const [existingAttachment] = await db
+    .select({ id: posts.id })
+    .from(posts)
+    .where(and(eq(posts.post_type_id, attachmentTypeId), eq(posts.slug, SHOWCASE_ATTACHMENT.slug)))
+    .limit(1);
+
+  let attachmentId = existingAttachment?.id as number | undefined;
+  if (!attachmentId) {
+    const [insertedAttachment] = await db
+      .insert(posts)
+      .values({
+        post_type_id: attachmentTypeId,
+        title: SHOWCASE_ATTACHMENT.title,
+        slug: SHOWCASE_ATTACHMENT.slug,
+        status: "published",
+        meta_values: JSON.stringify({
+          mime_type: SHOWCASE_ATTACHMENT.mime_type,
+          attachment_file: SHOWCASE_ATTACHMENT.file,
+          attachment_width: SHOWCASE_ATTACHMENT.width,
+          attachment_height: SHOWCASE_ATTACHMENT.height,
+          attachment_path: SHOWCASE_ATTACHMENT.path,
+          attachment_alt: SHOWCASE_ATTACHMENT.alt,
+        }),
+        created_at: now,
+        updated_at: now,
+      })
+      .returning({ id: posts.id });
+    attachmentId = (insertedAttachment as { id: number } | undefined)?.id;
+  }
+  if (!attachmentId) return;
+
+  const pageBody = buildShowcasePageBodyHtml();
+  const [existingPage] = await db
+    .select({ id: posts.id })
+    .from(posts)
+    .where(and(eq(posts.post_type_id, pageTypeId), eq(posts.slug, SHOWCASE_PAGE.slug)))
+    .limit(1);
+
+  let pageId = existingPage?.id as number | undefined;
+  if (!pageId) {
+    const [insertedPage] = await db
+      .insert(posts)
+      .values({
+        post_type_id: pageTypeId,
+        id_locale_code: ptBrLocaleId,
+        title: SHOWCASE_PAGE.title,
+        slug: SHOWCASE_PAGE.slug,
+        excerpt: SHOWCASE_PAGE.excerpt,
+        body: pageBody,
+        status: "published",
+        published_at: now,
+        meta_values: JSON.stringify({
+          translation_key: SHOWCASE_PAGE.translation_key,
+          post_thumbnail_id: String(attachmentId),
+        }),
+        created_at: now,
+        updated_at: now,
+      })
+      .returning({ id: posts.id });
+    pageId = (insertedPage as { id: number } | undefined)?.id;
+  }
+  if (!pageId) return;
+
+  const [existingMediaLink] = await db
+    .select({ post_id: postsMedia.post_id })
+    .from(postsMedia)
+    .where(and(eq(postsMedia.post_id, pageId), eq(postsMedia.media_id, attachmentId)))
+    .limit(1);
+  if (!existingMediaLink) {
+    await db.insert(postsMedia).values({ post_id: pageId, media_id: attachmentId });
+  }
+
+  const [existingPost] = await db
+    .select({ id: posts.id })
+    .from(posts)
+    .where(and(eq(posts.post_type_id, postTypeId), eq(posts.slug, SHOWCASE_POST.slug)))
+    .limit(1);
+
+  let postId = existingPost?.id as number | undefined;
+  if (!postId) {
+    const [insertedPost] = await db
+      .insert(posts)
+      .values({
+        post_type_id: postTypeId,
+        id_locale_code: ptBrLocaleId,
+        title: SHOWCASE_POST.title,
+        slug: SHOWCASE_POST.slug,
+        excerpt: SHOWCASE_POST.excerpt,
+        body: SHOWCASE_POST.body_html,
+        status: "published",
+        published_at: now,
+        created_at: now,
+        updated_at: now,
+      })
+      .returning({ id: posts.id });
+    postId = (insertedPost as { id: number } | undefined)?.id;
+  }
+
+  const categoryId = taxBySlug.get(SHOWCASE_POST.category_slug);
+  if (postId && categoryId) {
+    const [existingTaxLink] = await db
+      .select({ post_id: postsTaxonomies.post_id })
+      .from(postsTaxonomies)
+      .where(and(eq(postsTaxonomies.post_id, postId), eq(postsTaxonomies.term_id, categoryId)))
+      .limit(1);
+    if (!existingTaxLink) {
+      await db.insert(postsTaxonomies).values({ post_id: postId, term_id: categoryId });
+    }
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -439,6 +571,8 @@ export async function runSeed(db: any): Promise<void> {
       });
     }
   }
+
+  await ensureShowcaseHelloWorldContent(db, typeIds, taxBySlug, updatedLocalesByCode, now);
 
   // Permissões por perfil (0=admin, 1=editor, 2=autor, 3=leitor)
   const existingCapabilities = await db

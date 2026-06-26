@@ -6,13 +6,25 @@
  * Usa o arquivo SQLite em .wrangler/state/v3/d1/ gerado pelo wrangler.
  */
 import { readdirSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { join } from "node:path";
 import { createClient } from "@libsql/client/node";
 import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "../src/db/schema.ts";
 import { runSeed } from "../src/db/seed.ts";
+import { SHOWCASE_ATTACHMENT } from "../src/db/seed-data.ts";
 
 const WRANGLER_STATE = join(process.cwd(), ".wrangler", "state", "v3", "d1");
+const SHOWCASE_MEDIA_FILE = join(process.cwd(), "drizzle", "seed", "assets", "hello-world.svg");
+
+function uploadShowcaseMediaLocal(): void {
+  const r2Key = SHOWCASE_ATTACHMENT.path.replace(/^\//, "");
+  console.log(`[db:seed] Enviando mídia de demonstração para R2 local (${r2Key})...`);
+  execSync(
+    `npx wrangler r2 object put ${JSON.stringify(`edgepress-media/${r2Key}`)} --file=${JSON.stringify(SHOWCASE_MEDIA_FILE)} --content-type=${JSON.stringify(SHOWCASE_ATTACHMENT.mime_type)} --local -c wrangler.toml`,
+    { stdio: "inherit", cwd: process.cwd() },
+  );
+}
 
 function findLocalD1Sqlite(dir: string): string | null {
   try {
@@ -56,6 +68,7 @@ Depois execute o seed novamente:
   try {
     console.log("Executando seed no banco local...");
     await runSeed(db);
+    uploadShowcaseMediaLocal();
     console.log("Seed concluído com sucesso.");
   } catch (err) {
     console.error("Erro ao executar seed:", err);
