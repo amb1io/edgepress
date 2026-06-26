@@ -1,0 +1,28 @@
+{% layout 'layouts/base' %}
+<article class="entry entry-single" itemscope itemtype="https://schema.org/BlogPosting">
+  <header>
+    <p itemprop="datePublished">{{ post.published_at | post_date }}</p>
+    <h1 itemprop="headline">{{ post.title }}</h1>
+    <hr />
+  </header>
+  <div class="container content" itemprop="articleBody">
+    {% the_content %}
+    <hr />
+    <aside class="author-bio">
+      <img src="https://en.gravatar.com/userimage/5565716/4920433887b40884f61775ca2ce2af2f.jpeg?size=256" alt="Rhamses Soares" width="100" height="100" />
+      <p>
+        {% if route.locale == 'en' %}
+          Hi, I'm <strong>Rhamses</strong>. I'm a Web engineer based in Brazil.
+          Follow me on <a href="https://www.twitter.com/rhamses" target="_blank" rel="noopener">Twitter</a>,
+          see my work on <a href="https://www.github.com/rhamses" target="_blank" rel="noopener">GitHub</a>,
+          or read more on <a href="https://rhams.es" target="_blank" rel="noopener">my website</a>.
+        {% else %}
+          Olá, sou o <strong>Rhamses</strong>. Sou engenheiro Web no Brasil.
+          Me siga no <a href="https://www.twitter.com/rhamses" target="_blank" rel="noopener">Twitter</a>,
+          veja meu trabalho no <a href="https://www.github.com/rhamses" target="_blank" rel="noopener">GitHub</a>,
+          ou leia mais em <a href="https://rhams.es" target="_blank" rel="noopener">meu site</a>.
+        {% endif %}
+      </p>
+    </aside>
+  </div>
+</article>

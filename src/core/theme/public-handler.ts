@@ -6,8 +6,13 @@ import { buildThemeRenderContext } from "./context.ts";
 import { renderTheme } from "./render.ts";
 import { resolvePublicRoute } from "./resolve-route.ts";
 import { defaultThemePackage } from "../../themes-default/2026/bundle.ts";
+import { blogRhamsesThemePackage } from "../../themes-default/blog-rhamses/bundle.ts";
 
 const FALLBACK_THEME_SLUG = "2026";
+const BUNDLED_THEMES: Record<string, typeof defaultThemePackage> = {
+  "2026": defaultThemePackage,
+  "blog-rhamses": blogRhamsesThemePackage,
+};
 
 export async function handlePublicThemeRequest(
   request: Request,
@@ -24,6 +29,9 @@ export async function handlePublicThemeRequest(
     }))?.trim() || FALLBACK_THEME_SLUG;
 
   let pkg = await loadThemePackage(kv, activeSlug);
+  if (!pkg) {
+    pkg = BUNDLED_THEMES[activeSlug] ?? null;
+  }
   if (!pkg && activeSlug === FALLBACK_THEME_SLUG) {
     pkg = defaultThemePackage;
   }

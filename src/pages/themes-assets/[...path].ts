@@ -2,6 +2,12 @@ import type { APIRoute } from "astro";
 import { env as cfEnv } from "cloudflare:workers";
 
 import { defaultThemeAssets } from "../../themes-default/2026/assets-bundle.ts";
+import { blogRhamsesThemeAssets } from "../../themes-default/blog-rhamses/assets-bundle.ts";
+
+const BUNDLED_THEME_ASSETS: Record<string, Record<string, { body: string; contentType: string }>> = {
+  "2026": defaultThemeAssets,
+  "blog-rhamses": blogRhamsesThemeAssets,
+};
 
 export const prerender = false;
 
@@ -38,8 +44,9 @@ function parseThemeAssetPath(
 }
 
 function serveBundledDefaultAsset(themeSlug: string, assetPath: string): Response | null {
-  if (themeSlug !== "2026") return null;
-  const fallback = defaultThemeAssets[assetPath];
+  const assets = BUNDLED_THEME_ASSETS[themeSlug];
+  if (!assets) return null;
+  const fallback = assets[assetPath];
   if (!fallback) return null;
 
   return new Response(fallback.body, {

@@ -11,6 +11,8 @@ export type ThemeManifest = {
   assets_dir?: string;
   /** Translation key or slug for the home page content */
   home_content_key?: string;
+  /** When true, home route lists published posts instead of a single page. */
+  home_list_posts?: boolean;
 };
 
 export type ThemePackageRecord = {

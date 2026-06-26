@@ -1,0 +1,32 @@
+{% comment %}
+  Layout base — Blog Rhamsés (Charca fork)
+{% endcomment %}
+<!doctype html>
+<html {% html_attrs %} class="{% if route.locale == 'en' %}locale-en{% else %}locale-pt{% endif %}">
+  <head>
+    {% seo_head %}
+    {% theme_styles %}
+    <script>
+      (function () {
+        const root = document.documentElement;
+        const theme = localStorage.getItem("theme");
+        if (
+          theme === "dark" ||
+          (!theme && window.matchMedia("(prefers-color-scheme: dark)").matches)
+        ) {
+          root.classList.add("theme-dark");
+        }
+      })();
+    </script>
+  </head>
+  <body {% body_class %}>
+    <div class="site-layout">
+      {% include 'parts/header' %}
+      <main class="site-main">
+        {% page_content %}
+      </main>
+      {% include 'parts/footer' %}
+    </div>
+    {% scripts_footer %}
+  </body>
+</html>

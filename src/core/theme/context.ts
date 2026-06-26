@@ -185,6 +185,7 @@ export async function buildThemeRenderContext(
   const homeUrl = publicLocaleHomeUrl(locale);
   const assetBase = `${baseUrl}/themes-assets/${pkg.manifest.slug}`;
   const homeContentKey = pkg.manifest.home_content_key ?? "hello-world";
+  const homeListPosts = pkg.manifest.home_list_posts === true;
 
   let post: ThemePostView | undefined;
   let posts: ThemePostView[] | undefined;
@@ -193,7 +194,21 @@ export async function buildThemeRenderContext(
   let seoPost: ContentPostDetail | undefined;
   let resolvedKind = route.kind;
 
-  if (route.kind === "home") {
+  if (route.kind === "home" && homeListPosts) {
+    const page = 1;
+    const limit = 20;
+    const list = await content.getListWithDetails("posts", {
+      page,
+      limit,
+      locale: dbLocale,
+      filter: { post_type: "post", status: "published" },
+      order: "published_at",
+      orderDir: "desc",
+    });
+    posts = list.items.map((item) => toPostView(item as ContentPostDetail, baseUrl));
+    seoPost = posts[0] as unknown as ContentPostDetail | undefined;
+    resolvedKind = "home";
+  } else if (route.kind === "home") {
     try {
       const data = await content.getItem("posts", homeContentKey, {
         status: "published",
