@@ -80,7 +80,7 @@ import {
   getThemeSnapshotById,
   validateThemeCanonicalMeta,
 } from "../../core/services/theme-service.ts";
-import { triggerThemeImportFromRuntime } from "../../core/services/theme-import-trigger.ts";
+import { importThemeFromGitHub } from "../../core/services/theme-importer.ts";
 import { syncSeoMetadataFromPostSave } from "../../core/services/seo-metadata-service.ts";
 import {
   adminUrlLocaleToDbCode,
@@ -664,46 +664,63 @@ export async function POST({
       await syncThemeCache(locals, db);
     }
 
+    if (post_type === "themes" && shouldQueueThemeImport && !themeCanonicalMeta?.github_repo_url) {
+      console.warn(
+        "[themes] import trigger skipped: github_repo_url not set",
+        JSON.stringify({ theme_slug: slug, postId })
+      );
+    }
+
     if (
       post_type === "themes" &&
       shouldQueueThemeImport &&
       postId &&
       themeCanonicalMeta?.github_repo_url
     ) {
-      const triggerPayload = {
-        theme_post_id: postId,
-        theme_slug: slug,
-        repo_url: themeCanonicalMeta.github_repo_url,
-        ref: themeCanonicalMeta.github_ref ?? "main",
-        subdir: themeCanonicalMeta.theme_subdir ?? "",
-        requested_by: currentUser.id,
+      console.info(
+        "[themes] queuing import",
+        JSON.stringify({ theme_slug: slug, repo_url: themeCanonicalMeta.github_repo_url, ref: themeCanonicalMeta.github_ref ?? "main" })
+      );
+      const handleImportError = async (err: unknown) => {
+        console.error("[themes] import failed", err);
+        try {
+          const snapshot = await getThemeSnapshotById(db, postId);
+          if (!snapshot) return;
+          const failedMeta = withThemeImportState(snapshot.meta_values, {
+            requested_active: false,
+            is_active: false,
+            import_status: "failed",
+            import_error:
+              err instanceof Error ? err.message : "Erro ao importar tema",
+          });
+          await updatePost(db, postId, postTypeId, {
+            meta_values: failedMeta,
+            updated_at: Date.now(),
+          });
+          await syncThemeStatusCacheByPostId(locals, db, postId);
+          await syncThemeCache(locals, db);
+        } catch {
+          // ignora erros do fallback
+        }
       };
 
-      // Trigger assíncrono: não bloqueia o response de save do admin.
-      void triggerThemeImportFromRuntime(locals, triggerPayload).catch(
-        async (err) => {
-          console.error("[themes] import trigger failed", err);
-          try {
-            const snapshot = await getThemeSnapshotById(db, postId);
-            if (!snapshot) return;
-            const failedMeta = withThemeImportState(snapshot.meta_values, {
-              requested_active: false,
-              is_active: false,
-              import_status: "failed",
-              import_error:
-                err instanceof Error ? err.message : "Erro ao disparar importação",
-            });
-            await updatePost(db, postId, postTypeId, {
-              meta_values: failedMeta,
-              updated_at: Date.now(),
-            });
-            await syncThemeStatusCacheByPostId(locals, db, postId);
-            await syncThemeCache(locals, db);
-          } catch {
-            // ignora erros do fallback async de import trigger
-          }
-        }
-      );
+      // Em Workers de produção usa waitUntil do runtime Cloudflare (ctx) para não
+      // bloquear o response; em dev (Vite/Astro sem runtime real) await diretamente
+      // para garantir que o import não seja descartado antes de completar.
+      const importPromise = importThemeFromGitHub(locals, {
+        themePostId: postId,
+        themeSlug: slug,
+        repoUrl: themeCanonicalMeta.github_repo_url,
+        ref: themeCanonicalMeta.github_ref ?? "main",
+        subdir: themeCanonicalMeta.theme_subdir ?? "",
+      }).catch(handleImportError);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cfCtx = (locals as any)?.cfContext;
+      if (typeof cfCtx?.waitUntil === "function") {
+        cfCtx.waitUntil(importPromise);
+      } else {
+        await importPromise;
+      }
     }
 
     // Retornar resposta
