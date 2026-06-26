@@ -1,1 +1,1 @@
-export * from "../../api/endpoints/theme-upload.ts";
+export * from "../../../api/endpoints/theme-upload.ts";

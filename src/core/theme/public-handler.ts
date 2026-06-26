@@ -1,6 +1,7 @@
 import { db } from "../../db/index.ts";
-import { getActiveThemeSlugFromSettings } from "../services/settings-service.ts";
+import { getActiveThemeFromDb, getThemeSnapshotById } from "../services/theme-service.ts";
 import { getKvFromLocals } from "../../utils/runtime-locals.ts";
+import { parseMetaValues } from "../../utils/meta-parser.ts";
 import { loadThemePackage } from "./theme-package.ts";
 import { buildThemeRenderContext } from "./context.ts";
 import { renderTheme } from "./render.ts";
@@ -17,14 +18,19 @@ export async function handlePublicThemeRequest(
   const route = resolvePublicRoute(url.pathname, url.searchParams);
 
   const kv = getKvFromLocals(locals);
-  const activeSlug =
-    (await getActiveThemeSlugFromSettings(db, {
-      kv,
-      isAuthenticated: Boolean(locals.user),
-    }))?.trim() || FALLBACK_THEME_SLUG;
+  const activeTheme = await getActiveThemeFromDb(db);
+  const activeSlug = activeTheme.is_active ? activeTheme.meta.theme_slug?.trim() : "";
+  const packageSlug = activeSlug || FALLBACK_THEME_SLUG;
 
-  let pkg = await loadThemePackage(kv, activeSlug);
-  if (!pkg && activeSlug === FALLBACK_THEME_SLUG) {
+  let pkg = await loadThemePackage(kv, packageSlug);
+  if (!pkg && activeTheme.id) {
+    const snapshot = await getThemeSnapshotById(db, activeTheme.id);
+    const legacySlug = parseMetaValues(snapshot?.meta_values ?? null)["manifest_slug"]?.trim();
+    if (legacySlug && legacySlug !== packageSlug) {
+      pkg = await loadThemePackage(kv, legacySlug);
+    }
+  }
+  if (!pkg && packageSlug === FALLBACK_THEME_SLUG) {
     pkg = defaultThemePackage;
   }
   if (!pkg) {

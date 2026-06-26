@@ -18,7 +18,6 @@ import { installThemePackage } from "../../core/services/theme-install.ts";
 import {
   buildThemePathFromSlug,
   getThemeSnapshotById,
-  isThemeActiveFlag,
   normalizeSupports,
   normalizeThemeSlug,
   parseThemeImportState,
@@ -34,7 +33,7 @@ import {
   htmxRedirectResponse,
   redirectResponse,
 } from "../../utils/http-responses.ts";
-import { getString } from "../../utils/form-data.ts";
+import { getString, getCheckboxFlag } from "../../utils/form-data.ts";
 import { stringifyMetaValues } from "../../utils/meta-parser.ts";
 import { parseNumericId } from "../../utils/validation.ts";
 import { buildAbsoluteUrl, buildListUrl } from "../../utils/url.ts";
@@ -67,7 +66,6 @@ function buildThemeMetaValues(
     theme_path: buildThemePathFromSlug(slug),
     supports: "single,archive,page",
     requested_active: requestedActive ? "1" : "0",
-    is_active: "0",
     import_status: importStatus,
   };
 }
@@ -90,7 +88,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const title = getString(formData, "title");
     const slug = getString(formData, "slug");
     const postIdParam = getString(formData, "id");
-    const requestedActive = isThemeActiveFlag(getString(formData, "meta_is_active"));
+    const requestedActive = getCheckboxFlag(formData, "meta_is_active");
     const themeZip = getThemeZipFile(formData);
 
     if (!title || !slug) {
@@ -246,6 +244,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
       });
       const { enforceSingleActiveTheme } = await import("../../core/services/theme-service.ts");
       await enforceSingleActiveTheme(db, postId);
+      await syncThemeStatusCacheByPostId(locals, db, postId);
+      await syncThemeCache(locals, db);
+    } else if (!themeZip && !requestedActive && action === "edit" && existingImportState.is_active) {
+      const inactiveMeta = withThemeImportState(existingThemeState?.meta_values ?? null, {
+        requested_active: false,
+        is_active: false,
+        import_status: existingImportState.import_status,
+        import_error: undefined,
+      });
+      await updatePost(db, postId, postTypeId, {
+        meta_values: inactiveMeta,
+        updated_at: Date.now(),
+      });
       await syncThemeStatusCacheByPostId(locals, db, postId);
       await syncThemeCache(locals, db);
     } else if (!themeZip) {

@@ -6,6 +6,7 @@ import ContentFormNotification from "../components/ContentFormNotification.astro
 import { db } from "../../db/index.ts";
 import type { MenuItem } from "../../utils/menu.ts";
 import { parseMetaValues } from "../../utils/meta-parser.ts";
+import { isThemeActiveFlag } from "../../core/services/theme-service.ts";
 import {
   getContentPageData,
   isContentPageRedirect,
@@ -50,7 +51,8 @@ const initialStatus = result.initialStatus || "draft";
 const initialAuthorId = result.initialAuthorId;
 const postId = result.post?.id ?? null;
 const postMeta = parseMetaValues(result.post?.meta_values ?? null);
-const initialIsActive = postMeta["requested_active"] === "1" || postMeta["is_active"] === "1";
+const initialIsActive =
+  isThemeActiveFlag(postMeta["requested_active"]) || isThemeActiveFlag(postMeta["is_active"]);
 const initialImportStatus = postMeta["import_status"] ?? "idle";
 ---
 

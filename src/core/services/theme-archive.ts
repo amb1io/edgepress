@@ -1,62 +1,116 @@
 import { parseTarGzip } from "nanotar";
 import type { ThemeArchiveEntry } from "./theme-package-collector.ts";
 
+const SIG_LOCAL_FILE_HEADER = 0x04034b50;
+const SIG_CENTRAL_DIRECTORY = 0x02014b50;
+const SIG_END_OF_CENTRAL_DIRECTORY = 0x06054b50;
+
+type ZipCentralEntry = {
+  name: string;
+  compression: number;
+  compressedSize: number;
+  localHeaderOffset: number;
+};
+
+function findEndOfCentralDirectoryOffset(view: DataView, length: number): number {
+  const min = Math.max(0, length - 22 - 65535);
+  for (let pos = length - 22; pos >= min; pos--) {
+    if (view.getUint32(pos, true) === SIG_END_OF_CENTRAL_DIRECTORY) {
+      return pos;
+    }
+  }
+  throw new Error("Invalid ZIP archive: end of central directory not found");
+}
+
+function readZipCentralEntries(bytes: Uint8Array, view: DataView): ZipCentralEntry[] {
+  const eocd = findEndOfCentralDirectoryOffset(view, bytes.length);
+  const entryCount = view.getUint16(eocd + 10, true);
+  const centralDirOffset = view.getUint32(eocd + 16, true);
+
+  const entries: ZipCentralEntry[] = [];
+  let offset = centralDirOffset;
+
+  for (let i = 0; i < entryCount; i++) {
+    if (view.getUint32(offset, true) !== SIG_CENTRAL_DIRECTORY) {
+      throw new Error("Invalid ZIP central directory entry");
+    }
+
+    const compression = view.getUint16(offset + 10, true);
+    let compressedSize = view.getUint32(offset + 20, true);
+    const nameLength = view.getUint16(offset + 28, true);
+    const extraLength = view.getUint16(offset + 30, true);
+    const commentLength = view.getUint16(offset + 32, true);
+    const localHeaderOffset = view.getUint32(offset + 42, true);
+
+    const nameStart = offset + 46;
+    const name = new TextDecoder().decode(bytes.subarray(nameStart, nameStart + nameLength));
+
+    if (compressedSize === 0xffffffff) {
+      const extraStart = nameStart + nameLength;
+      let extraOffset = extraStart;
+      const extraEnd = extraStart + extraLength;
+      while (extraOffset + 4 <= extraEnd) {
+        const headerId = view.getUint16(extraOffset, true);
+        const dataSize = view.getUint16(extraOffset + 2, true);
+        if (headerId === 0x0001 && dataSize >= 8) {
+          compressedSize = Number(view.getBigUint64(extraOffset + 4, true));
+        }
+        extraOffset += 4 + dataSize;
+      }
+    }
+
+    entries.push({ name, compression, compressedSize, localHeaderOffset });
+    offset = nameStart + nameLength + extraLength + commentLength;
+  }
+
+  return entries;
+}
+
+function getLocalFileDataOffset(view: DataView, localHeaderOffset: number): number {
+  if (view.getUint32(localHeaderOffset, true) !== SIG_LOCAL_FILE_HEADER) {
+    throw new Error("Invalid ZIP local file header");
+  }
+  const nameLength = view.getUint16(localHeaderOffset + 26, true);
+  const extraLength = view.getUint16(localHeaderOffset + 28, true);
+  return localHeaderOffset + 30 + nameLength + extraLength;
+}
+
 async function inflateRawDeflate(data: Uint8Array): Promise<Uint8Array> {
-  const ds = new DecompressionStream("deflate-raw");
-  const writer = ds.writable.getWriter();
-  await writer.write(data);
-  await writer.close();
-
-  const chunks: Uint8Array[] = [];
-  const reader = ds.readable.getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) chunks.push(value);
+  if (data.length === 0) {
+    return new Uint8Array(0);
   }
 
-  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return out;
+  const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  const buffer = await new Response(stream).arrayBuffer();
+  return new Uint8Array(buffer);
 }
 
 async function parseZip(buffer: ArrayBuffer): Promise<ThemeArchiveEntry[]> {
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
+  const centralEntries = readZipCentralEntries(bytes, view);
   const entries: ThemeArchiveEntry[] = [];
-  let offset = 0;
 
-  while (offset + 30 <= bytes.length) {
-    const signature = view.getUint32(offset, true);
-    if (signature !== 0x04034b50) break;
+  for (const entry of centralEntries) {
+    if (entry.name.endsWith("/")) continue;
 
-    const compression = view.getUint16(offset + 8, true);
-    const compressedSize = view.getUint32(offset + 18, true);
-    const nameLen = view.getUint16(offset + 26, true);
-    const extraLen = view.getUint16(offset + 28, true);
-    const nameStart = offset + 30;
-    const name = new TextDecoder().decode(bytes.subarray(nameStart, nameStart + nameLen));
-    const dataStart = nameStart + nameLen + extraLen;
-    const compressed = bytes.subarray(dataStart, dataStart + compressedSize);
+    const dataOffset = getLocalFileDataOffset(view, entry.localHeaderOffset);
+    const compressed = bytes.subarray(dataOffset, dataOffset + entry.compressedSize);
 
-    if (!name.endsWith("/")) {
-      let data: Uint8Array;
-      if (compression === 0) {
-        data = compressed;
-      } else if (compression === 8) {
-        data = await inflateRawDeflate(compressed);
-      } else {
-        throw new Error(`Unsupported ZIP compression method: ${compression}`);
-      }
-      entries.push({ name, data });
+    if (compressed.length !== entry.compressedSize) {
+      throw new Error(`ZIP entry "${entry.name}" has incomplete compressed data`);
     }
 
-    offset = dataStart + compressedSize;
+    let data: Uint8Array;
+    if (entry.compression === 0) {
+      data = compressed;
+    } else if (entry.compression === 8) {
+      data = await inflateRawDeflate(compressed);
+    } else {
+      throw new Error(`Unsupported ZIP compression method: ${entry.compression}`);
+    }
+
+    entries.push({ name: entry.name, data });
   }
 
   if (entries.length === 0) {

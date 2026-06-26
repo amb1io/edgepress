@@ -7,12 +7,15 @@ import {
   type ThemePackageRecord,
 } from "../theme/theme-package.ts";
 import type { ThemeManifest } from "../theme/types.ts";
+import { themeAssetR2Key, themePackageKvKey } from "../theme/theme-package.ts";
 import { getPostTypeId, updatePost } from "./post-service.ts";
 import {
   enforceSingleActiveTheme,
   getThemeSnapshotById,
+  normalizeThemeSlug,
   withThemeImportState,
 } from "./theme-service.ts";
+import { parseMetaValues } from "../../utils/meta-parser.ts";
 
 type R2Bucket = {
   put: (
@@ -33,10 +36,11 @@ export async function installThemePackage(
     activate: boolean;
   },
 ): Promise<ThemePackageRecord> {
+  const packageSlug = normalizeThemeSlug(input.themeSlug);
   const pkg: ThemePackageRecord = {
     manifest: {
       ...input.manifest,
-      slug: input.manifest.slug || input.themeSlug.trim().toLowerCase(),
+      slug: packageSlug,
     },
     templates: input.templates,
     updated_at: Date.now(),
@@ -50,18 +54,41 @@ export async function installThemePackage(
   const bucket = (cfEnv as { MEDIA_BUCKET?: R2Bucket }).MEDIA_BUCKET ?? null;
   await saveThemePackage(kv, bucket, pkg, input.assets);
 
+  const manifestSlug = normalizeThemeSlug(input.manifest.slug);
+  if (manifestSlug && manifestSlug !== packageSlug) {
+    const legacyPkg: ThemePackageRecord = {
+      ...pkg,
+      manifest: { ...pkg.manifest, slug: manifestSlug },
+    };
+    await kv.put(themePackageKvKey(manifestSlug), JSON.stringify(legacyPkg));
+    if (bucket) {
+      for (const [relativePath, data] of input.assets.entries()) {
+        const key = themeAssetR2Key(manifestSlug, relativePath);
+        await bucket.put(key, data, {
+          httpMetadata: { contentType: guessAssetContentType(relativePath) },
+        });
+      }
+    }
+  }
+
   const themesTypeId = await getPostTypeId(db, "themes");
   if (!themesTypeId) {
     throw new Error("Themes post type not found");
   }
 
   const snapshot = await getThemeSnapshotById(db, input.themePostId);
-  const nextMeta = withThemeImportState(snapshot?.meta_values ?? null, {
+  let nextMeta = withThemeImportState(snapshot?.meta_values ?? null, {
     requested_active: false,
     is_active: input.activate,
     import_status: "ready",
     import_error: undefined,
   });
+
+  if (manifestSlug && manifestSlug !== packageSlug) {
+    const metaObj = parseMetaValues(nextMeta);
+    metaObj["manifest_slug"] = manifestSlug;
+    nextMeta = JSON.stringify(metaObj);
+  }
 
   await updatePost(db, input.themePostId, themesTypeId, {
     meta_values: nextMeta,
@@ -76,4 +103,15 @@ export async function installThemePackage(
   await syncThemeCache(locals, db);
 
   return pkg;
+}
+
+function guessAssetContentType(path: string): string {
+  const lower = path.toLowerCase();
+  if (lower.endsWith(".css")) return "text/css; charset=utf-8";
+  if (lower.endsWith(".js")) return "application/javascript; charset=utf-8";
+  if (lower.endsWith(".svg")) return "image/svg+xml";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".webp")) return "image/webp";
+  return "application/octet-stream";
 }
