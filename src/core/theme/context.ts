@@ -5,17 +5,29 @@ import {
   type ContentPostDetail,
 } from "../services/edgepress-content.ts";
 import { getSettingsFromDb } from "../services/settings-service.ts";
+import {
+  getTranslationSlugsByKey,
+  type TranslationSlugRow,
+} from "../services/post-translation-service.ts";
 import { db } from "../../db/index.ts";
 import { getKvFromLocals } from "../../utils/runtime-locals.ts";
+import { adminUrlLocaleToDbCode } from "../../utils/admin-locale-constants.ts";
 import type {
+  LocaleSwitcherItem,
   MenuItem,
   ResolvedPublicRoute,
   ThemePackageRecord,
   ThemePostView,
   ThemeRenderContext,
+  ThemeRouteKind,
 } from "./types.ts";
 import { buildSeoFromPost } from "./seo-head.ts";
-import { localeToHtmlLang, normalizePublicLocale } from "./resolve-route.ts";
+import {
+  localeToHtmlLang,
+  normalizePublicLocale,
+  publicLocaleHomeUrl,
+  publicLocaleUrlPrefix,
+} from "./resolve-route.ts";
 
 type CustomFieldRow = { name?: string; value?: string; type?: string };
 type CustomFieldItem = { title?: string; fields?: CustomFieldRow[] };
@@ -107,6 +119,51 @@ function buildBodyClass(route: ResolvedPublicRoute, post?: ThemePostView): strin
   return parts.join(" ");
 }
 
+const LOCALE_SWITCHER_META: ReadonlyArray<{ code: string; flag: string; label: string }> = [
+  { code: "pt-br", flag: "🇧🇷", label: "PT" },
+  { code: "en", flag: "🇺🇸", label: "EN" },
+];
+
+async function buildLocaleSwitcher(
+  currentLocale: string,
+  resolvedKind: ThemeRouteKind,
+  post: ThemePostView | undefined,
+  homeTranslationKey: string | undefined,
+): Promise<LocaleSwitcherItem[]> {
+  let siblings: TranslationSlugRow[] = [];
+  const translationKey =
+    resolvedKind === "home"
+      ? homeTranslationKey
+      : post?.meta?.translation_key;
+
+  if (
+    translationKey &&
+    (resolvedKind === "home" || resolvedKind === "single" || resolvedKind === "page")
+  ) {
+    siblings = await getTranslationSlugsByKey(translationKey, ["published"]);
+  }
+
+  return LOCALE_SWITCHER_META.map(({ code, flag, label }) => {
+    const prefix = publicLocaleUrlPrefix(code);
+    let url = publicLocaleHomeUrl(code);
+
+    if (resolvedKind === "archive") {
+      url = `${prefix}/posts`;
+    } else if (
+      translationKey &&
+      (resolvedKind === "home" || resolvedKind === "single" || resolvedKind === "page")
+    ) {
+      const dbCode = adminUrlLocaleToDbCode(code);
+      const match = siblings.find((row) => row.locale_code === dbCode);
+      url = match ? `${prefix}/${match.slug}` : publicLocaleHomeUrl(code);
+    } else if (post?.slug && code === currentLocale) {
+      url = `${prefix}/${post.slug}`;
+    }
+
+    return { code, flag, label, url, active: code === currentLocale };
+  });
+}
+
 export async function buildThemeRenderContext(
   locals: App.Locals,
   requestUrl: URL,
@@ -123,7 +180,11 @@ export async function buildThemeRenderContext(
   const siteName = String(settings.site_name ?? "").trim() || "Site";
   const siteDescription = String(settings.site_description ?? "").trim();
   const locale = normalizePublicLocale(route.locale);
+  const dbLocale = adminUrlLocaleToDbCode(locale);
+  const localePrefix = publicLocaleUrlPrefix(locale);
+  const homeUrl = publicLocaleHomeUrl(locale);
   const assetBase = `${baseUrl}/themes-assets/${pkg.manifest.slug}`;
+  const homeContentKey = pkg.manifest.home_content_key ?? "hello-world";
 
   let post: ThemePostView | undefined;
   let posts: ThemePostView[] | undefined;
@@ -133,11 +194,10 @@ export async function buildThemeRenderContext(
   let resolvedKind = route.kind;
 
   if (route.kind === "home") {
-    const homeKey = pkg.manifest.home_content_key ?? "hello-world";
     try {
-      const data = await content.getItem("posts", homeKey, {
+      const data = await content.getItem("posts", homeContentKey, {
         status: "published",
-        locale,
+        locale: dbLocale,
         resolve: "translation_key",
       });
       seoPost = data as ContentPostDetail;
@@ -152,7 +212,7 @@ export async function buildThemeRenderContext(
     const list = await content.getListWithDetails("posts", {
       page,
       limit,
-      locale,
+      locale: dbLocale,
       filter: { post_type: route.postType ?? "post", status: "published" },
       order: "published_at",
       orderDir: "desc",
@@ -194,7 +254,7 @@ export async function buildThemeRenderContext(
     custom_fields?: CustomFieldItem[];
   }>("posts", {
     limit: 500,
-    locale,
+    locale: dbLocale,
     filter: { post_type: "menus", status: "published" },
   });
 
@@ -213,17 +273,27 @@ export async function buildThemeRenderContext(
     ogImage: post ? resolveOgImage(seoPost ?? ({} as ContentPostDetail), baseUrl) : undefined,
   });
 
+  const localeSwitcher = await buildLocaleSwitcher(
+    locale,
+    resolvedKind,
+    post,
+    homeContentKey,
+  );
+
   return {
     site: {
       title: siteName,
       description: siteDescription,
       locale,
+      locale_prefix: localePrefix,
+      home_url: homeUrl,
       base_url: baseUrl,
       html_lang: localeToHtmlLang(locale),
       year: new Date().getFullYear(),
     },
     seo,
     menus,
+    locale_switcher: localeSwitcher,
     theme: {
       slug: pkg.manifest.slug,
       version: pkg.manifest.version,

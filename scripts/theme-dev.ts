@@ -13,8 +13,8 @@ import {
   loadDefaultThemePackage,
 } from "../src/themes-default/2026/load-package.ts";
 import { renderTheme, resetLiquidForTests } from "../src/core/theme/render.ts";
-import { resolvePublicRoute, localeToHtmlLang } from "../src/core/theme/resolve-route.ts";
-import type { ResolvedPublicRoute, ThemePackageRecord, ThemeRenderContext } from "../src/core/theme/types.ts";
+import { resolvePublicRoute, localeToHtmlLang, publicLocaleHomeUrl, publicLocaleUrlPrefix } from "../src/core/theme/resolve-route.ts";
+import type { LocaleSwitcherItem, ResolvedPublicRoute, ThemePackageRecord, ThemeRenderContext } from "../src/core/theme/types.ts";
 
 const PORT = Number(process.env["THEME_DEV_PORT"] ?? 4322);
 const RELOAD_PATH = "/__theme_dev/events";
@@ -59,6 +59,45 @@ function startThemeWatcher(): void {
   console.log(`[theme:dev] watching ${DEFAULT_THEME_DIR} (templates, assets, theme.json)`);
 }
 
+function buildDevLocaleUrl(
+  targetLocale: string,
+  route: ResolvedPublicRoute,
+  kind: string,
+): string {
+  const prefix = publicLocaleUrlPrefix(targetLocale);
+  if (kind === "archive") return `${prefix}/posts`;
+  if (route.slug) {
+    if (route.slug === "hello-world" && targetLocale === "en") return "/en/hello-world-en";
+    if (route.slug === "hello-world-en" && targetLocale === "pt-br") return "/hello-world";
+    if (route.slug === "hello-world-post" && targetLocale === "en") return "/en/hello-world-post-en";
+    if (route.slug === "hello-world-post-en" && targetLocale === "pt-br") return "/hello-world-post";
+    return `${prefix}/${route.slug}`;
+  }
+  return publicLocaleHomeUrl(targetLocale);
+}
+
+function buildDevLocaleSwitcher(
+  route: ResolvedPublicRoute,
+  kind: string,
+): LocaleSwitcherItem[] {
+  return [
+    {
+      code: "pt-br",
+      flag: "🇧🇷",
+      label: "PT",
+      url: buildDevLocaleUrl("pt-br", route, kind),
+      active: route.locale === "pt-br",
+    },
+    {
+      code: "en",
+      flag: "🇺🇸",
+      label: "EN",
+      url: buildDevLocaleUrl("en", route, kind),
+      active: route.locale === "en",
+    },
+  ];
+}
+
 function buildDevContext(
   url: URL,
   route: ResolvedPublicRoute,
@@ -66,6 +105,8 @@ function buildDevContext(
 ): ThemeRenderContext {
   const baseUrl = url.origin;
   const locale = route.locale;
+  const localePrefix = publicLocaleUrlPrefix(locale);
+  const homeUrl = publicLocaleHomeUrl(locale);
 
   let kind = route.kind;
   if (route.slug && kind === "page") {
@@ -90,6 +131,8 @@ function buildDevContext(
       title: "Edgepress Theme Dev",
       description: "Preview local do tema Liquid",
       locale,
+      locale_prefix: localePrefix,
+      home_url: homeUrl,
       base_url: baseUrl,
       html_lang: localeToHtmlLang(locale),
       year: new Date().getFullYear(),
@@ -114,6 +157,7 @@ function buildDevContext(
     },
     route: { kind, path: route.path, locale },
     body_class: `route-${kind} locale-${locale.replace(/-/g, "_")}`,
+    locale_switcher: buildDevLocaleSwitcher(route, kind),
     post,
     ...(kind === "archive"
       ? {

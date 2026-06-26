@@ -9,6 +9,8 @@ function baseContext(overrides: Partial<ThemeRenderContext> = {}): ThemeRenderCo
       title: "Demo Site",
       description: "Demo",
       locale: "pt-br",
+      locale_prefix: "",
+      home_url: "/",
       base_url: "http://localhost:8787",
       html_lang: "pt-BR",
       year: 2026,
@@ -29,6 +31,10 @@ function baseContext(overrides: Partial<ThemeRenderContext> = {}): ThemeRenderCo
     },
     route: { kind: "home", path: "/", locale: "pt-br" },
     body_class: "route-home",
+    locale_switcher: [
+      { code: "pt-br", flag: "🇧🇷", label: "PT", url: "/", active: true },
+      { code: "en", flag: "🇺🇸", label: "EN", url: "/en", active: false },
+    ],
     post: {
       id: 1,
       title: "Hello",
@@ -56,6 +62,9 @@ describe("renderTheme", () => {
     expect(html).toContain('<section class="hero">');
     expect(html).toContain("Theme API (tutorial)");
     expect(html).toContain('class="site-header"');
+    expect(html).toContain('class="site-lang-switcher"');
+    expect(html).toContain("🇧🇷");
+    expect(html).toContain("🇺🇸");
   });
 
   it("renders 404 template", async () => {

@@ -6,7 +6,7 @@
   <div class="post-grid">
     {% for item in posts %}
       <article class="post-card">
-        <h2><a href="/{{ item.slug }}">{{ item.title }}</a></h2>
+        <h2><a href="{{ site.locale_prefix }}/{{ item.slug }}">{{ item.title }}</a></h2>
         {% if item.excerpt %}
           <p>{{ item.excerpt }}</p>
         {% endif %}

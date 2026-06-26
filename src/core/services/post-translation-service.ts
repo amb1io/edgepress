@@ -174,6 +174,37 @@ export async function findPostByTranslationKey(
   return any;
 }
 
+export type TranslationSlugRow = {
+  slug: string;
+  locale_code: string;
+};
+
+/** All published slugs sharing the same translation_key (for locale switcher). */
+export async function getTranslationSlugsByKey(
+  translationKey: string,
+  statusList: string[],
+  database: Database = defaultDb,
+): Promise<TranslationSlugRow[]> {
+  const key = normalizeTranslationKey(translationKey);
+  if (!key) return [];
+
+  const statusCond = statusWhere(statusList);
+
+  const rows = await database
+    .select({
+      slug: posts.slug,
+      locale_code: locales.locale_code,
+    })
+    .from(posts)
+    .innerJoin(locales, eq(posts.id_locale_code, locales.id))
+    .where(and(translationKeyMatch(key), statusCond));
+
+  return rows.map((row) => ({
+    slug: String(row.slug),
+    locale_code: String(row.locale_code),
+  }));
+}
+
 export function buildTranslationPostCacheKey(
   translationKey: string,
   localeCode: string | null | undefined,

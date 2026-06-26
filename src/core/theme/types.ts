@@ -60,9 +60,21 @@ export type ThemeSiteContext = {
   title: string;
   description: string;
   locale: string;
+  /** URL prefix for the active locale (`""` or `/en`). */
+  locale_prefix: string;
+  /** Home URL for the active locale (`/` or `/en`). */
+  home_url: string;
   base_url: string;
   html_lang: string;
   year: number;
+};
+
+export type LocaleSwitcherItem = {
+  code: string;
+  label: string;
+  flag: string;
+  url: string;
+  active: boolean;
 };
 
 export type ThemeRenderContext = {
@@ -80,6 +92,8 @@ export type ThemeRenderContext = {
     locale: string;
   };
   body_class: string;
+  /** Language switcher links (pt-br, en). */
+  locale_switcher: LocaleSwitcherItem[];
   post?: ThemePostView;
   posts?: ThemePostView[];
   archive?: {

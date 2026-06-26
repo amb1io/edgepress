@@ -20,6 +20,20 @@ export function localeToHtmlLang(locale: string): string {
   return locale;
 }
 
+export const PUBLIC_THEME_LOCALES = ["pt-br", "en"] as const;
+
+/** URL path prefix for a public locale (`""` for pt-br, `/en` for English). */
+export function publicLocaleUrlPrefix(locale: string): string {
+  const normalized = normalizePublicLocale(locale);
+  return normalized === "pt-br" ? "" : `/${normalized}`;
+}
+
+/** Home URL for a public locale. */
+export function publicLocaleHomeUrl(locale: string): string {
+  const prefix = publicLocaleUrlPrefix(locale);
+  return prefix || "/";
+}
+
 /** Parses a public URL path into route kind + locale + slug segments. */
 export function resolvePublicRoute(pathname: string, searchParams: URLSearchParams): ResolvedPublicRoute {
   let path = pathname.trim();
