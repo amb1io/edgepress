@@ -1,0 +1,17 @@
+{
+  "name": "Edgepress 2026",
+  "slug": "2026",
+  "version": "1.0.0",
+  "engine": "liquid",
+  "supports": ["home", "single", "page", "archive"],
+  "home_content_key": "hello-world",
+  "layout": "layouts/base",
+  "templates": {
+    "home": "home",
+    "single": "single",
+    "page": "page",
+    "archive": "archive",
+    "404": "404"
+  },
+  "assets_dir": "assets"
+}
