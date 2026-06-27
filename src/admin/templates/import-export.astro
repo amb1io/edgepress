@@ -1,0 +1,113 @@
+---
+/**
+ * Template da página Import/Export em Settings.
+ */
+import AdminLayout from "../layouts/AdminLayout.astro";
+import AdminFormContainer from "../components/admin/AdminFormContainer.astro";
+import { t, type Locale } from "../../i18n/index.ts";
+import type { MenuItem } from "../../utils/menu.ts";
+
+export interface Props {
+  locale: string;
+  menuItems: MenuItem[];
+  currentUser: { email: string; name: string };
+}
+
+const { locale, menuItems, currentUser } = Astro.props;
+const currentLocale = locale as Locale;
+
+const pageTitle = t(currentLocale, "admin.importExport.title");
+const exportTitle = t(currentLocale, "admin.importExport.exportTitle");
+const exportDescription = t(currentLocale, "admin.importExport.exportDescription");
+const exportButton = t(currentLocale, "admin.importExport.exportButton");
+const exportLoading = t(currentLocale, "admin.importExport.exportLoading");
+const importTitle = t(currentLocale, "admin.importExport.importTitle");
+const importHint = t(currentLocale, "admin.importExport.importHint");
+const importButton = t(currentLocale, "admin.importExport.importButton");
+const importConfirm = t(currentLocale, "admin.importExport.importConfirm");
+const importLoading = t(currentLocale, "admin.importExport.importLoading");
+const importSuccess = t(currentLocale, "admin.importExport.importSuccess");
+const importError = t(currentLocale, "admin.importExport.importError");
+---
+
+<AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={currentUser}>
+  <div slot="header-actions">
+    <span class="text-sm text-base-content/70">{currentUser.email}</span>
+  </div>
+
+  <script define:vars={{ importConfirm, importError, importSuccess }}>
+    window.__importExportStrings = { importConfirm, importError, importSuccess };
+  </script>
+  <script>
+    import "../scripts/import-export-init.ts";
+  </script>
+
+  <AdminFormContainer>
+    <div class="flex flex-col gap-10" x-data="importExportPage">
+      <section class="flex flex-col gap-4">
+        <div>
+          <h2 class="text-xl font-semibold">{exportTitle}</h2>
+          <p class="text-sm text-base-content/70 mt-1">{exportDescription}</p>
+        </div>
+        <button
+          type="button"
+          class="btn btn-primary w-fit"
+          @click="exportData()"
+          :disabled="exporting || importing"
+        >
+          <span x-show="!exporting" x-cloak>{exportButton}</span>
+          <span x-show="exporting" x-cloak>{exportLoading}</span>
+        </button>
+      </section>
+
+      <div class="divider"></div>
+
+      <section class="flex flex-col gap-4">
+        <div>
+          <h2 class="text-xl font-semibold">{importTitle}</h2>
+          <p class="text-sm text-base-content/70 mt-1">{importHint}</p>
+        </div>
+
+        <form
+          class="flex flex-col gap-4"
+          enctype="multipart/form-data"
+          @submit="submitImport($event)"
+        >
+          <div class="form-control">
+            <label for="import-file" class="label">
+              <span class="label-text">.edgepress</span>
+            </label>
+            <input
+              id="import-file"
+              type="file"
+              name="file"
+              accept=".edgepress,.tar.gz,.tgz,application/gzip,application/x-gzip"
+              class="file-input file-input-bordered w-full max-w-xl"
+              required
+              :disabled="importing || exporting"
+            />
+          </div>
+
+          <button
+            type="submit"
+            class="btn btn-secondary w-fit"
+            :disabled="importing || exporting"
+          >
+            <span x-show="!importing" x-cloak>{importButton}</span>
+            <span x-show="importing" x-cloak>{importLoading}</span>
+          </button>
+        </form>
+      </section>
+
+      <div
+        x-show="importMessage"
+        x-cloak
+        class="alert"
+        :class="importOk ? 'alert-success' : 'alert-error'"
+        role="alert"
+      >
+        <span x-text="importMessage"></span>
+      </div>
+    </div>
+  </AdminFormContainer>
+</AdminLayout>

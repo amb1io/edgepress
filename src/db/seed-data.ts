@@ -142,7 +142,7 @@ export const MENU_CONFIG: MenuConfigRow[] = [
     menu_order: 8,
     icon: "line-md:document-list",
   },
-  { typeSlug: "settings", menu_options: ["list", "new", "cache"], menu_order: 9, icon: "line-md:cog" },
+  { typeSlug: "settings", menu_options: ["list", "new", "cache", "import_export"], menu_order: 9, icon: "line-md:cog" },
 ];
 
 /** Post types padrão (slug, name, meta_schema). Re-exportado de default-post-types para centralizar dados de seed. */
