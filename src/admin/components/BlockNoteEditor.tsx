@@ -201,7 +201,13 @@ export default function BlockNoteEditor({
     const blocksInput = document.getElementById(blocksInputId) as HTMLInputElement | null;
     if (!input || !editor) return;
     try {
-      const html = editor.blocksToHTMLLossy(editor.document);
+      const html =
+        typeof (editor as { blocksToFullHTML?: (blocks: unknown) => string }).blocksToFullHTML ===
+        "function"
+          ? (editor as { blocksToFullHTML: (blocks: unknown) => string }).blocksToFullHTML(
+              editor.document,
+            )
+          : editor.blocksToHTMLLossy(editor.document);
       const blocks = editor.document;
       input.value = html ?? "";
       if (blocksInput) blocksInput.value = JSON.stringify(blocks ?? []);

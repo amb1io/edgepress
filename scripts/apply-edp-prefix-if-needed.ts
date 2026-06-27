@@ -9,7 +9,7 @@ import { createClient, type Client } from "@libsql/client/node";
 
 const WRANGLER_STATE = join(process.cwd(), ".wrangler", "state", "v3", "d1");
 const WRANGLER_CONFIG = "wrangler.toml";
-const DATABASE = "farramedia";
+const DATABASE = "edgepress";
 
 const TABLE_RENAMES: ReadonlyArray<[string, string]> = [
   ["user", "edp_user"],
@@ -68,42 +68,37 @@ async function applyRenames(client: Client): Promise<number> {
   return renamed;
 }
 
+function tableExistsRemote(tableName: string): boolean {
+  const output = execFileSync(
+    "npx",
+    [
+      "wrangler",
+      "d1",
+      "execute",
+      DATABASE,
+      "--remote",
+      "--json",
+      "--command",
+      `SELECT 1 AS found FROM sqlite_master WHERE type='table' AND name='${tableName}' LIMIT 1`,
+      "-c",
+      WRANGLER_CONFIG,
+    ],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  );
+  try {
+    const parsed = JSON.parse(output);
+    const results = parsed?.[0]?.results ?? parsed?.result?.[0]?.results ?? [];
+    return results.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 function applyRenamesRemote(): number {
   let renamed = 0;
   for (const [legacy, prefixed] of TABLE_RENAMES) {
-    const checkLegacy = execFileSync(
-      "npx",
-      [
-        "wrangler",
-        "d1",
-        "execute",
-        DATABASE,
-        "--remote",
-        "--command",
-        `SELECT 1 FROM sqlite_master WHERE type='table' AND name='${legacy}' LIMIT 1`,
-        "-c",
-        WRANGLER_CONFIG,
-      ],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-    );
-    if (!checkLegacy.trim()) continue;
-
-    const checkPrefixed = execFileSync(
-      "npx",
-      [
-        "wrangler",
-        "d1",
-        "execute",
-        DATABASE,
-        "--remote",
-        "--command",
-        `SELECT 1 FROM sqlite_master WHERE type='table' AND name='${prefixed}' LIMIT 1`,
-        "-c",
-        WRANGLER_CONFIG,
-      ],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-    );
-    if (checkPrefixed.trim()) continue;
+    if (!tableExistsRemote(legacy)) continue;
+    if (tableExistsRemote(prefixed)) continue;
 
     execFileSync(
       "npx",

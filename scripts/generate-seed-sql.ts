@@ -15,6 +15,13 @@ import {
   META_ONLY_POST_TYPE_SLUGS,
   TAXONOMY_SEED_ROWS,
   DEFAULT_SETTINGS_ROWS,
+  SHOWCASE_ATTACHMENT,
+  SHOWCASE_PAGE,
+  SHOWCASE_PAGE_EN,
+  SHOWCASE_POST,
+  SHOWCASE_POST_EN,
+  buildShowcasePageBodyHtml,
+  buildShowcasePageBodyHtmlEn,
 } from "../src/db/seed-data.ts";
 import { prefixedTable } from "../src/db/table-prefix.ts";
 // JSON imports (chaves de tradução)
@@ -206,6 +213,63 @@ for (const config of MENU_CONFIG) {
     `UPDATE ${T("posts")} SET meta_values='${metaValues}', updated_at=${SEED_TS} WHERE slug='${slug}';`
   );
 }
+lines.push("");
+
+lines.push("-- Conteúdo de demonstração Hello World (tema 2026)");
+const attachmentMeta = escapeSql(
+  JSON.stringify({
+    mime_type: SHOWCASE_ATTACHMENT.mime_type,
+    attachment_file: SHOWCASE_ATTACHMENT.file,
+    attachment_width: SHOWCASE_ATTACHMENT.width,
+    attachment_height: SHOWCASE_ATTACHMENT.height,
+    attachment_path: SHOWCASE_ATTACHMENT.path,
+    attachment_alt: SHOWCASE_ATTACHMENT.alt,
+  }),
+);
+lines.push(
+  `INSERT OR IGNORE INTO ${T("posts")} (post_type_id, title, slug, status, meta_values, created_at, updated_at) SELECT (SELECT id FROM ${T("post_types")} WHERE slug='attachment' LIMIT 1), '${escapeSql(SHOWCASE_ATTACHMENT.title)}', '${escapeSql(SHOWCASE_ATTACHMENT.slug)}', 'published', '${attachmentMeta}', ${SEED_TS}, ${SEED_TS} WHERE NOT EXISTS (SELECT 1 FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_ATTACHMENT.slug)}');`,
+);
+
+const pageMetaBase = escapeSql(JSON.stringify({ translation_key: SHOWCASE_PAGE.translation_key }));
+const pageBody = escapeSql(buildShowcasePageBodyHtml());
+lines.push(
+  `INSERT OR IGNORE INTO ${T("posts")} (post_type_id, id_locale_code, title, slug, excerpt, body, status, meta_values, published_at, created_at, updated_at) SELECT (SELECT id FROM ${T("post_types")} WHERE slug='page' LIMIT 1), (SELECT id FROM ${T("locales")} WHERE locale_code='${escapeSql(SHOWCASE_PAGE.locale_code)}' LIMIT 1), '${escapeSql(SHOWCASE_PAGE.title)}', '${escapeSql(SHOWCASE_PAGE.slug)}', '${escapeSql(SHOWCASE_PAGE.excerpt)}', '${pageBody}', 'published', '${pageMetaBase}', ${SEED_TS}, ${SEED_TS}, ${SEED_TS} WHERE NOT EXISTS (SELECT 1 FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_PAGE.slug)}');`,
+);
+lines.push(
+  `UPDATE ${T("posts")} SET meta_values=json_object('translation_key', '${escapeSql(SHOWCASE_PAGE.translation_key)}', 'post_thumbnail_id', CAST((SELECT id FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_ATTACHMENT.slug)}' LIMIT 1) AS TEXT)) WHERE slug='${escapeSql(SHOWCASE_PAGE.slug)}';`,
+);
+lines.push(
+  `INSERT OR IGNORE INTO ${T("posts_media")} (post_id, media_id) SELECT (SELECT id FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_PAGE.slug)}' LIMIT 1), (SELECT id FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_ATTACHMENT.slug)}' LIMIT 1) WHERE NOT EXISTS (SELECT 1 FROM ${T("posts_media")} WHERE post_id=(SELECT id FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_PAGE.slug)}' LIMIT 1) AND media_id=(SELECT id FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_ATTACHMENT.slug)}' LIMIT 1));`,
+);
+
+const postBody = escapeSql(SHOWCASE_POST.body_html);
+const postMeta = escapeSql(JSON.stringify({ translation_key: SHOWCASE_POST.translation_key }));
+lines.push(
+  `INSERT OR IGNORE INTO ${T("posts")} (post_type_id, id_locale_code, title, slug, excerpt, body, status, meta_values, published_at, created_at, updated_at) SELECT (SELECT id FROM ${T("post_types")} WHERE slug='post' LIMIT 1), (SELECT id FROM ${T("locales")} WHERE locale_code='${escapeSql(SHOWCASE_POST.locale_code)}' LIMIT 1), '${escapeSql(SHOWCASE_POST.title)}', '${escapeSql(SHOWCASE_POST.slug)}', '${escapeSql(SHOWCASE_POST.excerpt)}', '${postBody}', 'published', '${postMeta}', ${SEED_TS}, ${SEED_TS}, ${SEED_TS} WHERE NOT EXISTS (SELECT 1 FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_POST.slug)}');`,
+);
+lines.push(
+  `INSERT OR IGNORE INTO ${T("posts_taxonomies")} (post_id, term_id) SELECT (SELECT id FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_POST.slug)}' LIMIT 1), (SELECT id FROM ${T("taxonomies")} WHERE slug='${escapeSql(SHOWCASE_POST.category_slug)}' LIMIT 1) WHERE NOT EXISTS (SELECT 1 FROM ${T("posts_taxonomies")} WHERE post_id=(SELECT id FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_POST.slug)}' LIMIT 1) AND term_id=(SELECT id FROM ${T("taxonomies")} WHERE slug='${escapeSql(SHOWCASE_POST.category_slug)}' LIMIT 1));`,
+);
+
+const pageBodyEn = escapeSql(buildShowcasePageBodyHtmlEn());
+lines.push(
+  `INSERT OR IGNORE INTO ${T("posts")} (post_type_id, id_locale_code, title, slug, excerpt, body, status, meta_values, published_at, created_at, updated_at) SELECT (SELECT id FROM ${T("post_types")} WHERE slug='page' LIMIT 1), (SELECT id FROM ${T("locales")} WHERE locale_code='${escapeSql(SHOWCASE_PAGE_EN.locale_code)}' LIMIT 1), '${escapeSql(SHOWCASE_PAGE_EN.title)}', '${escapeSql(SHOWCASE_PAGE_EN.slug)}', '${escapeSql(SHOWCASE_PAGE_EN.excerpt)}', '${pageBodyEn}', 'published', '${escapeSql(JSON.stringify({ translation_key: SHOWCASE_PAGE_EN.translation_key }))}', ${SEED_TS}, ${SEED_TS}, ${SEED_TS} WHERE NOT EXISTS (SELECT 1 FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_PAGE_EN.slug)}');`,
+);
+lines.push(
+  `UPDATE ${T("posts")} SET meta_values=json_object('translation_key', '${escapeSql(SHOWCASE_PAGE_EN.translation_key)}', 'post_thumbnail_id', CAST((SELECT id FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_ATTACHMENT.slug)}' LIMIT 1) AS TEXT)) WHERE slug='${escapeSql(SHOWCASE_PAGE_EN.slug)}';`,
+);
+lines.push(
+  `INSERT OR IGNORE INTO ${T("posts_media")} (post_id, media_id) SELECT (SELECT id FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_PAGE_EN.slug)}' LIMIT 1), (SELECT id FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_ATTACHMENT.slug)}' LIMIT 1) WHERE NOT EXISTS (SELECT 1 FROM ${T("posts_media")} WHERE post_id=(SELECT id FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_PAGE_EN.slug)}' LIMIT 1) AND media_id=(SELECT id FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_ATTACHMENT.slug)}' LIMIT 1));`,
+);
+
+const postBodyEn = escapeSql(SHOWCASE_POST_EN.body_html);
+const postMetaEn = escapeSql(JSON.stringify({ translation_key: SHOWCASE_POST_EN.translation_key }));
+lines.push(
+  `INSERT OR IGNORE INTO ${T("posts")} (post_type_id, id_locale_code, title, slug, excerpt, body, status, meta_values, published_at, created_at, updated_at) SELECT (SELECT id FROM ${T("post_types")} WHERE slug='post' LIMIT 1), (SELECT id FROM ${T("locales")} WHERE locale_code='${escapeSql(SHOWCASE_POST_EN.locale_code)}' LIMIT 1), '${escapeSql(SHOWCASE_POST_EN.title)}', '${escapeSql(SHOWCASE_POST_EN.slug)}', '${escapeSql(SHOWCASE_POST_EN.excerpt)}', '${postBodyEn}', 'published', '${postMetaEn}', ${SEED_TS}, ${SEED_TS}, ${SEED_TS} WHERE NOT EXISTS (SELECT 1 FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_POST_EN.slug)}');`,
+);
+lines.push(
+  `INSERT OR IGNORE INTO ${T("posts_taxonomies")} (post_id, term_id) SELECT (SELECT id FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_POST_EN.slug)}' LIMIT 1), (SELECT id FROM ${T("taxonomies")} WHERE slug='${escapeSql(SHOWCASE_POST_EN.category_slug)}' LIMIT 1) WHERE NOT EXISTS (SELECT 1 FROM ${T("posts_taxonomies")} WHERE post_id=(SELECT id FROM ${T("posts")} WHERE slug='${escapeSql(SHOWCASE_POST_EN.slug)}' LIMIT 1) AND term_id=(SELECT id FROM ${T("taxonomies")} WHERE slug='${escapeSql(SHOWCASE_POST_EN.category_slug)}' LIMIT 1));`,
+);
 lines.push("");
 
 mkdirSync(OUT_DIR, { recursive: true });

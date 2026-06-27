@@ -66,6 +66,20 @@ export function getBoolean(formData: FormData, key: string, defaultValue: boolea
 }
 
 /**
+ * Lê checkbox enviado junto com hidden fallback (name=0 + checkbox name=1).
+ * FormData.get() retorna só o primeiro valor; getAll + último valor reflete o checkbox.
+ */
+export function getCheckboxFlag(formData: FormData, key: string): boolean {
+  const values = formData
+    .getAll(key)
+    .filter((v): v is string => typeof v === 'string')
+    .map((v) => v.trim().toLowerCase());
+  if (values.length === 0) return false;
+  const last = values[values.length - 1]!;
+  return last === '1' || last === 'true' || last === 'on' || last === 'yes';
+}
+
+/**
  * Extrai um array de strings do FormData
  * @param formData - FormData a ser processado
  * @param key - Chave do campo (geralmente com [] no final)
