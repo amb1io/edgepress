@@ -87,6 +87,12 @@ export function resolveMenuOption(
         link: `${basePath}?domain=cache`,
         icon: "line-md:document",
       };
+    case "import_export":
+      return {
+        text: t(locale, `menu.option.${option}`) || option,
+        link: `${basePath}?domain=import_export`,
+        icon: "line-md:downloading-loop",
+      };
     case "post_types":
       return {
         text: t(locale, "menu.option.post_types") || "Post Types",
