@@ -23,7 +23,7 @@ import {
   buildShowcasePageBodyHtml,
   buildShowcasePageBodyHtmlEn,
 } from "../src/db/seed-data.ts";
-import { prefixedTable } from "../src/db/table-prefix.ts";
+import { EDP_TABLES, prefixedTable } from "../src/db/table-prefix.ts";
 // JSON imports (chaves de tradução)
 import enTranslations from "../src/i18n/languages/en.json";
 import esTranslations from "../src/i18n/languages/es.json";
