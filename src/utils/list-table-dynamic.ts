@@ -221,10 +221,12 @@ export async function getTableList(
   );
 
   const whereParts: string[] = [];
-  // Na listagem de posts: excluir status "trash" e excluir o post "pai" do menu lateral (show_in_menu = 1)
+  // Na listagem de posts: excluir status "trash" e post pai do menu lateral (show_in_menu)
   if (logicalTable === "posts") {
     whereParts.push(`${quotedTable}."status" != 'trash'`);
-    whereParts.push(`(json_extract(${quotedTable}."meta_values", '$.show_in_menu') IS NULL OR json_extract(${quotedTable}."meta_values", '$.show_in_menu') != 1)`);
+    whereParts.push(
+      `(json_extract(${quotedTable}."meta_values", '$.show_in_menu') IS NULL OR (json_extract(${quotedTable}."meta_values", '$.show_in_menu') != 1 AND json_extract(${quotedTable}."meta_values", '$.show_in_menu') != '1' AND lower(coalesce(json_extract(${quotedTable}."meta_values", '$.show_in_menu'), '')) != 'true'))`,
+    );
     const taxonomyId = filter["taxonomy_id"];
     const taxonomySlug = filter["taxonomy_slug"];
     const taxonomyType = filter["taxonomy_type"];
