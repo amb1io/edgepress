@@ -1,0 +1,17 @@
+{
+  "name": "Blog Rhamsés",
+  "slug": "blog-rhamses",
+  "version": "1.0.0",
+  "engine": "liquid",
+  "supports": ["home", "single", "page", "archive"],
+  "home_list_posts": true,
+  "layout": "layouts/base",
+  "templates": {
+    "home": "home",
+    "single": "single",
+    "page": "page",
+    "archive": "archive",
+    "404": "404"
+  },
+  "assets_dir": "assets"
+}

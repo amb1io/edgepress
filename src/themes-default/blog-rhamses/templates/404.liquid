@@ -1,0 +1,6 @@
+{% layout 'layouts/base' %}
+<div class="container">
+  <h1>404</h1>
+  <p>{% if route.locale == 'en' %}Page not found.{% else %}Página não encontrada.{% endif %}</p>
+  <p><a href="{{ site.home_url }}">{% if route.locale == 'en' %}Back home{% else %}Voltar ao início{% endif %}</a></p>
+</div>

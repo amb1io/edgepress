@@ -126,6 +126,15 @@ function buildDevContext(
     meta: {},
   };
 
+  const is_front_page = kind === "home";
+  const is_single = kind === "single";
+  const is_page = kind === "page";
+  const is_singular = is_single || is_page;
+  const is_archive = kind === "archive";
+  const is_404 = kind === "404";
+  const posts = [post];
+  const have_posts = posts.length > 0;
+
   return {
     site: {
       title: "Edgepress Theme Dev",
@@ -159,13 +168,16 @@ function buildDevContext(
     body_class: `route-${kind} locale-${locale.replace(/-/g, "_")}`,
     locale_switcher: buildDevLocaleSwitcher(route, kind),
     post,
-    ...(kind === "archive"
-      ? {
-          archive: { title: "Blog", type: "post" },
-          posts: [post],
-          pagination: { page: 1, total_pages: 1 },
-        }
-      : {}),
+    posts,
+    archive: { title: "Blog", type: "post" },
+    pagination: { page: 1, total_pages: 1 },
+    is_front_page,
+    is_single,
+    is_page,
+    is_singular,
+    is_archive,
+    is_404,
+    have_posts,
   };
 }
 

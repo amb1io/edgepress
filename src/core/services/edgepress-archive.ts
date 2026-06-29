@@ -1,5 +1,5 @@
 /**
- * Export/import EdgePress database + R2 uploads as a .edgepress (tar.gz) archive.
+ * Export/import EdgePress database + R2 uploads + theme packages as a .edgepress (tar.gz) archive.
  */
 import { createTarGzip, parseTarGzip } from "nanotar";
 import { sql } from "drizzle-orm";
@@ -16,12 +16,18 @@ import {
 } from "../../db/schema.ts";
 import { tableName } from "../../db/table-prefix.ts";
 import type { Database } from "../../utils/types/database.ts";
+import { THEME_PKG_KV_PREFIX } from "../theme/theme-package.ts";
+import { getActiveThemeFromDb, THEME_ACTIVE_KV_KEY, THEME_META_KV_PREFIX } from "./theme-service.ts";
+import { upsertActiveThemeSetting } from "./settings-service.ts";
 
 export const EDGEPRESS_FORMAT = "edgepress" as const;
 export const EDGEPRESS_SCHEMA_VERSION = 1;
 export const APP_VERSION = "0.0.1";
 export const MEDIA_PREFIX = "uploads/";
 export const MEDIA_TAR_PREFIX = "media/uploads/";
+export const THEME_PKG_TAR_PREFIX = "themes/";
+export const THEME_ASSET_TAR_PREFIX = "themes/";
+export const THEME_PACKAGE_JSON = "package.json";
 
 /** FK-safe insert order. Reverse for wipe. User-created content only. */
 export const TABLE_ORDER = [
@@ -67,6 +73,8 @@ export type EdgepressManifest = {
   counts: Partial<Record<EdgepressLogicalTable, number>>;
   mediaCount: number;
   mediaFiles: Array<{ key: string; contentType: string }>;
+  themeCount: number;
+  themePackages: Array<{ slug: string }>;
 };
 
 export type EdgepressDatabasePayload = {
@@ -76,6 +84,18 @@ export type EdgepressDatabasePayload = {
 export type EdgepressImportResult = {
   counts: Partial<Record<EdgepressLogicalTable, number>>;
   mediaCount: number;
+  themeCount: number;
+};
+
+export type ArchiveKvLike = {
+  get: (key: string, type?: "text" | "json") => Promise<unknown>;
+  put: (key: string, value: string) => Promise<void>;
+  list?: (options?: { prefix?: string; limit?: number; cursor?: string }) => Promise<{
+    keys: { name: string }[];
+    list_complete: boolean;
+    cursor?: string;
+  }>;
+  delete?: (key: string) => Promise<void>;
 };
 
 type R2BucketLike = {
@@ -217,15 +237,16 @@ async function runSql(db: Database, statement: ReturnType<typeof sql.raw> | Retu
   await db.all(statement);
 }
 
-async function readAllR2Objects(bucket: R2BucketLike): Promise<
-  Array<{ key: string; data: Uint8Array; contentType: string }>
-> {
+async function readAllR2ByPrefix(
+  bucket: R2BucketLike,
+  prefix: string,
+): Promise<Array<{ key: string; data: Uint8Array; contentType: string }>> {
   const results: Array<{ key: string; data: Uint8Array; contentType: string }> = [];
   let cursor: string | undefined;
 
   do {
     const listed = await bucket.list({
-      prefix: MEDIA_PREFIX,
+      prefix,
       ...(cursor ? { cursor } : {}),
       limit: 1000,
     });
@@ -247,13 +268,19 @@ async function readAllR2Objects(bucket: R2BucketLike): Promise<
   return results;
 }
 
-async function wipeR2Uploads(bucket: R2BucketLike): Promise<number> {
+async function readAllR2Objects(bucket: R2BucketLike): Promise<
+  Array<{ key: string; data: Uint8Array; contentType: string }>
+> {
+  return readAllR2ByPrefix(bucket, MEDIA_PREFIX);
+}
+
+async function wipeR2ByPrefix(bucket: R2BucketLike, prefix: string): Promise<number> {
   let deleted = 0;
   let cursor: string | undefined;
 
   do {
     const listed = await bucket.list({
-      prefix: MEDIA_PREFIX,
+      prefix,
       ...(cursor ? { cursor } : {}),
       limit: 1000,
     });
@@ -267,6 +294,127 @@ async function wipeR2Uploads(bucket: R2BucketLike): Promise<number> {
   } while (cursor);
 
   return deleted;
+}
+
+async function wipeR2Uploads(bucket: R2BucketLike): Promise<number> {
+  return wipeR2ByPrefix(bucket, MEDIA_PREFIX);
+}
+
+async function readAllThemePackages(
+  kv: ArchiveKvLike,
+): Promise<Array<{ slug: string; data: string }>> {
+  if (!kv.list) return [];
+
+  const packages: Array<{ slug: string; data: string }> = [];
+  let cursor: string | undefined;
+
+  do {
+    const listed = await kv.list({
+      prefix: THEME_PKG_KV_PREFIX,
+      limit: 200,
+      ...(cursor ? { cursor } : {}),
+    });
+
+    for (const key of listed.keys) {
+      const slug = key.name.slice(THEME_PKG_KV_PREFIX.length).trim().toLowerCase();
+      if (!slug) continue;
+      const raw = await kv.get(key.name, "text");
+      if (typeof raw !== "string" || !raw.trim()) continue;
+      packages.push({ slug, data: raw });
+    }
+
+    cursor = listed.list_complete ? undefined : listed.cursor;
+  } while (cursor);
+
+  return packages;
+}
+
+async function wipeThemeKvPackages(kv: ArchiveKvLike): Promise<number> {
+  if (!kv.list || !kv.delete) return 0;
+
+  let deleted = 0;
+  let cursor: string | undefined;
+
+  do {
+    const listed = await kv.list({
+      prefix: THEME_PKG_KV_PREFIX,
+      limit: 200,
+      ...(cursor ? { cursor } : {}),
+    });
+
+    for (const key of listed.keys) {
+      await kv.delete(key.name);
+      deleted++;
+    }
+
+    cursor = listed.list_complete ? undefined : listed.cursor;
+  } while (cursor);
+
+  return deleted;
+}
+
+async function deleteKvKeysByPrefix(kv: ArchiveKvLike, prefix: string): Promise<void> {
+  if (!kv.list || !kv.delete) return;
+
+  let cursor: string | undefined;
+  do {
+    const listed = await kv.list({
+      prefix,
+      limit: 200,
+      ...(cursor ? { cursor } : {}),
+    });
+
+    for (const key of listed.keys) {
+      await kv.delete(key.name);
+    }
+
+    cursor = listed.list_complete ? undefined : listed.cursor;
+  } while (cursor);
+}
+
+async function wipeThemeKvCache(kv: ArchiveKvLike): Promise<void> {
+  await wipeThemeKvPackages(kv);
+  if (kv.delete) {
+    try {
+      await kv.delete(THEME_ACTIVE_KV_KEY);
+    } catch {
+      // ignore
+    }
+  }
+  await deleteKvKeysByPrefix(kv, THEME_META_KV_PREFIX);
+}
+
+function themePackageTarPath(slug: string): string {
+  return `${THEME_PKG_TAR_PREFIX}${slug}/${THEME_PACKAGE_JSON}`;
+}
+
+function parseThemePackageTarPath(path: string): string | null {
+  const match = path.match(/^themes\/([^/]+)\/package\.json$/);
+  return match?.[1]?.trim().toLowerCase() ?? null;
+}
+
+function isThemeAssetTarPath(path: string): boolean {
+  if (!path.startsWith(THEME_ASSET_TAR_PREFIX)) return false;
+  return !path.endsWith(`/${THEME_PACKAGE_JSON}`);
+}
+
+async function syncThemeCacheAfterImport(db: Database, kv: ArchiveKvLike): Promise<void> {
+  try {
+    const activeTheme = await getActiveThemeFromDb(db);
+    await kv.put(THEME_ACTIVE_KV_KEY, JSON.stringify(activeTheme));
+
+    if (activeTheme.meta?.theme_slug) {
+      await kv.put(
+        `${THEME_META_KV_PREFIX}${activeTheme.meta.theme_slug}`,
+        JSON.stringify(activeTheme.meta),
+      );
+      await upsertActiveThemeSetting(db, activeTheme.meta.theme_slug);
+    } else if (activeTheme.slug) {
+      await upsertActiveThemeSetting(db, activeTheme.slug);
+    }
+  } catch {
+    // ignore cache sync failures
+  }
 }
 
 async function wipeDatabase(db: Database): Promise<void> {
@@ -308,7 +456,11 @@ async function resetAutoIncrementSequences(db: Database): Promise<void> {
   }
 }
 
-export async function buildExport(db: Database, bucket: R2BucketLike): Promise<Uint8Array> {
+export async function buildExport(
+  db: Database,
+  bucket: R2BucketLike,
+  kv?: ArchiveKvLike | null,
+): Promise<Uint8Array> {
   const tables: Partial<Record<EdgepressLogicalTable, RowRecord[]>> = {};
   const counts: Partial<Record<EdgepressLogicalTable, number>> = {};
 
@@ -319,6 +471,9 @@ export async function buildExport(db: Database, bucket: R2BucketLike): Promise<U
   }
 
   const mediaObjects = await readAllR2Objects(bucket);
+  const themePackages = kv ? await readAllThemePackages(kv) : [];
+  const themeAssets = await readAllR2ByPrefix(bucket, THEME_ASSET_TAR_PREFIX);
+
   const manifest: EdgepressManifest = {
     format: EDGEPRESS_FORMAT,
     schemaVersion: EDGEPRESS_SCHEMA_VERSION,
@@ -331,6 +486,8 @@ export async function buildExport(db: Database, bucket: R2BucketLike): Promise<U
       key: item.key,
       contentType: item.contentType,
     })),
+    themeCount: themePackages.length,
+    themePackages: themePackages.map((item) => ({ slug: item.slug })),
   };
   const databasePayload: EdgepressDatabasePayload = { tables };
   const tarEntries: TarEntryInput[] = [
@@ -338,6 +495,14 @@ export async function buildExport(db: Database, bucket: R2BucketLike): Promise<U
     { name: "database.json", data: encodeJson(databasePayload) },
     ...mediaObjects.map((item) => ({
       name: `${MEDIA_TAR_PREFIX}${item.key.slice(MEDIA_PREFIX.length)}`,
+      data: item.data,
+    })),
+    ...themePackages.map((item) => ({
+      name: themePackageTarPath(item.slug),
+      data: item.data,
+    })),
+    ...themeAssets.map((item) => ({
+      name: item.key,
       data: item.data,
     })),
   ];
@@ -376,6 +541,7 @@ export async function restoreImport(
   db: Database,
   bucket: R2BucketLike,
   archiveBuffer: ArrayBuffer,
+  kv?: ArchiveKvLike | null,
 ): Promise<EdgepressImportResult> {
   const entries = await parseTarGzip(archiveBuffer);
   const entryMap = new Map<string, Uint8Array>();
@@ -396,6 +562,10 @@ export async function restoreImport(
 
   await wipeDatabase(db);
   await wipeR2Uploads(bucket);
+  await wipeR2ByPrefix(bucket, THEME_ASSET_TAR_PREFIX);
+  if (kv) {
+    await wipeThemeKvCache(kv);
+  }
 
   const counts: Partial<Record<EdgepressLogicalTable, number>> = {};
   const tableOrder = resolveImportTableOrder(manifest.tableOrder);
@@ -417,15 +587,36 @@ export async function restoreImport(
   );
 
   let mediaCount = 0;
+  let themeCount = 0;
+
   for (const [name, data] of entryMap.entries()) {
-    if (!name.startsWith(MEDIA_TAR_PREFIX)) continue;
-    const r2Key = `${MEDIA_PREFIX}${name.slice(MEDIA_TAR_PREFIX.length)}`;
-    const contentType = contentTypeByKey.get(r2Key) ?? inferContentType(r2Key);
-    await bucket.put(r2Key, data, { httpMetadata: { contentType } });
-    mediaCount++;
+    if (name.startsWith(MEDIA_TAR_PREFIX)) {
+      const r2Key = `${MEDIA_PREFIX}${name.slice(MEDIA_TAR_PREFIX.length)}`;
+      const contentType = contentTypeByKey.get(r2Key) ?? inferContentType(r2Key);
+      await bucket.put(r2Key, data, { httpMetadata: { contentType } });
+      mediaCount++;
+      continue;
+    }
+
+    const packageSlug = parseThemePackageTarPath(name);
+    if (packageSlug && kv) {
+      const packageJson = new TextDecoder().decode(data);
+      await kv.put(`${THEME_PKG_KV_PREFIX}${packageSlug}`, packageJson);
+      themeCount++;
+      continue;
+    }
+
+    if (isThemeAssetTarPath(name)) {
+      const contentType = inferContentType(name);
+      await bucket.put(name, data, { httpMetadata: { contentType } });
+    }
   }
 
-  return { counts, mediaCount };
+  if (kv) {
+    await syncThemeCacheAfterImport(db, kv);
+  }
+
+  return { counts, mediaCount, themeCount };
 }
 
 export function buildExportFilename(): string {

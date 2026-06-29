@@ -1,0 +1,27 @@
+{% layout 'layouts/base' %}
+<div class="container">
+  <h1>{% if route.locale == 'en' %}Latest Articles{% else %}Últimos Artigos{% endif %}</h1>
+  {% for item in posts %}
+    {% unless forloop.first %}<hr />{% endunless %}
+    <article class="post-item" itemscope itemtype="https://schema.org/BlogPosting">
+      {% if item.cover_image %}
+        <figure>
+          <a href="{{ site.locale_prefix }}/{{ item.slug }}">
+            <img itemprop="image" src="{{ item.cover_image }}" alt="" loading="lazy" />
+          </a>
+        </figure>
+      {% endif %}
+      <h2 itemprop="headline">
+        <a href="{{ site.locale_prefix }}/{{ item.slug }}" itemprop="url">{{ item.title }}</a>
+      </h2>
+      {% if item.excerpt %}
+        <p itemprop="description">{{ item.excerpt }}</p>
+      {% endif %}
+      <div class="post-item-footer">
+        <span class="post-item-date" itemprop="datePublished">— {{ item.published_at | post_date }}</span>
+      </div>
+    </article>
+  {% else %}
+    <p>{% if route.locale == 'en' %}No posts published yet.{% else %}Nenhum post publicado.{% endif %}</p>
+  {% endfor %}
+</div>

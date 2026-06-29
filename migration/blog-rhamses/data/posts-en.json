@@ -1,0 +1,353 @@
+{
+  "source": "en-translations.ts",
+  "extractedAt": "2026-06-26T17:48:27.206Z",
+  "posts": [
+    {
+      "slug": "ciencia-de-dados-e-matematica-en",
+      "title": "Data Science and Mathematics",
+      "description": "For me, a much bigger challenge than learning to code.",
+      "publishDate": "7 Dec 2023",
+      "publishedAt": 1701918000000,
+      "body_html": "<p>Many years ago I decided that programming would be a natural path for my career as a <em>Web Designer</em>, which I had been doing for almost three years. To land more freelance work I got involved with WordPress and gradually explored PHP until I could call myself a \"WordPress developer\" — ask me to build a custom post type, but don't ask me for a dedicated class to handle images, for example. That's how I approached the programming world for the last 15 years: Python came along, JS frameworks, Node.js, and lots of infrastructure with Linux, CI/CD, and so on.</p>\n\n<h2>And now for something completely different.</h2>\n<p>Data has always been a curiosity of mine. From political polls on TV talking about the famous \"margin of error\" that left me wondering (why 2 points and not 4 or 6? And why plus or minus? Did nobody reach a conclusion?); with the rise of infographics I was fascinated by the limitless creativity to illustrate all kinds of data, even when it became impossible to understand because of unconventional layouts.</p>\n\n<p>Following the rapid evolution of Machine Learning and AI, plus so many other interests in journalism, politics, sports, and a little experience working alongside data teams at companies I've been through, it seems increasingly clear that this is my new challenge: Data Science and all the complexity around it — because the foundation of this field is exactly my weakness: Mathematics, and that changes everything.</p>\n\n<h2>How to learn how to learn?</h2>\n<p>Look, I don't struggle with the subject — I have complete dread, a real trigger! I'll never forget that my highest geometry grade ever was a tearful 3 out of 10, and that matters because illustrating problems seems very important from what I see when researching math topics.</p>\n\n<p>So I seek all the help I can, because unlike programming where being self-taught is essential to stay current, in data science I need as many mentors as possible to understand years of mathematical knowledge I have no idea how works.</p>\n\n<p>I'm currently taking an online course and an elective on Data Science; to raise my math level I went back to zero and I'm following Khan Academy tracks on the subject. On Amazon I have some books saved for a future purchase, while on YouTube the number of videos on the topic only grows.</p>\n\n<h2>Accountability — why not?</h2>\n<p>One thing that always works is asking friends for help to stay accountable with studies. That's what I'm doing here — I'm asking for your help too to stay on track, and I'll use this space to document everything I learn in this area.</p>\n\n<p>Thank you, and see you soon. 😄</p>",
+      "images": [
+        {
+          "filename": "capa.jpg",
+          "relativePath": "ciencia-de-dados-e-matematica/capa.jpg",
+          "r2Key": "uploads/blog/ciencia-de-dados-e-matematica/capa.jpg",
+          "mediaUrl": "/api/media/uploads/blog/ciencia-de-dados-e-matematica/capa.jpg",
+          "mimeType": "image/jpeg"
+        },
+        {
+          "filename": "capa.webp",
+          "relativePath": "ciencia-de-dados-e-matematica/capa.webp",
+          "r2Key": "uploads/blog/ciencia-de-dados-e-matematica/capa.webp",
+          "mediaUrl": "/api/media/uploads/blog/ciencia-de-dados-e-matematica/capa.webp",
+          "mimeType": "image/webp"
+        }
+      ],
+      "coverImage": {
+        "filename": "capa.webp",
+        "relativePath": "ciencia-de-dados-e-matematica/capa.webp",
+        "r2Key": "uploads/blog/ciencia-de-dados-e-matematica/capa.webp",
+        "mediaUrl": "/api/media/uploads/blog/ciencia-de-dados-e-matematica/capa.webp",
+        "mimeType": "image/webp"
+      },
+      "translation_key": "ciencia-de-dados-e-matematica"
+    },
+    {
+      "slug": "web-components-exemplos-e-overview-en",
+      "title": "Web Components — Examples and Overview",
+      "description": "How to use Web Components in everyday projects",
+      "publishDate": "10 Nov 2023",
+      "publishedAt": 1699585200000,
+      "body_html": "<p>Web Components are already a reality and many of us work every day with JS frameworks like React, Vue, or Angular — but what if we want that same flexibility in a plain HTML project?</p>\n\n<h2>How it works</h2>\n<p>A Web Component is the result of three different specifications: <strong>Custom Elements</strong>, <strong>Shadow DOM</strong>, and <strong>HTML Templates</strong>.</p>\n\n<h3>Custom Elements</h3>\n<p>This specification is responsible for creating and managing customizable HTML elements. Through its <code>.define()</code> method we enable a new tag to be used on the page.</p>\n<p>We define our new element using a <a href=\"https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Classes\" target=\"_blank\" rel=\"noopener\">class in JS</a>.</p>\n\n<h2>Shadow DOM</h2>\n<p>Creating a new element means inserting potential conflicts into a page that already has many tags, scripts, and CSS. Shadow DOM removes that conflict by <em>encapsulating</em> everything you need inside a <strong>shadow root</strong> — like a new HTML document inside the element.</p>\n\n<p><strong>Any element can have a Shadow DOM</strong> — you can manipulate that structure without worrying about conflicts with the main document because they are separate trees.</p>\n\n<h2>HTML template tag</h2>\n<p>If you come from Vue.js you're already familiar with these tags. What I didn't know is that they are W3C recommendations!</p>\n\n<p><code>&lt;template&gt;</code> and <code>&lt;slot&gt;</code> accept content but render nothing when the page loads. They also provide a way to be manipulated via JavaScript to create HTML structures equivalent to the JS code we need (like named slots).</p>\n\n<h2>Demo</h2>\n<p>I created a <a href=\"https://github.com/rhamses/ans-tag\" target=\"_blank\" rel=\"noopener\">Web Component to display a health plan ANS number</a>. Because it's an HTML tag you can resize it by changing the tag's <code>font-size</code>.</p>\n<img src=\"https://raw.githubusercontent.com/rhamses/ans-tag/main/demo/ans-demo.gif\" alt=\"ANS tag demo\" loading=\"lazy\" />\n\n<h2>Reference sites</h2>\n<p>- <a href=\"https://developer.mozilla.org/en-US/docs/Web/API/Web_components\" target=\"_blank\" rel=\"noopener\">MDN</a></p>\n<p>- <a href=\"https://www.webcomponents.org\" target=\"_blank\" rel=\"noopener\">WebComponents.org</a></p>\n\n<h2>Frameworks that help day to day</h2>\n<p>- <a href=\"https://lit.dev\" target=\"_blank\" rel=\"noopener\">Lit</a></p>\n<p>- <a href=\"https://polymer-library.polymer-project.org\" target=\"_blank\" rel=\"noopener\">Polymer</a></p>\n<p>- <a href=\"https://stenciljs.com\" target=\"_blank\" rel=\"noopener\">Stencil</a></p>",
+      "images": [
+        {
+          "filename": "capa.jpg",
+          "relativePath": "web-components-exemplos-e-overview/capa.jpg",
+          "r2Key": "uploads/blog/web-components-exemplos-e-overview/capa.jpg",
+          "mediaUrl": "/api/media/uploads/blog/web-components-exemplos-e-overview/capa.jpg",
+          "mimeType": "image/jpeg"
+        },
+        {
+          "filename": "capa.webp",
+          "relativePath": "web-components-exemplos-e-overview/capa.webp",
+          "r2Key": "uploads/blog/web-components-exemplos-e-overview/capa.webp",
+          "mediaUrl": "/api/media/uploads/blog/web-components-exemplos-e-overview/capa.webp",
+          "mimeType": "image/webp"
+        }
+      ],
+      "coverImage": {
+        "filename": "capa.webp",
+        "relativePath": "web-components-exemplos-e-overview/capa.webp",
+        "r2Key": "uploads/blog/web-components-exemplos-e-overview/capa.webp",
+        "mediaUrl": "/api/media/uploads/blog/web-components-exemplos-e-overview/capa.webp",
+        "mimeType": "image/webp"
+      },
+      "translation_key": "web-components-exemplos-e-overview"
+    },
+    {
+      "slug": "cloudflare-service-worker-en",
+      "title": "Cloudflare Service Worker",
+      "description": "Manipulate your site without a backend. Get ready for edge computing.",
+      "publishDate": "11 Oct 2023",
+      "publishedAt": 1696993200000,
+      "body_html": "<p>Imagine manipulating requests to your site without a web server instance? Running A/B tests, redirecting traffic without editing a line of Apache or Nginx. These are just some of the qualities of <strong>edge computing</strong>.</p>\n\n<h2>Edge Computing and Workers</h2>\n<p>It's a term for scripts that run close to the client that made the request. <a href=\"https://blog.cloudflare.com/introducing-cloudflare-workers/\" target=\"_blank\" rel=\"noopener\">Cloudflare was the first</a> company to launch this strategy back in 2017, and since then other companies support this hosting and development model. The main benefits are:</p>\n<ul>\n<li><strong>Performance:</strong> because responses happen near the client's geography, load time drops below <strong>50ms!!</strong></li>\n<li><strong>Value:</strong> there's a free tier for a Cloudflare Worker that covers many use cases, and if you need to pay it starts at just <strong>$5/month</strong></li>\n<li><strong>Ease:</strong> all you need is JavaScript! Request manipulation uses the same Web Worker API browsers already use — no more worrying about web servers.</li>\n</ul>\n\n<h2>Example: Redirecting a subdomain to routes</h2>\n<p>A good custom example I needed was creating the route for this blog! Originally the address was a Cloudflare subdomain <code>rhamses-blog.pages.dev</code> but I wanted it accessed via <a href=\"https://rhams.es/blog\" target=\"_blank\" rel=\"noopener\"><strong>rhams.es/blog</strong></a></p>\n\n<h3>Creating a Cloudflare Pages instance</h3>\n<p>The first step was creating an instance on Cloudflare Pages. The blog was originally hosted on <a href=\"https://netlify.com\" target=\"_blank\" rel=\"noopener\">netlify.com</a> but for stack compatibility I moved everything to Cloudflare. Creation is practically the same — link your GitHub profile or upload the final files directly.</p>\n<img src=\"/api/media/uploads/blog/cloudflare-service-worker/image1.png\" alt=\"Cloudflare Pages subdomain\" loading=\"lazy\" />\n\n<h3>Creating a Service Worker for redirection</h3>\n<p>Now we get to the point! To create a service worker we write JavaScript following the <a href=\"https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API\" target=\"_blank\" rel=\"noopener\">Web Worker API</a> conventions.</p>\n<img src=\"/api/media/uploads/blog/cloudflare-service-worker/image2.png\" alt=\"Create Cloudflare Worker\" loading=\"lazy\" />\n\n<p>The worker code intercepts requests and rewrites paths so <code>rhams.es/blog</code> serves content from the Pages deployment. See the full post images for step-by-step screenshots of the dashboard and final configuration.</p>",
+      "images": [
+        {
+          "filename": "capa.jpg",
+          "relativePath": "cloudflare-service-worker/capa.jpg",
+          "r2Key": "uploads/blog/cloudflare-service-worker/capa.jpg",
+          "mediaUrl": "/api/media/uploads/blog/cloudflare-service-worker/capa.jpg",
+          "mimeType": "image/jpeg"
+        },
+        {
+          "filename": "capa.webp",
+          "relativePath": "cloudflare-service-worker/capa.webp",
+          "r2Key": "uploads/blog/cloudflare-service-worker/capa.webp",
+          "mediaUrl": "/api/media/uploads/blog/cloudflare-service-worker/capa.webp",
+          "mimeType": "image/webp"
+        },
+        {
+          "filename": "image1.png",
+          "relativePath": "cloudflare-service-worker/image1.png",
+          "r2Key": "uploads/blog/cloudflare-service-worker/image1.png",
+          "mediaUrl": "/api/media/uploads/blog/cloudflare-service-worker/image1.png",
+          "mimeType": "image/png"
+        },
+        {
+          "filename": "image2.png",
+          "relativePath": "cloudflare-service-worker/image2.png",
+          "r2Key": "uploads/blog/cloudflare-service-worker/image2.png",
+          "mediaUrl": "/api/media/uploads/blog/cloudflare-service-worker/image2.png",
+          "mimeType": "image/png"
+        },
+        {
+          "filename": "image3.png",
+          "relativePath": "cloudflare-service-worker/image3.png",
+          "r2Key": "uploads/blog/cloudflare-service-worker/image3.png",
+          "mediaUrl": "/api/media/uploads/blog/cloudflare-service-worker/image3.png",
+          "mimeType": "image/png"
+        },
+        {
+          "filename": "image4.png",
+          "relativePath": "cloudflare-service-worker/image4.png",
+          "r2Key": "uploads/blog/cloudflare-service-worker/image4.png",
+          "mediaUrl": "/api/media/uploads/blog/cloudflare-service-worker/image4.png",
+          "mimeType": "image/png"
+        },
+        {
+          "filename": "image5.png",
+          "relativePath": "cloudflare-service-worker/image5.png",
+          "r2Key": "uploads/blog/cloudflare-service-worker/image5.png",
+          "mediaUrl": "/api/media/uploads/blog/cloudflare-service-worker/image5.png",
+          "mimeType": "image/png"
+        }
+      ],
+      "coverImage": {
+        "filename": "capa.webp",
+        "relativePath": "cloudflare-service-worker/capa.webp",
+        "r2Key": "uploads/blog/cloudflare-service-worker/capa.webp",
+        "mediaUrl": "/api/media/uploads/blog/cloudflare-service-worker/capa.webp",
+        "mimeType": "image/webp"
+      },
+      "translation_key": "cloudflare-service-worker"
+    },
+    {
+      "slug": "consultando-a-tabela-fipe-via-api-en",
+      "title": "Querying the FIPE Table via API",
+      "description": "A new way to query the FIPE table programmatically.",
+      "publishDate": "2 Oct 2023",
+      "publishedAt": 1696215600000,
+      "body_html": "<p>The <a href=\"https://veiculos.fipe.org.br\" target=\"_blank\" rel=\"noopener\">FIPE Table</a> is an excellent research resource for anyone who owns or plans to buy a car. Standardizing the average price of new and used cars greatly facilitates negotiation and, in a way, feeds pricing across the entire automotive market chain.</p>\n\n<p>Because of that, many people dream of having access to this data as an API to embed in their own applications. The problem is that FIPE (yes, that's the foundation's name, not the car price table) doesn't provide this structured data for queries.</p>\n\n<p>There are some initiatives online to turn this data into an API, but they all lack something: up-to-date data, endpoint performance, configuration difficulty, and so on...</p>\n\n<h2><a href=\"https://fipe.amb1.io\" target=\"_blank\" rel=\"noopener\">Enter my idea => fipe.amb1.io</a></h2>\n<video src=\"/api/media/uploads/blog/consultando-a-tabela-fipe-via-api/fipe-apresentacao.mp4\" autoplay muted controls style=\"max-width: 100%\"></video>\n\n<h3>How the data was acquired</h3>\n<p>The first step was <strong>not</strong> to use the existing structure on the FIPE Table website. Python scraping was necessary and the information was downloaded to a MongoDB instance.</p>\n\n<h3>Autocomplete search</h3>\n<p>The way search information is presented felt too rigid — I thought it needed something more organic like <strong>autocomplete</strong>. Instead of selecting brand, model, and version step by step, you now only need to search for the desired year separately after selecting the vehicle and its version.</p>\n<img src=\"/api/media/uploads/blog/consultando-a-tabela-fipe-via-api/autocomplete.png\" alt=\"fipe.amb1.io autocomplete\" loading=\"lazy\" />\n\n<h3>Price list</h3>\n<p>For each vehicle found you can get all values <strong>for 2023</strong> starting in January/2023. The site also shows appreciation/depreciation percentages relative to the previous month and the start of the year.</p>\n<img src=\"/api/media/uploads/blog/consultando-a-tabela-fipe-via-api/precos.png\" alt=\"Price cards on fipe.amb1.io\" loading=\"lazy\" />\n\n<h2>But... where's the API?</h2>\n<p>The API is available at <a href=\"https://fipe.amb1.io/api\" target=\"_blank\" rel=\"noopener\">fipe.amb1.io/api</a> with endpoints to search brands, models, years, and prices — built on Cloudflare Workers for edge performance.</p>",
+      "images": [
+        {
+          "filename": "autocomplete.png",
+          "relativePath": "consultando-a-tabela-fipe-via-api/autocomplete.png",
+          "r2Key": "uploads/blog/consultando-a-tabela-fipe-via-api/autocomplete.png",
+          "mediaUrl": "/api/media/uploads/blog/consultando-a-tabela-fipe-via-api/autocomplete.png",
+          "mimeType": "image/png"
+        },
+        {
+          "filename": "capa.jpg",
+          "relativePath": "consultando-a-tabela-fipe-via-api/capa.jpg",
+          "r2Key": "uploads/blog/consultando-a-tabela-fipe-via-api/capa.jpg",
+          "mediaUrl": "/api/media/uploads/blog/consultando-a-tabela-fipe-via-api/capa.jpg",
+          "mimeType": "image/jpeg"
+        },
+        {
+          "filename": "capa.webp",
+          "relativePath": "consultando-a-tabela-fipe-via-api/capa.webp",
+          "r2Key": "uploads/blog/consultando-a-tabela-fipe-via-api/capa.webp",
+          "mediaUrl": "/api/media/uploads/blog/consultando-a-tabela-fipe-via-api/capa.webp",
+          "mimeType": "image/webp"
+        },
+        {
+          "filename": "fipe-apresentacao.mp4",
+          "relativePath": "consultando-a-tabela-fipe-via-api/fipe-apresentacao.mp4",
+          "r2Key": "uploads/blog/consultando-a-tabela-fipe-via-api/fipe-apresentacao.mp4",
+          "mediaUrl": "/api/media/uploads/blog/consultando-a-tabela-fipe-via-api/fipe-apresentacao.mp4",
+          "mimeType": "video/mp4"
+        },
+        {
+          "filename": "fipe-novidades.mp4",
+          "relativePath": "consultando-a-tabela-fipe-via-api/fipe-novidades.mp4",
+          "r2Key": "uploads/blog/consultando-a-tabela-fipe-via-api/fipe-novidades.mp4",
+          "mediaUrl": "/api/media/uploads/blog/consultando-a-tabela-fipe-via-api/fipe-novidades.mp4",
+          "mimeType": "video/mp4"
+        },
+        {
+          "filename": "precos.png",
+          "relativePath": "consultando-a-tabela-fipe-via-api/precos.png",
+          "r2Key": "uploads/blog/consultando-a-tabela-fipe-via-api/precos.png",
+          "mediaUrl": "/api/media/uploads/blog/consultando-a-tabela-fipe-via-api/precos.png",
+          "mimeType": "image/png"
+        }
+      ],
+      "coverImage": {
+        "filename": "capa.webp",
+        "relativePath": "consultando-a-tabela-fipe-via-api/capa.webp",
+        "r2Key": "uploads/blog/consultando-a-tabela-fipe-via-api/capa.webp",
+        "mediaUrl": "/api/media/uploads/blog/consultando-a-tabela-fipe-via-api/capa.webp",
+        "mimeType": "image/webp"
+      },
+      "translation_key": "consultando-a-tabela-fipe-via-api"
+    },
+    {
+      "slug": "como-animar-elementos-sem-usar-javascript-e-css-en",
+      "title": "How to Animate Elements Without JavaScript (or CSS!)",
+      "description": "Sometimes simple animation needs only SVG.",
+      "publishDate": "13 Feb 2023",
+      "publishedAt": 1676257200000,
+      "body_html": "<p>Sometimes we need simple animations and end up reaching for heavier solutions like entire JavaScript libraries or overly complex <a href=\"https://codepen.io/\" target=\"_blank\" rel=\"noopener\">CodePen</a> demos when we could use SVG alone.</p>\n\n<p><a href=\"https://en.wikipedia.org/wiki/SVG\" target=\"_blank\" rel=\"noopener\">SVG</a> is a world apart from the web stack. Although the best-known use is icons, it's an excellent platform for everything from <a href=\"https://lottiefiles.com/animation/svg\" target=\"_blank\" rel=\"noopener\">animations</a> to page transitions.</p>\n\n<h2>Inspiration</h2>\n<p>I found this tweet showing the <code>animateMotion</code> property — I had never heard of it.</p>\n<p><a href=\"https://twitter.com/PaulieScanlon/status/1624905433306566656\" target=\"_blank\" rel=\"noopener\">https://twitter.com/PaulieScanlon/status/1624905433306566656</a></p>\n\n<p>I decided to make my own example and read more about the property on <a href=\"https://developer.mozilla.org/en-US/docs/Web/SVG/Element/animateMotion\" target=\"_blank\" rel=\"noopener\">MDN</a>. Basically <code>animateMotion</code> tells an SVG element to follow the path of another element.</p>\n\n<h2>Trying a different shape</h2>\n<p>I wanted a different drawing — like a race on a track — so I found an SVG of the Interlagos circuit in São Paulo and a separate race car SVG. I combined them in Figma, exported a new SVG, and built a group with 3 different cars each with <code>animateMotion</code>, a <code>begin</code> attribute for staggered start, and <code>rotate=\"auto\"</code> so the car turns along the path.</p>\n\n<h2>Improvements</h2>\n<p>It's far from perfect — I don't know SVG deeply and just wanted to see the animation work. I'd like the cars 100% inside the track and not leaving the canvas at the edges. If you know how, get in touch!</p>\n\n<h2>Links</h2>\n<p>- <a href=\"https://gist.github.com/rhamses/9645d935ce111274e63ee79b0557adfd\" target=\"_blank\" rel=\"noopener\">Final code on my gist</a></p>\n<p>- <a href=\"https://codepen.io/rhamses/full/poOzQBy\" target=\"_blank\" rel=\"noopener\">CodePen demo</a></p>\n<p>- <a href=\"https://www.youtube.com/watch?v=4laPOtTRteI\" target=\"_blank\" rel=\"noopener\">Sara Drasner is excellent for teaching SVG</a></p>",
+      "images": [
+        {
+          "filename": "capa.jpg",
+          "relativePath": "como-animar-elementos-sem-usar-javascript-e-css/capa.jpg",
+          "r2Key": "uploads/blog/como-animar-elementos-sem-usar-javascript-e-css/capa.jpg",
+          "mediaUrl": "/api/media/uploads/blog/como-animar-elementos-sem-usar-javascript-e-css/capa.jpg",
+          "mimeType": "image/jpeg"
+        },
+        {
+          "filename": "capa.webp",
+          "relativePath": "como-animar-elementos-sem-usar-javascript-e-css/capa.webp",
+          "r2Key": "uploads/blog/como-animar-elementos-sem-usar-javascript-e-css/capa.webp",
+          "mediaUrl": "/api/media/uploads/blog/como-animar-elementos-sem-usar-javascript-e-css/capa.webp",
+          "mimeType": "image/webp"
+        }
+      ],
+      "coverImage": {
+        "filename": "capa.webp",
+        "relativePath": "como-animar-elementos-sem-usar-javascript-e-css/capa.webp",
+        "r2Key": "uploads/blog/como-animar-elementos-sem-usar-javascript-e-css/capa.webp",
+        "mediaUrl": "/api/media/uploads/blog/como-animar-elementos-sem-usar-javascript-e-css/capa.webp",
+        "mimeType": "image/webp"
+      },
+      "translation_key": "como-animar-elementos-sem-usar-javascript-e-css"
+    },
+    {
+      "slug": "identificando-idiomas-através-do-javascript-en",
+      "title": "Identifying Languages Through JavaScript",
+      "description": "Using native functions that help in everyday work.",
+      "publishDate": "6 Jun 2022",
+      "publishedAt": 1654484400000,
+      "body_html": "<p>Working with multiple languages is the main path into the Unicode world, but it's not the only one — emojis are only possible thanks to that normalization. Identifying and working with Unicode seems complicated, but at least in JS, it isn't.</p>\n\n<h2>Why Unicode</h2>\n<p>Without Unicode even writing HTML would be impossible because it's the basis of any encoding — without it we'd never have the <code>&lt;meta charset=\"utf-8\"&gt;</code> tag that tells the browser how to render special characters.</p>\n<p><a href=\"https://www.youtube.com/watch?v=-n2nlPHEMG8\" target=\"_blank\" rel=\"noopener\">https://www.youtube.com/watch?v=-n2nlPHEMG8</a></p>\n\n<h2>Using Unicode in JavaScript</h2>\n<p>To use Unicode in JavaScript use the <code>\\u0000</code> pattern where the number is the symbol code in the Unicode standard. You can consult all <a href=\"https://www.unicode.org/charts/\" target=\"_blank\" rel=\"noopener\">supported characters</a>.</p>\n\n<h2>Identifying languages</h2>\n<p>All <a href=\"https://en.wikipedia.org/wiki/Unicode_block\" target=\"_blank\" rel=\"noopener\">Unicode symbols are allocated in context blocks</a>, which makes it easy to test languages against each block. Note: blocks are separated by context, not language — you may need to test text against more than one block.</p>\n\n<h2>Practical applications</h2>\n<p>One application is assigning a specific font per language, since it's hard to find one free font supporting every world language. On Google Fonts you can search fonts that support specific languages. Below I compared Arabic text with <strong>Roboto</strong> versus the <strong>Almarai</strong> font I chose for Arabic text in the Hashflags Bot project.</p>\n<img src=\"/api/media/uploads/blog/identificando-idiomas-atraves-do-javascript/image2.webp\" alt=\"Roboto Arabic support\" loading=\"lazy\" />\n<img src=\"/api/media/uploads/blog/identificando-idiomas-atraves-do-javascript/image1.webp\" alt=\"Almarai Arabic support\" loading=\"lazy\" />\n<img src=\"/api/media/uploads/blog/identificando-idiomas-atraves-do-javascript/image.webp\" alt=\"Almarai in Hashflags Bot\" loading=\"lazy\" />\n\n<h2>Relevant content</h2>\n<p>- <a href=\"https://flaviocopes.com/javascript-unicode/\" target=\"_blank\" rel=\"noopener\">Unicode in JavaScript</a></p>\n<p>- <a href=\"https://home.unicode.org/\" target=\"_blank\" rel=\"noopener\">Official Unicode site</a></p>",
+      "images": [
+        {
+          "filename": "capa.jpg",
+          "relativePath": "identificando-idiomas-atraves-do-javascript/capa.jpg",
+          "r2Key": "uploads/blog/identificando-idiomas-atraves-do-javascript/capa.jpg",
+          "mediaUrl": "/api/media/uploads/blog/identificando-idiomas-atraves-do-javascript/capa.jpg",
+          "mimeType": "image/jpeg"
+        },
+        {
+          "filename": "capa.webp",
+          "relativePath": "identificando-idiomas-atraves-do-javascript/capa.webp",
+          "r2Key": "uploads/blog/identificando-idiomas-atraves-do-javascript/capa.webp",
+          "mediaUrl": "/api/media/uploads/blog/identificando-idiomas-atraves-do-javascript/capa.webp",
+          "mimeType": "image/webp"
+        },
+        {
+          "filename": "image.webp",
+          "relativePath": "identificando-idiomas-atraves-do-javascript/image.webp",
+          "r2Key": "uploads/blog/identificando-idiomas-atraves-do-javascript/image.webp",
+          "mediaUrl": "/api/media/uploads/blog/identificando-idiomas-atraves-do-javascript/image.webp",
+          "mimeType": "image/webp"
+        },
+        {
+          "filename": "image1.webp",
+          "relativePath": "identificando-idiomas-atraves-do-javascript/image1.webp",
+          "r2Key": "uploads/blog/identificando-idiomas-atraves-do-javascript/image1.webp",
+          "mediaUrl": "/api/media/uploads/blog/identificando-idiomas-atraves-do-javascript/image1.webp",
+          "mimeType": "image/webp"
+        },
+        {
+          "filename": "image2.webp",
+          "relativePath": "identificando-idiomas-atraves-do-javascript/image2.webp",
+          "r2Key": "uploads/blog/identificando-idiomas-atraves-do-javascript/image2.webp",
+          "mediaUrl": "/api/media/uploads/blog/identificando-idiomas-atraves-do-javascript/image2.webp",
+          "mimeType": "image/webp"
+        },
+        {
+          "filename": "identificando-idiomas-através-do-javascript.webp",
+          "relativePath": "identificando-idiomas-através-do-javascript.webp",
+          "r2Key": "uploads/blog/identificando-idiomas-através-do-javascript.webp",
+          "mediaUrl": "/api/media/uploads/blog/identificando-idiomas-através-do-javascript.webp",
+          "mimeType": "image/webp"
+        }
+      ],
+      "coverImage": {
+        "filename": "capa.webp",
+        "relativePath": "identificando-idiomas-atraves-do-javascript/capa.webp",
+        "r2Key": "uploads/blog/identificando-idiomas-atraves-do-javascript/capa.webp",
+        "mediaUrl": "/api/media/uploads/blog/identificando-idiomas-atraves-do-javascript/capa.webp",
+        "mimeType": "image/webp"
+      },
+      "translation_key": "identificando-idiomas-através-do-javascript"
+    },
+    {
+      "slug": "criando-imagens-dinamicamente-com-sharp-e-nodejs-en",
+      "title": "Creating Images Dynamically with Sharp and Node.js",
+      "description": "Generating images dynamically for Node.js",
+      "publishDate": "26 May 2022",
+      "publishedAt": 1653534000000,
+      "body_html": "<p><a href=\"https://www.npmjs.com/package/sharp\" target=\"_blank\" rel=\"noopener\">Sharp</a> is one of the most famous packages in the Node.js ecosystem — the go-to recommendation for image manipulation, conversion, and even editing, listed as a dependency in many large projects. But one thing people rarely talk about is creating a brand-new image from scratch with Sharp — that's what we'll cover.</p>\n\n<figure>\n  <img src=\"/api/media/uploads/blog/criando-imagens-dinamicamente-com-sharp-e-nodejs/image1.png\" alt=\"Image generated with Sharp\" loading=\"lazy\" />\n  <figcaption>This image was generated with Sharp for the @hashflagsbot project</figcaption>\n</figure>\n\n<h2>TL;DR</h2>\n<p>To make an image like the one above you'll need multiple calls to the <code>composite</code> method, like Photoshop layers, plus <code>Buffer</code> and SVG packages for text.</p>\n\n<h2>Creating an image</h2>\n<p>See the <a href=\"https://sharp.pixelplumbing.com/api-composite\" target=\"_blank\" rel=\"noopener\">official Sharp compositing documentation</a>. To create a new image, instantiate Sharp with parameters inside the <code>create</code> key, then call <code>.png()</code> to indicate we're creating a new PNG image.</p>\n\n<h2>Using composite</h2>\n<p>Now that we have a base image, how do we add elements on top? With <code>composite</code> — it merges different images and returns the result so we can continue. Call <code>composite</code> multiple times on the same instance and Sharp does the rest.</p>\n\n<h2>Adding text</h2>\n<p>Since Sharp supports jpeg, png, webp, gif, and svg, you can create SVG text and insert it into the base image via code. For the example I use <a href=\"https://www.npmjs.com/package/text-to-svg\" target=\"_blank\" rel=\"noopener\">text-to-svg</a> to vectorize text.</p>\n\n<h2>Rendering the new image</h2>\n<p>With the image built entirely in code it's time to export. Sharp offers <code>.toBuffer</code> and <code>.toFile</code> output methods.</p>\n\n<h2>Live demo</h2>\n<p><a href=\"https://codesandbox.io/embed/sharpjs-example-l755gs\" target=\"_blank\" rel=\"noopener\">See a demonstration here</a>.</p>\n<iframe src=\"https://codesandbox.io/embed/sharpjs-example-l755gs?fontsize=14&amp;hidenavigation=1&amp;theme=dark\" style=\"width:100%; height:500px; border:0; border-radius: 4px; overflow:hidden; margin-left: auto; margin-right: auto; display:block\" title=\"sharpjs-example\" allow=\"accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; hid; microphone; midi; payment; usb; vr; xr-spatial-tracking\" sandbox=\"allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts\"></iframe>",
+      "images": [
+        {
+          "filename": "capa.jpg",
+          "relativePath": "criando-imagens-dinamicamente-com-sharp-e-nodejs/capa.jpg",
+          "r2Key": "uploads/blog/criando-imagens-dinamicamente-com-sharp-e-nodejs/capa.jpg",
+          "mediaUrl": "/api/media/uploads/blog/criando-imagens-dinamicamente-com-sharp-e-nodejs/capa.jpg",
+          "mimeType": "image/jpeg"
+        },
+        {
+          "filename": "capa.webp",
+          "relativePath": "criando-imagens-dinamicamente-com-sharp-e-nodejs/capa.webp",
+          "r2Key": "uploads/blog/criando-imagens-dinamicamente-com-sharp-e-nodejs/capa.webp",
+          "mediaUrl": "/api/media/uploads/blog/criando-imagens-dinamicamente-com-sharp-e-nodejs/capa.webp",
+          "mimeType": "image/webp"
+        },
+        {
+          "filename": "image1.png",
+          "relativePath": "criando-imagens-dinamicamente-com-sharp-e-nodejs/image1.png",
+          "r2Key": "uploads/blog/criando-imagens-dinamicamente-com-sharp-e-nodejs/image1.png",
+          "mediaUrl": "/api/media/uploads/blog/criando-imagens-dinamicamente-com-sharp-e-nodejs/image1.png",
+          "mimeType": "image/png"
+        },
+        {
+          "filename": "criando-imagens-dinamicamente-com-sharp-e-nodejs.png",
+          "relativePath": "criando-imagens-dinamicamente-com-sharp-e-nodejs.png",
+          "r2Key": "uploads/blog/criando-imagens-dinamicamente-com-sharp-e-nodejs.png",
+          "mediaUrl": "/api/media/uploads/blog/criando-imagens-dinamicamente-com-sharp-e-nodejs.png",
+          "mimeType": "image/png"
+        }
+      ],
+      "coverImage": {
+        "filename": "capa.webp",
+        "relativePath": "criando-imagens-dinamicamente-com-sharp-e-nodejs/capa.webp",
+        "r2Key": "uploads/blog/criando-imagens-dinamicamente-com-sharp-e-nodejs/capa.webp",
+        "mediaUrl": "/api/media/uploads/blog/criando-imagens-dinamicamente-com-sharp-e-nodejs/capa.webp",
+        "mimeType": "image/webp"
+      },
+      "translation_key": "criando-imagens-dinamicamente-com-sharp-e-nodejs"
+    },
+    {
+      "slug": "hello-world-en",
+      "title": "Hello world! 👋",
+      "description": "Every blog starts with a post. This is that moment.",
+      "publishDate": "8 Jan 2021",
+      "publishedAt": 1610074800000,
+      "body_html": "<img src=\"/api/media/uploads/blog/hello-world.jpeg\" alt=\"Illustration of woman using a meditation app\" loading=\"lazy\" />\n\n<h2>New year, old idea</h2>\n<p>A year ago I gathered all my courage and decided to post some of my shelved ideas on Twitter, fearing the \"code police\" would highlight every mistake — but to my surprise I only received praise, with some initiatives even gaining reach like this <a href=\"https://gerabandeira.netlify.app/\" target=\"_blank\" rel=\"noopener noreferrer\">Brazilian flag motto generator</a>.</p>\n<p><a href=\"https://twitter.com/Rhamses/status/1214535685241278464\" target=\"_blank\" rel=\"noopener noreferrer\">https://twitter.com/Rhamses/status/1214535685241278464</a></p>\n<p>So for this year I decided to dig out one of the most buried projects: this blog.</p>\n\n<h2>Goals 2020...2021?!</h2>\n<p>This space was born at the same time as the tweet above, but as usual instead of picking a market tool to ship faster, I <strong>super</strong> complicated the engineering behind it like an Amazon-scale structure only to end up with something much more basic than I imagined.</p>\n<p>The main motivation to take this step (and hopefully keep it) was that in 2020 my time programming at the PC dropped a lot while meetings and planning increased considerably — I even got anxious because you need to stay current when talking daily with teams at different knowledge levels.</p>\n<p>Reserving an hour a day to write here, I plan to document what I learn about:</p>\n<ul>\n  <li>Vue.js</li>\n  <li>WordPress (and JAMstack integrations with REST and GraphQL APIs)</li>\n  <li>MongoDB / Neo4J / ElasticSearch</li>\n  <li>Plus many updates on this blog project on <a href=\"https://github.com/rhamses/blog/\" target=\"_blank\" rel=\"noopener noreferrer\">Github</a></li>\n  <li>And whatever else comes to mind</li>\n</ul>",
+      "images": [
+        {
+          "filename": "hello-world.jpeg",
+          "relativePath": "hello-world.jpeg",
+          "r2Key": "uploads/blog/hello-world.jpeg",
+          "mediaUrl": "/api/media/uploads/blog/hello-world.jpeg",
+          "mimeType": "image/jpeg"
+        }
+      ],
+      "translation_key": "hello-world"
+    }
+  ]
+}
