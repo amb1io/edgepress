@@ -6,13 +6,12 @@ export type ThemeManifest = {
   version: string;
   engine: "liquid";
   supports: string[];
-  templates: Partial<Record<ThemeRouteKind, string>>;
+  /** Optional route hints; resolver auto-discovers templates in the package by WordPress-style names. */
+  templates: Record<string, string>;
   layout?: string;
   assets_dir?: string;
   /** Translation key or slug for the home page content */
   home_content_key?: string;
-  /** When true, home route lists published posts instead of a single page. */
-  home_list_posts?: boolean;
 };
 
 export type ThemePackageRecord = {
@@ -96,13 +95,25 @@ export type ThemeRenderContext = {
   body_class: string;
   /** Language switcher links (pt-br, en). */
   locale_switcher: LocaleSwitcherItem[];
+  /** Current post or page when applicable (slug route or home content). */
   post?: ThemePostView;
-  posts?: ThemePostView[];
-  archive?: {
+  /** Published posts list (always populated). */
+  posts: ThemePostView[];
+  /** Archive metadata (always populated). */
+  archive: {
     title: string;
     type: string;
   };
-  pagination?: ThemePagination;
+  /** Pagination for the posts list (always populated). */
+  pagination: ThemePagination;
+  /** WordPress-style conditional flags (always populated). */
+  is_front_page: boolean;
+  is_single: boolean;
+  is_page: boolean;
+  is_singular: boolean;
+  is_archive: boolean;
+  is_404: boolean;
+  have_posts: boolean;
   /** Injected by layout wrapper */
   content?: string;
 };

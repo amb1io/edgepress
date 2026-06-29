@@ -10,7 +10,6 @@ import {
   type TranslationSlugRow,
 } from "../services/post-translation-service.ts";
 import { db } from "../../db/index.ts";
-import { getKvFromLocals } from "../../utils/runtime-locals.ts";
 import { adminUrlLocaleToDbCode } from "../../utils/admin-locale-constants.ts";
 import type {
   LocaleSwitcherItem,
@@ -164,6 +163,17 @@ async function buildLocaleSwitcher(
   });
 }
 
+function buildArchivePageUrl(pathname: string, page: number): string {
+  const url = new URL(pathname, "http://localhost");
+  if (page <= 1) {
+    url.searchParams.delete("page");
+  } else {
+    url.searchParams.set("page", String(page));
+  }
+  const qs = url.searchParams.toString();
+  return `${url.pathname}${qs ? `?${qs}` : ""}`;
+}
+
 export async function buildThemeRenderContext(
   locals: App.Locals,
   requestUrl: URL,
@@ -172,7 +182,6 @@ export async function buildThemeRenderContext(
 ): Promise<ThemeRenderContext> {
   const baseUrl = requestUrl.origin;
   const content = createEdgepressContent(locals, { baseUrl });
-  const kv = getKvFromLocals(locals);
   const settings = await getSettingsFromDb(db, {
     names: ["site_name", "site_description"],
   });
@@ -185,93 +194,102 @@ export async function buildThemeRenderContext(
   const homeUrl = publicLocaleHomeUrl(locale);
   const assetBase = `${baseUrl}/themes-assets/${pkg.manifest.slug}`;
   const homeContentKey = pkg.manifest.home_content_key ?? "hello-world";
-  const homeListPosts = pkg.manifest.home_list_posts === true;
+
+  const listPage = route.kind === "archive" ? (route.page ?? 1) : 1;
+  const listLimit = route.kind === "archive" ? 10 : 20;
+  const listPostType = route.kind === "archive" ? (route.postType ?? "post") : "post";
+
+  const fetchSlugPost = route.slug
+    ? content
+        .getBySlug(route.slug, { status: "published" })
+        .catch((err: unknown) => {
+          if (err instanceof ContentNotFoundError || err instanceof ContentBadRequestError) {
+            return null;
+          }
+          throw err;
+        })
+    : Promise.resolve(null);
+
+  const fetchHomePost =
+    route.kind === "home"
+      ? content
+          .getItem("posts", homeContentKey, {
+            status: "published",
+            locale: dbLocale,
+            resolve: "translation_key",
+          })
+          .catch((err: unknown) => {
+            if (err instanceof ContentNotFoundError) return null;
+            throw err;
+          })
+      : Promise.resolve(null);
+
+  const [listResult, slugPostData, homePostData, menuList] = await Promise.all([
+    content.getListWithDetails("posts", {
+      page: listPage,
+      limit: listLimit,
+      locale: dbLocale,
+      filter: { post_type: listPostType, status: "published" },
+      order: "published_at",
+      orderDir: "desc",
+    }),
+    fetchSlugPost,
+    fetchHomePost,
+    content.getListWithDetails<{
+      custom_fields?: CustomFieldItem[];
+    }>("posts", {
+      limit: 500,
+      locale: dbLocale,
+      filter: { post_type: "menus", status: "published" },
+    }),
+  ]);
+
+  const posts = listResult.items.map((item) => toPostView(item as ContentPostDetail, baseUrl));
 
   let post: ThemePostView | undefined;
-  let posts: ThemePostView[] | undefined;
-  let archive: ThemeRenderContext["archive"];
-  let pagination: ThemeRenderContext["pagination"];
   let seoPost: ContentPostDetail | undefined;
   let resolvedKind = route.kind;
 
-  if (route.kind === "home" && homeListPosts) {
-    const page = 1;
-    const limit = 20;
-    const list = await content.getListWithDetails("posts", {
-      page,
-      limit,
-      locale: dbLocale,
-      filter: { post_type: "post", status: "published" },
-      order: "published_at",
-      orderDir: "desc",
-    });
-    posts = list.items.map((item) => toPostView(item as ContentPostDetail, baseUrl));
-    seoPost = posts[0] as unknown as ContentPostDetail | undefined;
-    resolvedKind = "home";
-  } else if (route.kind === "home") {
-    try {
-      const data = await content.getItem("posts", homeContentKey, {
-        status: "published",
-        locale: dbLocale,
-        resolve: "translation_key",
-      });
-      seoPost = data as ContentPostDetail;
-      post = toPostView(seoPost, baseUrl);
-      resolvedKind = "home";
-    } catch (err) {
-      if (!(err instanceof ContentNotFoundError)) throw err;
-    }
-  } else if (route.kind === "archive") {
-    const page = route.page ?? 1;
-    const limit = 10;
-    const list = await content.getListWithDetails("posts", {
-      page,
-      limit,
-      locale: dbLocale,
-      filter: { post_type: route.postType ?? "post", status: "published" },
-      order: "published_at",
-      orderDir: "desc",
-    });
-    posts = list.items.map((item) => toPostView(item as ContentPostDetail, baseUrl));
-    archive = {
-      title: route.postType === "post" ? "Blog" : String(route.postType ?? "Arquivo"),
-      type: route.postType ?? "post",
-    };
-    const totalPages = Math.max(1, list.totalPages);
-    pagination = {
-      page: list.page,
-      total_pages: totalPages,
-      ...(list.page > 1
-        ? { prev_url: buildArchivePageUrl(requestUrl.pathname, list.page - 1) }
-        : {}),
-      ...(list.page < totalPages
-        ? { next_url: buildArchivePageUrl(requestUrl.pathname, list.page + 1) }
-        : {}),
-    };
-    seoPost = posts[0] as unknown as ContentPostDetail | undefined;
-    resolvedKind = "archive";
+  if (slugPostData) {
+    seoPost = slugPostData;
+    post = toPostView(slugPostData, baseUrl);
+    resolvedKind = post.post_type_slug === "post" ? "single" : "page";
   } else if (route.slug) {
-    try {
-      const data = await content.getBySlug(route.slug, { status: "published" });
-      seoPost = data;
-      post = toPostView(data, baseUrl);
-      resolvedKind = post.post_type_slug === "post" ? "single" : "page";
-    } catch (err) {
-      if (err instanceof ContentNotFoundError || err instanceof ContentBadRequestError) {
-        resolvedKind = "404";
-      } else {
-        throw err;
-      }
-    }
+    resolvedKind = "404";
+  } else if (homePostData) {
+    seoPost = homePostData;
+    post = toPostView(homePostData, baseUrl);
+    resolvedKind = "home";
+  } else if (route.kind === "home" || route.kind === "archive") {
+    resolvedKind = route.kind;
+    seoPost = posts[0] as unknown as ContentPostDetail | undefined;
   }
 
-  const menuList = await content.getListWithDetails<{
-    custom_fields?: CustomFieldItem[];
-  }>("posts", {
-    limit: 500,
-    locale: dbLocale,
-    filter: { post_type: "menus", status: "published" },
-  });
+  const archive = {
+    title: listPostType === "post" ? "Blog" : String(listPostType),
+    type: listPostType,
+  };
+
+  const totalPages = Math.max(1, listResult.totalPages);
+  const paginationPath = route.kind === "archive" ? route.path : `${localePrefix}/posts`;
+  const pagination = {
+    page: listResult.page,
+    total_pages: totalPages,
+    ...(listResult.page > 1
+      ? { prev_url: buildArchivePageUrl(paginationPath, listResult.page - 1) }
+      : {}),
+    ...(listResult.page < totalPages
+      ? { next_url: buildArchivePageUrl(paginationPath, listResult.page + 1) }
+      : {}),
+  };
+
+  const is_front_page = resolvedKind === "home";
+  const is_single = resolvedKind === "single";
+  const is_page = resolvedKind === "page";
+  const is_singular = is_single || is_page;
+  const is_archive = resolvedKind === "archive";
+  const is_404 = resolvedKind === "404";
+  const have_posts = posts.length > 0;
 
   const menus: Record<string, MenuItem[]> = {
     primary: menuList.items.flatMap((item) =>
@@ -321,19 +339,15 @@ export async function buildThemeRenderContext(
     },
     body_class: buildBodyClass({ ...route, kind: resolvedKind }, post),
     ...(post ? { post } : {}),
-    ...(posts ? { posts } : {}),
-    ...(archive ? { archive } : {}),
-    ...(pagination ? { pagination } : {}),
+    posts,
+    archive,
+    pagination,
+    is_front_page,
+    is_single,
+    is_page,
+    is_singular,
+    is_archive,
+    is_404,
+    have_posts,
   };
-}
-
-function buildArchivePageUrl(pathname: string, page: number): string {
-  const url = new URL(pathname, "http://localhost");
-  if (page <= 1) {
-    url.searchParams.delete("page");
-  } else {
-    url.searchParams.set("page", String(page));
-  }
-  const qs = url.searchParams.toString();
-  return `${url.pathname}${qs ? `?${qs}` : ""}`;
 }

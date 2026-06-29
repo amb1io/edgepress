@@ -2,6 +2,8 @@
 
 Temas no Edgepress são pacotes **Liquid** renderizados em runtime no Worker — sem build e sem redeploy ao instalar.
 
+**Documentação detalhada de templates:** [templates-liquid.md](./templates-liquid.md) — variáveis, tags, filtros, rotas e exemplos.
+
 ## Estrutura do repositório
 
 ```text
@@ -44,6 +46,8 @@ meu-tema/
 
 ## Theme API (tags do core)
 
+Referência completa: **[templates-liquid.md](./templates-liquid.md)**.
+
 | Tag / filtro | Equivalente WordPress | Descrição |
 |--------------|----------------------|-----------|
 | `{% seo_head %}` | `wp_head()` (SEO) | Title, meta, OG, Twitter, JSON-LD |
@@ -74,9 +78,10 @@ O layout recebe `{{ content }}` com o HTML da página.
 - `menus` — mapa de menus (`menus.primary`, etc.)
 - `theme` — slug, version, asset_base_url
 - `route` — kind, path, locale
-- `post` — post/página atual (home, single, page)
-- `posts` — listagem (archive)
-- `archive`, `pagination` — arquivo e paginação
+- `post` — post/página atual (quando aplicável)
+- `posts` — listagem de posts (sempre disponível)
+- `archive`, `pagination` — metadados e paginação (sempre disponíveis)
+- `is_front_page`, `is_single`, `is_page`, `is_archive`, `is_404`, `have_posts` — flags condicionais
 
 ## Instalação
 
