@@ -1,12 +1,16 @@
 /**
  * GET /api/export
- * Gera um arquivo .edgepress (tar.gz) com banco D1 + imagens R2 (uploads/).
+ * Gera um arquivo .edgepress (tar.gz) com banco D1 + imagens R2 (uploads/) + pacotes de tema.
  * Requer autenticação de administrador.
  */
 import type { APIRoute } from "astro";
 import { env as cfEnv } from "cloudflare:workers";
 import { db } from "../../db/index.ts";
-import { buildExport, buildExportFilename } from "../../core/services/edgepress-archive.ts";
+import {
+  buildExport,
+  buildExportFilename,
+  type ArchiveKvLike,
+} from "../../core/services/edgepress-archive.ts";
 import { requireMinRole } from "../../utils/api-auth.ts";
 import { internalServerErrorResponse } from "../../utils/http-responses.ts";
 
@@ -50,7 +54,8 @@ export const GET: APIRoute = async ({ request, locals }) => {
   }
 
   try {
-    const archive = await buildExport(db, bucket);
+    const kv = cfEnv.CACHE as ArchiveKvLike | undefined;
+    const archive = await buildExport(db, bucket, kv);
     const filename = buildExportFilename();
     return new Response(archive, {
       status: 200,

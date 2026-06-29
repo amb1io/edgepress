@@ -1,12 +1,15 @@
 /**
  * POST /api/import
- * Restaura banco D1 + imagens R2 a partir de um arquivo .edgepress (tar.gz).
+ * Restaura banco D1 + imagens R2 + pacotes de tema a partir de um arquivo .edgepress (tar.gz).
  * Substitui todos os dados atuais (wipe + restore). Requer autenticação de administrador.
  */
 import type { APIRoute } from "astro";
 import { env as cfEnv } from "cloudflare:workers";
 import { db } from "../../db/index.ts";
-import { restoreImport } from "../../core/services/edgepress-archive.ts";
+import {
+  restoreImport,
+  type ArchiveKvLike,
+} from "../../core/services/edgepress-archive.ts";
 import { requireMinRole } from "../../utils/api-auth.ts";
 import { internalServerErrorResponse } from "../../utils/http-responses.ts";
 
@@ -98,13 +101,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   try {
     const buffer = await file.arrayBuffer();
-    const result = await restoreImport(db, bucket, buffer);
+    const kv = cfEnv.CACHE as ArchiveKvLike | undefined;
+    const result = await restoreImport(db, bucket, buffer, kv);
     return new Response(
       JSON.stringify({
         ok: true,
         message: "Import completed successfully",
         counts: result.counts,
         mediaCount: result.mediaCount,
+        themeCount: result.themeCount,
       }),
       { status: 200, headers: { "Content-Type": "application/json" } },
     );

@@ -16,13 +16,39 @@ import {
   MEDIA_TAR_PREFIX,
   PRESERVED_TABLES,
   TABLE_ORDER,
+  THEME_PKG_TAR_PREFIX,
   buildExport,
   buildExportFilename,
   restoreImport,
+  type ArchiveKvLike,
 } from "../edgepress-archive.ts";
 import { createArchiveTestDb } from "./edgepress-archive-db.setup.ts";
 import { createMockR2Bucket } from "./edgepress-archive-r2.mock.ts";
 import { resolveMenuOption } from "../../../utils/menu.ts";
+import { THEME_PKG_KV_PREFIX } from "../../theme/theme-package.ts";
+import { THEME_ACTIVE_KV_KEY } from "../theme-service.ts";
+
+function createMockKv(initial: Record<string, string> = {}): ArchiveKvLike & { store: Map<string, string> } {
+  const store = new Map<string, string>(Object.entries(initial));
+
+  return {
+    store,
+    get: vi.fn(async (key: string) => store.get(key) ?? null),
+    put: vi.fn(async (key: string, value: string) => {
+      store.set(key, value);
+    }),
+    list: vi.fn(async (options?: { prefix?: string }) => {
+      const prefix = options?.prefix ?? "";
+      const keys = [...store.keys()]
+        .filter((name) => name.startsWith(prefix))
+        .map((name) => ({ name }));
+      return { keys, list_complete: true };
+    }),
+    delete: vi.fn(async (key: string) => {
+      store.delete(key);
+    }),
+  };
+}
 
 const t = (_locale: string, key: string) => key;
 
@@ -200,6 +226,8 @@ describe("edgepress-archive integration", () => {
     expect(manifest.format).toBe(EDGEPRESS_FORMAT);
     expect(manifest.schemaVersion).toBe(EDGEPRESS_SCHEMA_VERSION);
     expect(manifest.mediaCount).toBe(1);
+    expect(manifest.themeCount).toBe(0);
+    expect(manifest.themePackages).toEqual([]);
     expect(manifest.counts.posts).toBe(1);
     expect(manifest.tableOrder).toEqual([...TABLE_ORDER]);
     expect(manifest.counts).not.toHaveProperty("locales");
@@ -250,6 +278,7 @@ describe("edgepress-archive integration", () => {
 
     expect(result.counts.posts).toBe(1);
     expect(result.mediaCount).toBe(1);
+    expect(result.themeCount).toBe(0);
 
     const restoredPosts = await db.select({ id: posts.id, slug: posts.slug }).from(posts);
     expect(restoredPosts).toEqual([{ id: 10, slug: "hello-export" }]);
@@ -421,6 +450,62 @@ describe("edgepress-archive integration", () => {
     const stored = bucket.store.get(`${MEDIA_PREFIX}seed/hello-world.svg`);
     expect(stored?.contentType).toBe("image/svg+xml");
     expect(stored?.data).toEqual(svg);
+  });
+
+  it("round-trip export then import preserves theme packages and assets", async () => {
+    const { db } = await createArchiveTestDb();
+    await seedArchiveFixtures(db);
+
+    const themePackage = JSON.stringify({
+      manifest: {
+        name: "Test Theme",
+        slug: "2026",
+        version: "1.0.0",
+        engine: "liquid",
+        supports: ["home", "single"],
+        templates: { home: "home" },
+      },
+      templates: { home: "<h1>Home</h1>" },
+      updated_at: Date.now(),
+    });
+
+    const kv = createMockKv({
+      [`${THEME_PKG_KV_PREFIX}2026`]: themePackage,
+    });
+
+    const cssBytes = new TextEncoder().encode("body { margin: 0; }");
+    const bucket = createMockR2Bucket({
+      "themes/2026/assets/theme.css": {
+        data: cssBytes,
+        contentType: "text/css",
+      },
+    });
+
+    const archiveBytes = await buildExport(db, bucket, kv);
+    const entries = await parseTarGzip(archiveBytes.buffer);
+    const byName = new Map(entries.map((entry) => [entry.name, entry]));
+
+    expect(byName.has(`${THEME_PKG_TAR_PREFIX}2026/package.json`)).toBe(true);
+    expect(byName.has("themes/2026/assets/theme.css")).toBe(true);
+
+    const manifest = JSON.parse(new TextDecoder().decode(byName.get("manifest.json")!.data!));
+    expect(manifest.themeCount).toBe(1);
+    expect(manifest.themePackages).toEqual([{ slug: "2026" }]);
+
+    kv.store.clear();
+    bucket.store.clear();
+    bucket.store.set("themes/old/assets/old.css", {
+      data: new Uint8Array([1]),
+      contentType: "text/css",
+    });
+
+    const result = await restoreImport(db, bucket, archiveBytes.buffer, kv);
+
+    expect(result.themeCount).toBe(1);
+    expect(kv.store.get(`${THEME_PKG_KV_PREFIX}2026`)).toBe(themePackage);
+    expect(bucket.store.has("themes/2026/assets/theme.css")).toBe(true);
+    expect(bucket.store.has("themes/old/assets/old.css")).toBe(false);
+    expect(kv.store.has(THEME_ACTIVE_KV_KEY)).toBe(true);
   });
 });
 
