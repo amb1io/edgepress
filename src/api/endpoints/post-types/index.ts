@@ -17,7 +17,7 @@ import {
 import type { MetaSchemaItem } from "../../../db/schema/meta_schema.ts";
 import { normalizeLineMdIcon } from "../../../utils/line-md-icons.ts";
 import { upsertPostTypeTranslations } from "../../../utils/post-type-translations.ts";
-import { invalidateContentListByTable, invalidateI18nCache } from "../../../utils/kv-cache-sync.ts";
+import { invalidateContentListByTable, invalidateI18nCache, invalidateArchivablePostTypesCache } from "../../../utils/kv-cache-sync.ts";
 import { invalidateTranslationsCache } from "../../../i18n/translations.ts";
 import { applyPostTypeTaxonomySave } from "../../../core/services/taxonomy-type-registry.ts";
 
@@ -162,6 +162,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
 
     await invalidateContentListByTable(locals, "post_types");
+    await invalidateArchivablePostTypesCache(locals);
     await invalidateI18nCache(locals);
     invalidateTranslationsCache();
     return htmxRefreshResponse();

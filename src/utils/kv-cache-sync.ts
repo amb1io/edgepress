@@ -25,6 +25,7 @@ import {
   parseThemeImportState,
 } from "./services/theme-service.ts";
 import { upsertActiveThemeSetting } from "./services/settings-service.ts";
+import { ARCHIVABLE_POST_TYPES_KV_KEY } from "../core/theme/post-type-routes.ts";
 
 /** Deleta todas as chaves com o prefixo dado. Ignora erros de KV. */
 export async function deleteKvKeysByPrefix(kv: App.KVLike, prefix: string): Promise<void> {
@@ -255,5 +256,18 @@ export async function syncThemeStatusCacheByPostId(
     );
   } catch {
     // ignora falhas de sync de status
+  }
+}
+
+/**
+ * Invalida cache de post types arquiváveis usado no roteamento público de temas.
+ */
+export async function invalidateArchivablePostTypesCache(locals: App.Locals): Promise<void> {
+  const kv = getKvFromLocals(locals);
+  if (!kv?.delete) return;
+  try {
+    await kv.delete(ARCHIVABLE_POST_TYPES_KV_KEY);
+  } catch {
+    // ignora falha de delete
   }
 }

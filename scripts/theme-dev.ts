@@ -14,7 +14,11 @@ import {
 } from "../src/themes/2026/load-package.ts";
 import { renderTheme, resetLiquidForTests } from "../src/core/theme/render.ts";
 import { resolvePublicRoute, localeToHtmlLang, publicLocaleHomeUrl, publicLocaleUrlPrefix } from "../src/core/theme/resolve-route.ts";
+import { NON_ARCHIVABLE_POST_TYPE_SLUGS } from "../src/core/theme/post-type-routes.ts";
 import type { LocaleSwitcherItem, ResolvedPublicRoute, ThemePackageRecord, ThemeRenderContext } from "../src/core/theme/types.ts";
+
+/** Slugs simulados como CPT arquivável no preview local (além de post via /posts). */
+const DEV_ARCHIVABLE_SLUGS = new Set(["post", "eventos"]);
 
 const PORT = Number(process.env["THEME_DEV_PORT"] ?? 4322);
 const RELOAD_PATH = "/__theme_dev/events";
@@ -63,9 +67,13 @@ function buildDevLocaleUrl(
   targetLocale: string,
   route: ResolvedPublicRoute,
   kind: string,
+  archivePostType?: string,
 ): string {
   const prefix = publicLocaleUrlPrefix(targetLocale);
-  if (kind === "archive") return `${prefix}/posts`;
+  if (kind === "archive") {
+    if (archivePostType === "post") return `${prefix}/posts`;
+    return `${prefix}/${archivePostType ?? "posts"}`;
+  }
   if (route.slug) {
     if (route.slug === "hello-world" && targetLocale === "en") return "/en/hello-world-en";
     if (route.slug === "hello-world-en" && targetLocale === "pt-br") return "/hello-world";
@@ -79,23 +87,40 @@ function buildDevLocaleUrl(
 function buildDevLocaleSwitcher(
   route: ResolvedPublicRoute,
   kind: string,
+  archivePostType?: string,
 ): LocaleSwitcherItem[] {
   return [
     {
       code: "pt-br",
       flag: "🇧🇷",
       label: "PT",
-      url: buildDevLocaleUrl("pt-br", route, kind),
+      url: buildDevLocaleUrl("pt-br", route, kind, archivePostType),
       active: route.locale === "pt-br",
     },
     {
       code: "en",
       flag: "🇺🇸",
       label: "EN",
-      url: buildDevLocaleUrl("en", route, kind),
+      url: buildDevLocaleUrl("en", route, kind, archivePostType),
       active: route.locale === "en",
     },
   ];
+}
+
+function resolveDevArchive(route: ResolvedPublicRoute): { kind: string; postType: string; title: string } | null {
+  if (route.kind === "archive") {
+    const postType = route.postType ?? "post";
+    return { kind: "archive", postType, title: postType === "post" ? "Blog" : postType };
+  }
+  if (route.slug && DEV_ARCHIVABLE_SLUGS.has(route.slug) && !NON_ARCHIVABLE_POST_TYPE_SLUGS.has(route.slug)) {
+    const postType = route.slug;
+    return {
+      kind: "archive",
+      postType,
+      title: postType === "post" ? "Blog" : postType.charAt(0).toUpperCase() + postType.slice(1),
+    };
+  }
+  return null;
 }
 
 function buildDevContext(
@@ -109,11 +134,15 @@ function buildDevContext(
   const homeUrl = publicLocaleHomeUrl(locale);
 
   let kind = route.kind;
-  if (route.slug && kind === "page") {
+  const devArchive = resolveDevArchive(route);
+  const archivePostType = devArchive?.postType;
+  if (devArchive) {
+    kind = "archive";
+  } else if (route.slug && kind === "page") {
     kind = route.slug.includes("post") ? "single" : "page";
   }
 
-  const post = {
+  const samplePost = {
     id: 1,
     title: kind === "home" ? "Bem-vindo ao Edgepress" : `Preview: ${route.slug ?? "home"}`,
     slug: route.slug ?? "hello-world",
@@ -126,14 +155,23 @@ function buildDevContext(
     meta: {},
   };
 
+  const post = kind === "archive" ? undefined : samplePost;
+  const posts = kind === "archive"
+    ? [
+        samplePost,
+        { ...samplePost, id: 2, title: "Segundo item do arquivo", slug: "item-2" },
+      ]
+    : [samplePost];
+
   const is_front_page = kind === "home";
   const is_single = kind === "single";
   const is_page = kind === "page";
   const is_singular = is_single || is_page;
   const is_archive = kind === "archive";
   const is_404 = kind === "404";
-  const posts = [post];
   const have_posts = posts.length > 0;
+  const archiveTitle = devArchive?.title ?? "Blog";
+  const archiveType = archivePostType ?? "post";
 
   return {
     site: {
@@ -147,8 +185,8 @@ function buildDevContext(
       year: new Date().getFullYear(),
     },
     seo: {
-      title: post.title,
-      description: post.excerpt,
+      title: kind === "archive" ? archiveTitle : samplePost.title,
+      description: samplePost.excerpt,
       canonical: `${baseUrl}${route.path || "/"}`,
       og_type: kind === "single" ? "article" : "website",
       site_name: "Edgepress Theme Dev",
@@ -157,6 +195,7 @@ function buildDevContext(
       primary: [
         { label: "Home", url: "/", active: route.path === "/" },
         { label: "Blog", url: "/posts", active: route.path.startsWith("/posts") },
+        { label: "Eventos", url: "/eventos", active: route.path.startsWith("/eventos") },
       ],
     },
     theme: {
@@ -166,10 +205,10 @@ function buildDevContext(
     },
     route: { kind, path: route.path, locale },
     body_class: `route-${kind} locale-${locale.replace(/-/g, "_")}`,
-    locale_switcher: buildDevLocaleSwitcher(route, kind),
-    post,
+    locale_switcher: buildDevLocaleSwitcher(route, kind, archivePostType),
+    ...(post ? { post } : {}),
     posts,
-    archive: { title: "Blog", type: "post" },
+    archive: { title: archiveTitle, type: archiveType },
     pagination: { page: 1, total_pages: 1 },
     is_front_page,
     is_single,

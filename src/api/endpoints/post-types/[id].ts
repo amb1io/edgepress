@@ -21,6 +21,7 @@ import { upsertPostTypeTranslations } from "../../../utils/post-type-translation
 import {
   invalidateContentListByTable,
   invalidateI18nCache,
+  invalidateArchivablePostTypesCache,
 } from "../../../utils/kv-cache-sync.ts";
 import { invalidateTranslationsCache } from "../../../i18n/translations.ts";
 import { applyPostTypeTaxonomySave } from "../../../core/services/taxonomy-type-registry.ts";
@@ -200,6 +201,7 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
     });
 
     await invalidateContentListByTable(locals, "post_types");
+    await invalidateArchivablePostTypesCache(locals);
     await invalidateI18nCache(locals);
     invalidateTranslationsCache();
     return htmxRefreshResponse();
@@ -233,5 +235,6 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
   await db.delete(posts).where(eq(posts.post_type_id, id));
   await db.delete(postTypes).where(eq(postTypes.id, id));
   await invalidateContentListByTable(locals, "post_types");
+  await invalidateArchivablePostTypesCache(locals);
   return htmxRefreshResponse();
 };
