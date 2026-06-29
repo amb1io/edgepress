@@ -1,34 +1,10 @@
-import type { ThemeManifest, ThemeRouteKind } from "./types.ts";
+import type { ThemeRouteKind } from "./types.ts";
 
-const FALLBACK_ORDER: ThemeRouteKind[] = ["page", "single", "home"];
-
-/** WordPress-style template hierarchy for Liquid themes. */
-export function resolveTemplateKey(
-  kind: ThemeRouteKind,
-  manifest: ThemeManifest,
-): string | null {
-  const templates = manifest.templates ?? {};
-
-  if (kind === "404") {
-    return templates["404"] ?? templates.page ?? templates.single ?? null;
-  }
-
-  const direct = templates[kind];
-  if (direct) return direct;
-
-  if (kind === "page" || kind === "single") {
-    for (const fallback of FALLBACK_ORDER) {
-      const key = templates[fallback];
-      if (key) return key;
-    }
-  }
-
-  if (kind === "archive") {
-    return templates.archive ?? templates.home ?? null;
-  }
-
-  return templates.home ?? null;
-}
+export type TemplateResolveHints = {
+  postTypeSlug?: string;
+  postSlug?: string;
+  archiveType?: string;
+};
 
 /** Normalizes manifest template paths to KV keys (without `templates/` prefix or `.liquid`). */
 export function normalizeTemplateKey(path: string): string {
@@ -40,4 +16,63 @@ export function normalizeTemplateKey(path: string): string {
     key = key.slice(0, -".liquid".length);
   }
   return key;
+}
+
+function hasTemplate(pkgTemplates: Record<string, string>, key: string): boolean {
+  return key in pkgTemplates;
+}
+
+function findTemplate(
+  pkgTemplates: Record<string, string>,
+  candidates: string[],
+): string | null {
+  for (const candidate of candidates) {
+    if (hasTemplate(pkgTemplates, candidate)) return candidate;
+  }
+  return null;
+}
+
+/** WordPress-style template hierarchy candidates for a route kind. */
+export function buildTemplateCandidates(
+  kind: ThemeRouteKind,
+  hints?: TemplateResolveHints,
+): string[] {
+  switch (kind) {
+    case "home":
+      return ["front-page", "home", "index"];
+    case "single": {
+      const type = hints?.postTypeSlug?.trim();
+      const slug = hints?.postSlug?.trim();
+      const candidates: string[] = [];
+      if (type && slug) candidates.push(`single-${type}-${slug}`);
+      if (type) candidates.push(`single-${type}`);
+      candidates.push("single", "singular", "index");
+      return candidates;
+    }
+    case "page": {
+      const slug = hints?.postSlug?.trim();
+      const candidates: string[] = [];
+      if (slug) candidates.push(`page-${slug}`);
+      candidates.push("page", "singular", "index");
+      return candidates;
+    }
+    case "archive": {
+      const type = hints?.archiveType ?? hints?.postTypeSlug ?? "post";
+      return [`archive-${type}`, "archive", "index"];
+    }
+    case "404":
+      return ["404", "index"];
+    default:
+      return ["index"];
+  }
+}
+
+/** WordPress-style template hierarchy for Liquid themes. */
+export function resolveTemplateKey(
+  kind: ThemeRouteKind,
+  pkgTemplates: Record<string, string>,
+  hints?: TemplateResolveHints,
+): string | null {
+  const candidates = buildTemplateCandidates(kind, hints);
+  return findTemplate(pkgTemplates, candidates);
 }

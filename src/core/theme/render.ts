@@ -51,12 +51,15 @@ export async function renderTheme(
 ): Promise<string> {
   const liquid = getLiquidForPackage(pkg);
 
-  const templatePath = resolveTemplateKey(ctx.route.kind, pkg.manifest);
-  if (!templatePath) {
+  const templateKey = resolveTemplateKey(ctx.route.kind, pkg.templates, {
+    postTypeSlug: ctx.post?.post_type_slug,
+    postSlug: ctx.post?.slug,
+    archiveType: ctx.archive.type,
+  });
+  if (!templateKey) {
     throw new Error(`No template for route kind: ${ctx.route.kind}`);
   }
 
-  const templateKey = normalizeTemplateKey(templatePath);
   const templateSource = pkg.templates[templateKey];
   if (!templateSource) {
     throw new Error(`Template not found in package: ${templateKey}`);
