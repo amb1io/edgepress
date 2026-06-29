@@ -83,6 +83,8 @@ O layout recebe `{{ content }}` com o HTML da página.
 - `archive`, `pagination` — metadados e paginação (sempre disponíveis)
 - `is_front_page`, `is_single`, `is_page`, `is_archive`, `is_404`, `have_posts` — flags condicionais
 
+**Rotas por post type:** CPTs customizados (exceto tipos internos como `page`, `attachment`) expõem archive em `/{slug-do-tipo}`. Aliases `/posts` e `/blog` listam o tipo `post`. Ver [templates-liquid.md](./templates-liquid.md#rotas-públicas-e-urls).
+
 ## Instalação
 
 1. Publique o repositório no GitHub (público).

@@ -74,10 +74,12 @@ export function resolvePublicRoute(pathname: string, searchParams: URLSearchPara
   if (!isValidSlug(slug)) {
     return { kind: "404", locale, path };
   }
+  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
   return {
     kind: "page",
     locale,
     path,
     slug,
+    page,
   };
 }
