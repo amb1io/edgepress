@@ -221,7 +221,9 @@ export async function syncThemeCache(
       );
     }
 
-    if (activeTheme.slug) {
+    if (activeTheme.meta?.theme_slug) {
+      await upsertActiveThemeSetting(db, activeTheme.meta.theme_slug);
+    } else if (activeTheme.slug) {
       await upsertActiveThemeSetting(db, activeTheme.slug);
     }
   } catch {

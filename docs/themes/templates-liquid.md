@@ -488,7 +488,7 @@ Todas as variáveis de conteúdo estão **sempre disponíveis** em qualquer rota
 
 **Temas de referência:**
 
-- `src/themes-default/2026/` — home com post único (`home_content_key`) e `{% the_content %}`
+- `src/themes/2026/` — home com post único (`home_content_key`) e `{% the_content %}`
 - `src/themes-default/blog-rhamses/` — home lista `posts` diretamente no template
 
 ---
@@ -507,7 +507,7 @@ Todas as variáveis de conteúdo estão **sempre disponíveis** em qualquer rota
 npm run theme:dev
 ```
 
-Preview em `http://localhost:4322` com o mesmo motor Liquid do Worker. Por padrão carrega `src/themes-default/2026/`; altere o pacote em `scripts/theme-dev.ts` ou use upload/ZIP para testar outro tema no ambiente completo (`npm run dev`).
+Preview em `http://localhost:4322` com o mesmo motor Liquid do Worker. Por padrão carrega `src/themes/2026/`; altere o pacote em `scripts/theme-dev.ts` ou use upload/ZIP para testar outro tema no ambiente completo (`npm run dev`).
 
 Hot reload: salvar `.liquid`, `theme.json` ou arquivos em `assets/` recarrega o browser.
 

@@ -11,7 +11,7 @@ import {
   DEFAULT_THEME_DIR,
   loadDefaultThemeAssets,
   loadDefaultThemePackage,
-} from "../src/themes-default/2026/load-package.ts";
+} from "../src/themes/2026/load-package.ts";
 import { renderTheme, resetLiquidForTests } from "../src/core/theme/render.ts";
 import { resolvePublicRoute, localeToHtmlLang, publicLocaleHomeUrl, publicLocaleUrlPrefix } from "../src/core/theme/resolve-route.ts";
 import type { LocaleSwitcherItem, ResolvedPublicRoute, ThemePackageRecord, ThemeRenderContext } from "../src/core/theme/types.ts";
@@ -257,6 +257,6 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, () => {
   startThemeWatcher();
   console.log(`[theme:dev] http://localhost:${PORT}`);
-  console.log("[theme:dev] Hot reload ativo — edite templates/assets em src/themes-default/2026/");
+  console.log("[theme:dev] Hot reload ativo — edite templates/assets em src/themes/2026/");
   console.log("[theme:dev] Static preview — use npm run dev for CMS content");
 });

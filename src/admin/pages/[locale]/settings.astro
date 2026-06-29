@@ -1,6 +1,7 @@
 ---
 import AdminLayout from "../../../admin/layouts/AdminLayout.astro";
 import CacheTemplate from "../../../admin/templates/cache.astro";
+import ImportExportTemplate from "../../../admin/templates/import-export.astro";
 import PostTypesTemplate from "../../../admin/templates/post-types.astro";
 import { t, locales, defaultLocale } from "../../../i18n/index.ts";
 import { db } from "../../../db/index.ts";
@@ -150,6 +151,12 @@ if (showPostTypes) {
     kvItems={kvItems}
     kvListError={kvListError}
     pageLength={datalistPageLength}
+  />
+) : domain === "import_export" ? (
+  <ImportExportTemplate
+    locale={locale}
+    menuItems={menuItems}
+    currentUser={{ email: user.email ?? "", name: user.name ?? "" }}
   />
 ) : showPostTypes ? (
   <PostTypesTemplate

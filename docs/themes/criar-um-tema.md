@@ -100,4 +100,4 @@ Abre um preview do tema default em `http://localhost:4322` usando o mesmo motor 
 
 ## Tema de referência
 
-Veja `src/themes-default/2026/` — migração do tema 2026 com comentários e demonstração de todas as tags.
+Veja `src/themes/2026/` — migração do tema 2026 com comentários e demonstração de todas as tags.
