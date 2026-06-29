@@ -1,14 +1,6 @@
 import type { APIRoute } from "astro";
 import { env as cfEnv } from "cloudflare:workers";
 
-import { defaultThemeAssets } from "../../themes/2026/assets-bundle.ts";
-import { blogRhamsesThemeAssets } from "../../themes-default/blog-rhamses/assets-bundle.ts";
-
-const BUNDLED_THEME_ASSETS: Record<string, Record<string, { body: string; contentType: string }>> = {
-  "2026": defaultThemeAssets,
-  "blog-rhamses": blogRhamsesThemeAssets,
-};
-
 export const prerender = false;
 
 function guessContentType(path: string): string {
@@ -43,21 +35,6 @@ function parseThemeAssetPath(
   };
 }
 
-function serveBundledDefaultAsset(themeSlug: string, assetPath: string): Response | null {
-  const assets = BUNDLED_THEME_ASSETS[themeSlug];
-  if (!assets) return null;
-  const fallback = assets[assetPath];
-  if (!fallback) return null;
-
-  return new Response(fallback.body, {
-    status: 200,
-    headers: {
-      "Content-Type": fallback.contentType,
-      "Cache-Control": "public, max-age=3600",
-    },
-  });
-}
-
 export const GET: APIRoute = async ({ params }) => {
   const parsed = parseThemeAssetPath(params.path);
   if (!parsed) {
@@ -85,9 +62,6 @@ export const GET: APIRoute = async ({ params }) => {
       return new Response(object.body, { status: 200, headers });
     }
   }
-
-  const bundled = serveBundledDefaultAsset(themeSlug, assetPath);
-  if (bundled) return bundled;
 
   return new Response("Not Found", { status: 404 });
 };
