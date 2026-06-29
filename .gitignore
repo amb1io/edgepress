@@ -5,7 +5,7 @@ tasks.TODO
 node_modules/
 /pnpm-lock.yaml
 
-# Copied theme static files (see scripts/sync-theme-public.mjs)
+# Legacy theme static copies (optional local public assets)
 /public/**
 !/public/.assetsignore
 
