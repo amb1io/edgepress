@@ -12,6 +12,8 @@ export type ThemeManifest = {
   assets_dir?: string;
   /** Translation key or slug for the home page content */
   home_content_key?: string;
+  /** When true, home is a post listing (`posts`); when false/absent, home uses `home_content_key` as singular content */
+  home_list_posts?: boolean;
 };
 
 export type ThemePackageRecord = {

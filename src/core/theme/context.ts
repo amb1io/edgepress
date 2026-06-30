@@ -15,7 +15,7 @@ import type {
   ThemePostView,
   ThemeRenderContext,
 } from "./types.ts";
-import { buildSeoFromPost } from "./seo-head.ts";
+import { buildSeoFromPost, resolveThemeSeoContext } from "./seo-head.ts";
 import {
   localeToHtmlLang,
   normalizePublicLocale,
@@ -133,6 +133,7 @@ export async function buildThemeRenderContext(
   const homeUrl = publicLocaleHomeUrl(locale);
   const assetBase = `${baseUrl}/themes-assets/${pkg.manifest.slug}`;
   const homeContentKey = pkg.manifest.home_content_key ?? "hello-world";
+  const homeListPosts = pkg.manifest.home_list_posts === true;
 
   const archivablePostTypes = await getArchivablePostTypes(db, kv);
   const archiveRoute = resolveArchivePostTypeFromRoute(route, archivablePostTypes);
@@ -155,7 +156,7 @@ export async function buildThemeRenderContext(
       : Promise.resolve(null);
 
   const fetchHomePost =
-    route.kind === "home"
+    route.kind === "home" && !homeListPosts
       ? content
           .getItem("posts", homeContentKey, {
             status: "published",
@@ -203,7 +204,6 @@ export async function buildThemeRenderContext(
 
   if (isArchiveRoute) {
     resolvedKind = "archive";
-    seoPost = filteredListPosts[0];
   } else if (slugPostData) {
     seoPost = slugPostData;
     post = await enrichPostViewWithCover(
@@ -215,7 +215,7 @@ export async function buildThemeRenderContext(
     resolvedKind = post.post_type_slug === "post" ? "single" : "page";
   } else if (route.slug) {
     resolvedKind = "404";
-  } else if (homePostData) {
+  } else if (route.kind === "home" && !homeListPosts && homePostData) {
     seoPost = homePostData as ContentPostDetail;
     post = await enrichPostViewWithCover(
       toPostView(seoPost),
@@ -226,7 +226,6 @@ export async function buildThemeRenderContext(
     resolvedKind = "home";
   } else if (route.kind === "home") {
     resolvedKind = "home";
-    seoPost = filteredListPosts[0];
   }
 
   const archive = {
@@ -269,12 +268,20 @@ export async function buildThemeRenderContext(
   const canonicalUrl = new URL(route.path || "/", baseUrl).href;
   const seoOgImage = seoPost
     ? await resolveCoverImage(seoPost, baseUrl, db, attachmentCache)
-    : undefined;
-  const seo = buildSeoFromPost({
-    ...(seoPost ? { post: seoPost as Parameters<typeof buildSeoFromPost>[0]["post"] } : {}),
-    fallbackTitle: isArchiveRoute ? archive.title : siteName,
-    canonicalUrl,
+    : resolvedKind === "home" && homeListPosts && posts[0]
+      ? posts[0].cover_image
+      : undefined;
+  const seo = resolveThemeSeoContext({
+    resolvedKind,
+    isArchiveRoute,
+    archiveTitle: archive.title,
+    homeListPosts,
+    ...(seoPost
+      ? { seoPost: seoPost as Parameters<typeof buildSeoFromPost>[0]["post"] }
+      : {}),
     siteName,
+    siteDescription,
+    canonicalUrl,
     ...(seoOgImage ? { ogImage: seoOgImage } : {}),
   });
 
