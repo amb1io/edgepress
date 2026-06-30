@@ -9,7 +9,6 @@ const ARCHIVABLE_POST_TYPES_TTL_SECONDS = 300;
 
 export const POST_TYPE_ARCHIVE_ALIASES: Record<string, string> = {
   posts: "post",
-  blog: "post",
 };
 
 export const NON_ARCHIVABLE_POST_TYPE_SLUGS = new Set([

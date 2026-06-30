@@ -18,7 +18,7 @@ meu-tema/
     home.liquid            # rota /
     single.liquid          # post (tipo post)
     page.liquid            # página estática
-    archive.liquid         # listagem /posts ou /blog
+    archive.liquid         # listagem /posts ou /{cpt}
     404.liquid
   assets/
     theme.css
@@ -39,6 +39,7 @@ Arquivos em `templates/` são referenciados **sem** o prefixo `templates/` e **s
   "supports": ["home", "single", "page", "archive"],
   "layout": "layouts/base",
   "home_content_key": "hello-world",
+  "home_list_posts": false,
   "templates": {
     "home": "home",
     "single": "single",
@@ -54,7 +55,8 @@ Arquivos em `templates/` são referenciados **sem** o prefixo `templates/` e **s
 |-------|-----------|
 | `supports` | Tipos de rota que o tema declara suportar |
 | `layout` | Layout padrão quando o template não usa `{% layout %}` na primeira linha |
-| `home_content_key` | Slug ou `translation_key` do post exibido na home (disponível em `post` na rota `/`) |
+| `home_content_key` | Slug ou `translation_key` do post exibido na home quando `home_list_posts` é `false` ou ausente |
+| `home_list_posts` | Se `true`, a home lista posts (`posts` preenchido, `post` opcional); se `false`/ausente, a home carrega `home_content_key` como página singular |
 | `templates` | Mapa opcional de aliases; o resolver usa **auto-discovery** nos arquivos do pacote |
 
 ### Hierarquia de templates (estilo WordPress)
@@ -87,7 +89,7 @@ O roteamento público segue três camadas:
 | URL | `route.kind` | Template típico |
 |-----|--------------|-----------------|
 | `/` | `home` | `home.liquid` ou `front-page.liquid` |
-| `/posts`, `/blog` | `archive` (tipo `post`) | `archive.liquid` ou `archive-post.liquid` |
+| `/posts` | `archive` (tipo `post`) | `archive.liquid` ou `archive-post.liquid` |
 | `/{post-type-slug}` | `archive` (CPT arquivável) | `archive-{type}.liquid` → `archive.liquid` |
 | `/{post-type-slug}?page=2` | `archive` paginado | `archive.liquid` |
 | `/meu-slug` | `single` ou `page` | `single.liquid` / `page.liquid` |
@@ -164,6 +166,18 @@ Preenchido pelo core a partir do post da rota ou fallbacks do site.
 | `seo.site_name` | string? | Nome do site para OG |
 | `seo.json_ld_html` | string? | `<script type="application/ld+json">` (não use direto; prefira `{% seo_head %}`) |
 
+**Regras de `seo.title` (e `<title>` via `{% seo_head %}`):**
+
+| Rota | `seo.title` |
+|------|-------------|
+| Home com `home_list_posts: true` | `site_name` (`site.title`) |
+| Home com `home_content_key` e post encontrado | título do post (ou `seo.title` do post) |
+| Home sem post de conteúdo | `site_name` |
+| Archive | nome do CPT (`archive.title`) |
+| Single / page | título do post atual |
+
+`seo.site_name` e `site.title` vêm sempre do setting `site_name`.
+
 ### `theme`
 
 | Propriedade | Tipo | Descrição |
@@ -182,7 +196,7 @@ Preenchido pelo core a partir do post da rota ou fallbacks do site.
 
 ### `post` (post ou página atual)
 
-Disponível quando há conteúdo singular na rota (slug, ou home via `home_content_key`). O template decide o que exibir — na home você pode ignorar `post` e usar `posts`.
+Disponível quando há conteúdo singular na rota (slug, ou home via `home_content_key` quando `home_list_posts` não está ativo). Com `home_list_posts: true`, use `posts` na home; `post` pode estar ausente.
 
 | Propriedade | Tipo | Descrição |
 |-------------|------|-----------|
@@ -233,7 +247,7 @@ Sempre disponíveis. Use em qualquer template para decidir o que renderizar:
 | `is_single` | Post do tipo `post` |
 | `is_page` | Página estática |
 | `is_singular` | `is_single` ou `is_page` |
-| `is_archive` | Listagem `/posts`, `/blog`, etc. |
+| `is_archive` | Listagem `/posts`, `/{cpt}` arquivável, etc. |
 | `is_404` | Slug não encontrado |
 | `have_posts` | `posts` tem pelo menos um item |
 
@@ -251,7 +265,14 @@ Sempre disponíveis. Use em qualquer template para decidir o que renderizar:
 
 ### `locale_switcher`
 
-Array de links PT/EN (e extensível no core).
+Array de links PT/EN (e extensível no core). As URLs são derivadas da **rota pública atual**, não dos slugs de tradução no banco.
+
+| Rota (`route.kind`) | `item.url` por locale |
+|---------------------|------------------------|
+| `home` (sem slug) | `/` (pt-br), `/en` (en) |
+| `archive` | `/posts` ou `/{cpt}` com prefixo do locale |
+| `single`, `page` ou qualquer rota com `slug` | `/{slug}` com prefixo do locale (mesmo slug em todos os idiomas) |
+| `404` sem slug | home do locale (`/` ou `/en`) |
 
 | Propriedade | Tipo | Descrição |
 |-------------|------|-----------|
@@ -269,9 +290,9 @@ Array de links PT/EN (e extensível no core).
 
 ### `menus`
 
-Mapa de menus por localização. Hoje o core popula `menus.primary` a partir de posts do tipo `menus` no CMS.
+Mapa de menus por localização. O core popula `menus.primary` a partir de posts publicados do tipo `menus` no CMS: cada post pode ter um bloco de custom field **"menu navigation"** com linhas `name` (rótulo) e `value` (URL). A API `/api/content/posts?filter_post_type=menus` retorna os mesmos dados para integrações externas.
 
-Cada item: `label`, `url`, `active` (boolean).
+Cada item: `label`, `url`, `active` (boolean — `true` quando `url` coincide com `route.path`).
 
 Alternativa: `{% nav_menu 'primary' %}` gera o `<nav>` completo.
 

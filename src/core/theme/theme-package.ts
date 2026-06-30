@@ -62,6 +62,7 @@ export function validateThemeManifest(raw: unknown): ThemeManifest {
     ...(typeof obj.home_content_key === "string"
       ? { home_content_key: obj.home_content_key }
       : {}),
+    ...(obj.home_list_posts === true ? { home_list_posts: true } : {}),
   };
 }
 

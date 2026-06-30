@@ -10,6 +10,7 @@ import type { ResolvedPublicRoute } from "../types.ts";
 
 const archivableTypes: ArchivablePostType[] = [
   { slug: "post", name: "Post" },
+  { slug: "blog", name: "Blog" },
   { slug: "eventos", name: "Eventos" },
   { slug: "produtos", name: "Produtos" },
 ];
@@ -65,6 +66,20 @@ describe("post-type-routes", () => {
     const resolved = resolveArchivePostTypeFromRoute(route, archivableTypes);
     expect(resolved?.postType).toBe("eventos");
     expect(resolved?.title).toBe("Eventos");
+  });
+
+  it("resolves blog CPT archive from slug route", () => {
+    const route: ResolvedPublicRoute = {
+      kind: "page",
+      locale: "pt-br",
+      path: "/blog",
+      slug: "blog",
+      page: 1,
+    };
+    expect(resolveArchivePostTypeFromRoute(route, archivableTypes)).toEqual({
+      postType: "blog",
+      title: "Blog",
+    });
   });
 
   it("returns null for non-archivable slug routes", () => {
