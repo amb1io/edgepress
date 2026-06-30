@@ -146,6 +146,78 @@ export async function syncPostCache(
   }
 }
 
+export type PostCacheSnapshot = {
+  id: number;
+  slug: string;
+  status: string;
+  meta_values: string | null;
+  id_locale_code: number | null;
+  post_type_id: number;
+};
+
+/**
+ * Remove do KV o cache do post após delete: post:id:X, post:slug:status=*,
+ * post:tk:... (locale do post) e listagens content:posts:*.
+ */
+export async function invalidatePostCache(
+  locals: App.Locals,
+  db: Database,
+  post: PostCacheSnapshot,
+): Promise<void> {
+  const kv = getKvFromLocals(locals);
+  if (!kv) return;
+
+  try {
+    await kv.delete?.(`post:id:${post.id}`);
+  } catch {
+    // ignora
+  }
+
+  try {
+    await deleteKvKeysByPrefix(kv, `post:${post.slug}:status=`);
+  } catch {
+    // ignora
+  }
+
+  try {
+    const meta = parseMetaValues(post.meta_values) as Record<string, unknown>;
+    const rawTk = meta[TRANSLATION_KEY_META];
+    const translationKey = normalizeTranslationKey(
+      typeof rawTk === "string" ? rawTk : typeof rawTk === "number" ? String(rawTk) : null,
+    );
+    if (translationKey) {
+      let localeCode = "_";
+      if (post.id_locale_code != null) {
+        const [locRow] = await db
+          .select({ locale_code: locales.locale_code })
+          .from(locales)
+          .where(eq(locales.id, post.id_locale_code))
+          .limit(1);
+        if (locRow?.locale_code) localeCode = locRow.locale_code;
+      }
+      const loc = String(localeCode ?? "").trim().toLowerCase() || "_";
+      await deleteKvKeysByPrefix(kv, `post:tk:${translationKey}:locale=${loc}:status=`);
+    }
+  } catch {
+    // ignora
+  }
+
+  await invalidateContentListByTable(locals, "posts");
+
+  try {
+    const [typeRow] = await db
+      .select({ slug: postTypes.slug })
+      .from(postTypes)
+      .where(eq(postTypes.id, post.post_type_id))
+      .limit(1);
+    if (typeRow?.slug === "themes") {
+      await invalidateThemeCache(locals);
+    }
+  } catch {
+    // ignora
+  }
+}
+
 /**
  * Invalida todas as chaves de listagem de uma tabela (prefixo content:table:).
  */

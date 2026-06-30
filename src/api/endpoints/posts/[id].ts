@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 
 // Database
 import { db } from "../../../db/index.ts";
-import { postTypes, posts, postsMedia, postsTaxonomies } from "../../../db/schema.ts";
+import { posts, postsMedia, postsTaxonomies } from "../../../db/schema.ts";
 
 // ORM
 import { eq } from "drizzle-orm";
@@ -10,7 +10,7 @@ import { eq } from "drizzle-orm";
 // Auth: apenas editor ou admin podem deletar posts
 import { requireMinRole } from "../../../utils/api-auth.ts";
 import { htmxRefreshResponse } from "../../../utils/http-responses.ts";
-import { invalidateThemeCache } from "../../../utils/kv-cache-sync.ts";
+import { invalidatePostCache } from "../../../utils/kv-cache-sync.ts";
 
 export const prerender = false;
 
@@ -22,6 +22,7 @@ export const prerender = false;
  * - Deleta relações em posts_taxonomies
  * - Deleta relações em posts_media
  * - Deleta o post
+ * - Invalida cache KV do post (post:id, post:slug, tradução e content:posts:*)
  * - Retorna JSON com sucesso/erro
  * 
  * @param {object} params - Parâmetros da rota
@@ -54,7 +55,14 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
   const postId = parseInt(id, 10);
   try {
     const [targetPost] = await db
-      .select({ post_type_id: posts.post_type_id })
+      .select({
+        id: posts.id,
+        post_type_id: posts.post_type_id,
+        slug: posts.slug,
+        status: posts.status,
+        meta_values: posts.meta_values,
+        id_locale_code: posts.id_locale_code,
+      })
       .from(posts)
       .where(eq(posts.id, postId))
       .limit(1);
@@ -69,14 +77,7 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
     await db.delete(posts).where(eq(posts.id, postId));
 
     if (targetPost) {
-      const [typeRow] = await db
-        .select({ slug: postTypes.slug })
-        .from(postTypes)
-        .where(eq(postTypes.id, targetPost.post_type_id))
-        .limit(1);
-      if (typeRow?.slug === "themes") {
-        await invalidateThemeCache(locals);
-      }
+      await invalidatePostCache(locals, db, targetPost);
     }
 
     if (request.headers.get("HX-Request") === "true") {
