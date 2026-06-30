@@ -59,7 +59,7 @@ export function resolvePublicRoute(pathname: string, searchParams: URLSearchPara
     return { kind: "home", locale, path };
   }
 
-  if (rest[0] === "posts" || rest[0] === "blog") {
+  if (rest[0] === "posts") {
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
     return {
       kind: "archive",
