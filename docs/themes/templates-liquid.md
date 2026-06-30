@@ -78,13 +78,26 @@ Exemplos de nomes de arquivo:
 
 ## Rotas públicas e URLs
 
+O roteamento público segue três camadas:
+
+1. **`resolvePublicRoute`** — interpreta locale, aliases e slug na URL
+2. **`buildThemeRenderContext`** — consulta post types arquiváveis no banco; se o segmento bater com um CPT, a rota vira `archive` (**prioridade sobre conteúdo singular** com o mesmo slug)
+3. **`resolveTemplateKey`** — escolhe o template Liquid (`archive-produtos.liquid`, etc.)
+
 | URL | `route.kind` | Template típico |
 |-----|--------------|-----------------|
-| `/` | `home` | `home.liquid` |
-| `/posts`, `/blog` | `archive` | `archive.liquid` |
-| `/posts?page=2` | `archive` (paginado) | `archive.liquid` |
-| `/meu-slug` | `single` ou `page` | conforme `post_type` |
-| slug inexistente | `404` | `404.liquid` |
+| `/` | `home` | `home.liquid` ou `front-page.liquid` |
+| `/posts`, `/blog` | `archive` (tipo `post`) | `archive.liquid` ou `archive-post.liquid` |
+| `/{post-type-slug}` | `archive` (CPT arquivável) | `archive-{type}.liquid` → `archive.liquid` |
+| `/{post-type-slug}?page=2` | `archive` paginado | `archive.liquid` |
+| `/meu-slug` | `single` ou `page` | `single.liquid` / `page.liquid` |
+| slug inexistente / tipo não arquivável | `404` | `404.liquid` |
+
+**Post types arquiváveis:** todos os tipos cadastrados em `edp_post_types`, exceto tipos internos (`page`, `attachment`, `themes`, `user`, `settings`, etc.). Tipos customizados criados no admin ganham archive em `/{slug}` automaticamente.
+
+**Colisão de slug:** se existir um post publicado com o mesmo slug de um CPT arquivável (ex.: conteúdo e tipo `produtos`), **o archive do post type vence** e a URL lista o tipo, não o post singular.
+
+Exemplo de template específico: `templates/archive-produtos.liquid` para o CPT `produtos`.
 
 **Locales na URL:**
 
@@ -482,7 +495,8 @@ Todas as variáveis de conteúdo estão **sempre disponíveis** em qualquer rota
 | Rota | `route.kind` | Template típico | Uso comum |
 |------|--------------|-----------------|-----------|
 | `/` | `home` | `front-page` ou `home` | `posts` para listagem, ou `post` para página fixa |
-| `/posts` | `archive` | `archive` | `posts`, `pagination`, `archive` |
+| `/posts`, `/blog` | `archive` | `archive` | aliases do tipo `post` |
+| `/{cpt-slug}` | `archive` | `archive-{type}` | listagem do CPT (prioridade sobre post com mesmo slug) |
 | `/meu-slug` | `single` ou `page` | `single-*` ou `page-*` | `post`, `{% the_content %}` |
 | slug inexistente | `404` | `404` | mensagem de erro |
 
@@ -521,7 +535,7 @@ Hot reload: salvar `.liquid`, `theme.json` ou arquivos em `assets/` recarrega o 
 4. Opcional: `home_content_key` para popular `post` na home com uma página fixa.
 5. Prefixar links com `{{ site.locale_prefix }}` para i18n.
 6. Incluir `{% seo_head %}`, `{% theme_styles %}`, `{% scripts_footer %}` no layout.
-7. Testar `/`, `/posts`, um slug de post, uma página e `/en/...` se houver traduções.
+7. Testar `/`, `/posts`, `/{cpt-slug}`, um slug de post, uma página e `/en/...` se houver traduções.
 
 ---
 
@@ -534,4 +548,5 @@ Hot reload: salvar `.liquid`, `theme.json` ou arquivos em `assets/` recarrega o 
 | Render e layout | `src/core/theme/render.ts` |
 | Hierarquia de templates | `src/core/theme/resolve-template.ts` |
 | Rotas e locales | `src/core/theme/resolve-route.ts` |
+| Post types arquiváveis | `src/core/theme/post-type-routes.ts` |
 | Tipos TypeScript | `src/core/theme/types.ts` |

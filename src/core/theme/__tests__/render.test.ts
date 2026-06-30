@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderTheme, resetLiquidForTests } from "../render.ts";
-import { defaultThemePackage } from "../../../themes/2026/bundle.ts";
+import { referenceThemePackage } from "./fixtures/reference-theme.ts";
 import type { ThemePackageRecord, ThemeRenderContext } from "../types.ts";
 
 function baseContext(overrides: Partial<ThemeRenderContext> = {}): ThemeRenderContext {
@@ -83,7 +83,7 @@ describe("renderTheme", () => {
   });
 
   it("renders home with seo_head and the_content", async () => {
-    const html = await renderTheme(defaultThemePackage, baseContext());
+    const html = await renderTheme(referenceThemePackage, baseContext());
     expect(html).toContain("<title>Demo</title>");
     expect(html).toContain("<p>Body content</p>");
     expect(html).toContain('<section class="hero">');
@@ -96,7 +96,7 @@ describe("renderTheme", () => {
 
   it("renders 404 template", async () => {
     const html = await renderTheme(
-      defaultThemePackage,
+      referenceThemePackage,
       baseContext({
         route: { kind: "404", path: "/missing", locale: "pt-br" },
         post: undefined,

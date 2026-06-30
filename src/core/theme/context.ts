@@ -10,6 +10,7 @@ import {
   type TranslationSlugRow,
 } from "../services/post-translation-service.ts";
 import { db } from "../../db/index.ts";
+import { getKvFromLocals } from "../../utils/runtime-locals.ts";
 import { adminUrlLocaleToDbCode } from "../../utils/admin-locale-constants.ts";
 import type {
   LocaleSwitcherItem,
@@ -27,6 +28,16 @@ import {
   publicLocaleHomeUrl,
   publicLocaleUrlPrefix,
 } from "./resolve-route.ts";
+import {
+  buildArchivePublicPath,
+  getArchivablePostTypes,
+  resolveArchivePostTypeFromRoute,
+} from "./post-type-routes.ts";
+import { filterPublicThemeListPosts } from "./post-filters.ts";
+import {
+  resolveCoverImage,
+  type CoverImageAttachmentCache,
+} from "./cover-image.ts";
 
 type CustomFieldRow = { name?: string; value?: string; type?: string };
 type CustomFieldItem = { title?: string; fields?: CustomFieldRow[] };
@@ -57,35 +68,7 @@ function getMenuItemsFromPost(
     .filter((x) => x.label !== "" && x.url !== "");
 }
 
-function resolveOgImage(post: ContentPostDetail, baseUrl: string): string | undefined {
-  const media = Array.isArray(post.media) ? post.media : [];
-  const metaValues = (post.meta_values ?? {}) as Record<string, unknown>;
-  const thumbIdRaw = metaValues["post_thumbnail_id"];
-  const thumbId =
-    typeof thumbIdRaw === "number"
-      ? thumbIdRaw
-      : typeof thumbIdRaw === "string"
-        ? parseInt(thumbIdRaw, 10)
-        : NaN;
-
-  for (const item of media) {
-    const row = item as { id?: number; meta_values?: Record<string, unknown> };
-    const id = row.id;
-    if (thumbId && !Number.isNaN(thumbId) && id !== thumbId) continue;
-    const meta = row.meta_values ?? {};
-    const path =
-      (typeof meta["attachment_path"] === "string" && meta["attachment_path"]) ||
-      (typeof meta["attachment_file"] === "string" && meta["attachment_file"]) ||
-      "";
-    if (!path) continue;
-    if (/^https?:\/\//i.test(path)) return path;
-    const normalized = path.startsWith("/") ? path : `/uploads/${path.replace(/^uploads\//, "")}`;
-    return new URL(`/api/media${normalized}`, baseUrl).href;
-  }
-  return undefined;
-}
-
-function toPostView(post: ContentPostDetail, baseUrl: string): ThemePostView {
+function toPostView(post: ContentPostDetail): ThemePostView {
   const metaValues = (post.meta_values ?? {}) as Record<string, unknown>;
   const meta: Record<string, string> = {};
   for (const [k, v] of Object.entries(metaValues)) {
@@ -105,10 +88,19 @@ function toPostView(post: ContentPostDetail, baseUrl: string): ThemePostView {
         : post.published_at
           ? Date.parse(String(post.published_at))
           : null,
-    post_type_slug: String(post.post_type_slug ?? "post"),
-    cover_image: resolveOgImage(post, baseUrl),
+    post_type_slug: String(post["post_type_slug"] ?? "post"),
     meta,
   };
+}
+
+async function enrichPostViewWithCover(
+  view: ThemePostView,
+  source: ContentPostDetail,
+  baseUrl: string,
+  cache: CoverImageAttachmentCache,
+): Promise<ThemePostView> {
+  const cover = await resolveCoverImage(source, baseUrl, db, cache);
+  return cover ? { ...view, cover_image: cover } : view;
 }
 
 function buildBodyClass(route: ResolvedPublicRoute, post?: ThemePostView): string {
@@ -128,12 +120,13 @@ async function buildLocaleSwitcher(
   resolvedKind: ThemeRouteKind,
   post: ThemePostView | undefined,
   homeTranslationKey: string | undefined,
+  archivePostType?: string,
 ): Promise<LocaleSwitcherItem[]> {
   let siblings: TranslationSlugRow[] = [];
   const translationKey =
     resolvedKind === "home"
       ? homeTranslationKey
-      : post?.meta?.translation_key;
+      : post?.meta?.["translation_key"];
 
   if (
     translationKey &&
@@ -146,8 +139,8 @@ async function buildLocaleSwitcher(
     const prefix = publicLocaleUrlPrefix(code);
     let url = publicLocaleHomeUrl(code);
 
-    if (resolvedKind === "archive") {
-      url = `${prefix}/posts`;
+    if (resolvedKind === "archive" && archivePostType) {
+      url = buildArchivePublicPath(archivePostType, prefix);
     } else if (
       translationKey &&
       (resolvedKind === "home" || resolvedKind === "single" || resolvedKind === "page")
@@ -182,12 +175,13 @@ export async function buildThemeRenderContext(
 ): Promise<ThemeRenderContext> {
   const baseUrl = requestUrl.origin;
   const content = createEdgepressContent(locals, { baseUrl });
+  const kv = getKvFromLocals(locals);
   const settings = await getSettingsFromDb(db, {
     names: ["site_name", "site_description"],
   });
 
-  const siteName = String(settings.site_name ?? "").trim() || "Site";
-  const siteDescription = String(settings.site_description ?? "").trim();
+  const siteName = String(settings["site_name"] ?? "").trim() || "Site";
+  const siteDescription = String(settings["site_description"] ?? "").trim();
   const locale = normalizePublicLocale(route.locale);
   const dbLocale = adminUrlLocaleToDbCode(locale);
   const localePrefix = publicLocaleUrlPrefix(locale);
@@ -195,20 +189,25 @@ export async function buildThemeRenderContext(
   const assetBase = `${baseUrl}/themes-assets/${pkg.manifest.slug}`;
   const homeContentKey = pkg.manifest.home_content_key ?? "hello-world";
 
-  const listPage = route.kind === "archive" ? (route.page ?? 1) : 1;
-  const listLimit = route.kind === "archive" ? 10 : 20;
-  const listPostType = route.kind === "archive" ? (route.postType ?? "post") : "post";
+  const archivablePostTypes = await getArchivablePostTypes(db, kv);
+  const archiveRoute = resolveArchivePostTypeFromRoute(route, archivablePostTypes);
+  const isArchiveRoute = archiveRoute != null;
 
-  const fetchSlugPost = route.slug
-    ? content
-        .getBySlug(route.slug, { status: "published" })
-        .catch((err: unknown) => {
-          if (err instanceof ContentNotFoundError || err instanceof ContentBadRequestError) {
-            return null;
-          }
-          throw err;
-        })
-    : Promise.resolve(null);
+  const listPage = isArchiveRoute ? (route.page ?? 1) : 1;
+  const listLimit = isArchiveRoute ? 10 : 20;
+  const listPostType = isArchiveRoute ? archiveRoute.postType : "post";
+
+  const fetchSlugPost =
+    route.slug && !isArchiveRoute
+      ? content
+          .getBySlug(route.slug, { status: "published" })
+          .catch((err: unknown) => {
+            if (err instanceof ContentNotFoundError || err instanceof ContentBadRequestError) {
+              return null;
+            }
+            throw err;
+          })
+      : Promise.resolve(null);
 
   const fetchHomePost =
     route.kind === "home"
@@ -235,43 +234,68 @@ export async function buildThemeRenderContext(
     }),
     fetchSlugPost,
     fetchHomePost,
-    content.getListWithDetails<{
-      custom_fields?: CustomFieldItem[];
-    }>("posts", {
+    content.getListWithDetails("posts", {
       limit: 500,
       locale: dbLocale,
       filter: { post_type: "menus", status: "published" },
     }),
   ]);
 
-  const posts = listResult.items.map((item) => toPostView(item as ContentPostDetail, baseUrl));
+  const attachmentCache: CoverImageAttachmentCache = new Map();
+  const filteredListPosts = filterPublicThemeListPosts(
+    listResult.items,
+  ) as ContentPostDetail[];
+
+  const posts = await Promise.all(
+    filteredListPosts.map(async (item) =>
+      enrichPostViewWithCover(toPostView(item), item, baseUrl, attachmentCache),
+    ),
+  );
 
   let post: ThemePostView | undefined;
   let seoPost: ContentPostDetail | undefined;
   let resolvedKind = route.kind;
 
-  if (slugPostData) {
+  if (isArchiveRoute) {
+    resolvedKind = "archive";
+    seoPost = filteredListPosts[0];
+  } else if (slugPostData) {
     seoPost = slugPostData;
-    post = toPostView(slugPostData, baseUrl);
+    post = await enrichPostViewWithCover(
+      toPostView(slugPostData),
+      slugPostData,
+      baseUrl,
+      attachmentCache,
+    );
     resolvedKind = post.post_type_slug === "post" ? "single" : "page";
   } else if (route.slug) {
     resolvedKind = "404";
   } else if (homePostData) {
-    seoPost = homePostData;
-    post = toPostView(homePostData, baseUrl);
+    seoPost = homePostData as ContentPostDetail;
+    post = await enrichPostViewWithCover(
+      toPostView(seoPost),
+      seoPost,
+      baseUrl,
+      attachmentCache,
+    );
     resolvedKind = "home";
-  } else if (route.kind === "home" || route.kind === "archive") {
-    resolvedKind = route.kind;
-    seoPost = posts[0] as unknown as ContentPostDetail | undefined;
+  } else if (route.kind === "home") {
+    resolvedKind = "home";
+    seoPost = filteredListPosts[0];
   }
 
   const archive = {
-    title: listPostType === "post" ? "Blog" : String(listPostType),
+    title: isArchiveRoute
+      ? archiveRoute.title
+      : listPostType === "post"
+        ? "Blog"
+        : String(listPostType),
     type: listPostType,
   };
 
   const totalPages = Math.max(1, listResult.totalPages);
-  const paginationPath = route.kind === "archive" ? route.path : `${localePrefix}/posts`;
+  const paginationPath =
+    resolvedKind === "archive" ? route.path : `${localePrefix}/posts`;
   const pagination = {
     page: listResult.page,
     total_pages: totalPages,
@@ -293,17 +317,20 @@ export async function buildThemeRenderContext(
 
   const menus: Record<string, MenuItem[]> = {
     primary: menuList.items.flatMap((item) =>
-      getMenuItemsFromPost(item, "menu navigation", route.path),
+      getMenuItemsFromPost(item as { custom_fields?: CustomFieldItem[] }, "menu navigation", route.path),
     ),
   };
 
   const canonicalUrl = new URL(route.path || "/", baseUrl).href;
+  const seoOgImage = seoPost
+    ? await resolveCoverImage(seoPost, baseUrl, db, attachmentCache)
+    : undefined;
   const seo = buildSeoFromPost({
-    post: seoPost as Parameters<typeof buildSeoFromPost>[0]["post"],
-    fallbackTitle: siteName,
+    ...(seoPost ? { post: seoPost as Parameters<typeof buildSeoFromPost>[0]["post"] } : {}),
+    fallbackTitle: isArchiveRoute ? archive.title : siteName,
     canonicalUrl,
     siteName,
-    ogImage: post ? resolveOgImage(seoPost ?? ({} as ContentPostDetail), baseUrl) : undefined,
+    ...(seoOgImage ? { ogImage: seoOgImage } : {}),
   });
 
   const localeSwitcher = await buildLocaleSwitcher(
@@ -311,6 +338,7 @@ export async function buildThemeRenderContext(
     resolvedKind,
     post,
     homeContentKey,
+    isArchiveRoute ? archive.type : undefined,
   );
 
   return {
