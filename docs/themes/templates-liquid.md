@@ -251,7 +251,14 @@ Sempre disponíveis. Use em qualquer template para decidir o que renderizar:
 
 ### `locale_switcher`
 
-Array de links PT/EN (e extensível no core).
+Array de links PT/EN (e extensível no core). As URLs são derivadas da **rota pública atual**, não dos slugs de tradução no banco.
+
+| Rota (`route.kind`) | `item.url` por locale |
+|---------------------|------------------------|
+| `home` (sem slug) | `/` (pt-br), `/en` (en) |
+| `archive` | `/posts` ou `/{cpt}` com prefixo do locale |
+| `single`, `page` ou qualquer rota com `slug` | `/{slug}` com prefixo do locale (mesmo slug em todos os idiomas) |
+| `404` sem slug | home do locale (`/` ou `/en`) |
 
 | Propriedade | Tipo | Descrição |
 |-------------|------|-----------|

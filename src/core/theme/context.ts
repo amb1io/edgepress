@@ -5,21 +5,15 @@ import {
   type ContentPostDetail,
 } from "../services/edgepress-content.ts";
 import { getSettingsFromDb } from "../services/settings-service.ts";
-import {
-  getTranslationSlugsByKey,
-  type TranslationSlugRow,
-} from "../services/post-translation-service.ts";
 import { db } from "../../db/index.ts";
 import { getKvFromLocals } from "../../utils/runtime-locals.ts";
 import { adminUrlLocaleToDbCode } from "../../utils/admin-locale-constants.ts";
 import type {
-  LocaleSwitcherItem,
   MenuItem,
   ResolvedPublicRoute,
   ThemePackageRecord,
   ThemePostView,
   ThemeRenderContext,
-  ThemeRouteKind,
 } from "./types.ts";
 import { buildSeoFromPost } from "./seo-head.ts";
 import {
@@ -28,11 +22,8 @@ import {
   publicLocaleHomeUrl,
   publicLocaleUrlPrefix,
 } from "./resolve-route.ts";
-import {
-  buildArchivePublicPath,
-  getArchivablePostTypes,
-  resolveArchivePostTypeFromRoute,
-} from "./post-type-routes.ts";
+import { getArchivablePostTypes, resolveArchivePostTypeFromRoute } from "./post-type-routes.ts";
+import { buildLocaleSwitcher } from "./locale-switcher.ts";
 import { filterPublicThemeListPosts } from "./post-filters.ts";
 import {
   resolveCoverImage,
@@ -108,52 +99,6 @@ function buildBodyClass(route: ResolvedPublicRoute, post?: ThemePostView): strin
   if (post?.post_type_slug) parts.push(`type-${post.post_type_slug}`);
   if (post?.slug) parts.push(`slug-${post.slug.replace(/\//g, "-")}`);
   return parts.join(" ");
-}
-
-const LOCALE_SWITCHER_META: ReadonlyArray<{ code: string; flag: string; label: string }> = [
-  { code: "pt-br", flag: "🇧🇷", label: "PT" },
-  { code: "en", flag: "🇺🇸", label: "EN" },
-];
-
-async function buildLocaleSwitcher(
-  currentLocale: string,
-  resolvedKind: ThemeRouteKind,
-  post: ThemePostView | undefined,
-  homeTranslationKey: string | undefined,
-  archivePostType?: string,
-): Promise<LocaleSwitcherItem[]> {
-  let siblings: TranslationSlugRow[] = [];
-  const translationKey =
-    resolvedKind === "home"
-      ? homeTranslationKey
-      : post?.meta?.["translation_key"];
-
-  if (
-    translationKey &&
-    (resolvedKind === "home" || resolvedKind === "single" || resolvedKind === "page")
-  ) {
-    siblings = await getTranslationSlugsByKey(translationKey, ["published"]);
-  }
-
-  return LOCALE_SWITCHER_META.map(({ code, flag, label }) => {
-    const prefix = publicLocaleUrlPrefix(code);
-    let url = publicLocaleHomeUrl(code);
-
-    if (resolvedKind === "archive" && archivePostType) {
-      url = buildArchivePublicPath(archivePostType, prefix);
-    } else if (
-      translationKey &&
-      (resolvedKind === "home" || resolvedKind === "single" || resolvedKind === "page")
-    ) {
-      const dbCode = adminUrlLocaleToDbCode(code);
-      const match = siblings.find((row) => row.locale_code === dbCode);
-      url = match ? `${prefix}/${match.slug}` : publicLocaleHomeUrl(code);
-    } else if (post?.slug && code === currentLocale) {
-      url = `${prefix}/${post.slug}`;
-    }
-
-    return { code, flag, label, url, active: code === currentLocale };
-  });
 }
 
 function buildArchivePageUrl(pathname: string, page: number): string {
@@ -333,11 +278,10 @@ export async function buildThemeRenderContext(
     ...(seoOgImage ? { ogImage: seoOgImage } : {}),
   });
 
-  const localeSwitcher = await buildLocaleSwitcher(
+  const localeSwitcher = buildLocaleSwitcher(
     locale,
+    route,
     resolvedKind,
-    post,
-    homeContentKey,
     isArchiveRoute ? archive.type : undefined,
   );
 
