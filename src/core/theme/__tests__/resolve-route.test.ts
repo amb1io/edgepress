@@ -10,7 +10,7 @@ describe("resolvePublicRoute", () => {
     });
   });
 
-  it("resolves post archive aliases", () => {
+  it("resolves post archive alias at /posts", () => {
     expect(resolvePublicRoute("/posts", new URLSearchParams())).toEqual({
       kind: "archive",
       locale: "pt-br",
@@ -18,11 +18,21 @@ describe("resolvePublicRoute", () => {
       postType: "post",
       page: 1,
     });
-    expect(resolvePublicRoute("/blog", new URLSearchParams("page=3"))).toEqual({
+    expect(resolvePublicRoute("/posts", new URLSearchParams("page=3"))).toEqual({
       kind: "archive",
       locale: "pt-br",
-      path: "/blog",
+      path: "/posts",
       postType: "post",
+      page: 3,
+    });
+  });
+
+  it("resolves /blog as CPT slug route, not post archive alias", () => {
+    expect(resolvePublicRoute("/blog", new URLSearchParams("page=3"))).toEqual({
+      kind: "page",
+      locale: "pt-br",
+      path: "/blog",
+      slug: "blog",
       page: 3,
     });
   });

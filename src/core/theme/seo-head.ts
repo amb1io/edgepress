@@ -1,5 +1,5 @@
 import { stripHtml } from "../services/json-ld-service.ts";
-import type { ThemeRenderContext } from "./types.ts";
+import type { ThemeRenderContext, ThemeRouteKind } from "./types.ts";
 
 /** Emits standardized SEO `<head>` tags (title, meta, OG, Twitter, JSON-LD). */
 export function renderSeoHead(ctx: ThemeRenderContext): string {
@@ -91,6 +91,65 @@ export function buildSeoFromPost(input: {
     site_name: input.siteName,
     json_ld_html,
   };
+}
+
+type ThemeSeoPostInput = NonNullable<Parameters<typeof buildSeoFromPost>[0]["post"]>;
+
+/** Resolves `seo` for `{% seo_head %}` from route kind and manifest home mode. */
+export function resolveThemeSeoContext(input: {
+  resolvedKind: ThemeRouteKind;
+  isArchiveRoute: boolean;
+  archiveTitle: string;
+  homeListPosts: boolean;
+  seoPost?: ThemeSeoPostInput;
+  siteName: string;
+  siteDescription: string;
+  canonicalUrl: string;
+  ogImage?: string;
+}): ThemeRenderContext["seo"] {
+  const base = {
+    canonicalUrl: input.canonicalUrl,
+    siteName: input.siteName,
+    ...(input.ogImage ? { ogImage: input.ogImage } : {}),
+  };
+
+  if (input.isArchiveRoute) {
+    const seo = buildSeoFromPost({
+      ...base,
+      fallbackTitle: input.archiveTitle,
+    });
+    return {
+      ...seo,
+      title: input.archiveTitle,
+      description: seo.description || input.siteDescription,
+    };
+  }
+
+  if (input.resolvedKind === "home" && input.homeListPosts) {
+    const seo = buildSeoFromPost({
+      ...base,
+      fallbackTitle: input.siteName,
+    });
+    return {
+      ...seo,
+      title: input.siteName,
+      description: seo.description || input.siteDescription,
+    };
+  }
+
+  if (input.resolvedKind === "home" && input.seoPost) {
+    return buildSeoFromPost({
+      ...base,
+      post: input.seoPost,
+      fallbackTitle: input.siteName,
+    });
+  }
+
+  return buildSeoFromPost({
+    ...base,
+    ...(input.seoPost ? { post: input.seoPost } : {}),
+    fallbackTitle: input.siteName,
+  });
 }
 
 function escapeHtml(value: string): string {
