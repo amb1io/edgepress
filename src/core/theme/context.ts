@@ -33,6 +33,11 @@ import {
   getArchivablePostTypes,
   resolveArchivePostTypeFromRoute,
 } from "./post-type-routes.ts";
+import { filterPublicThemeListPosts } from "./post-filters.ts";
+import {
+  resolveCoverImage,
+  type CoverImageAttachmentCache,
+} from "./cover-image.ts";
 
 type CustomFieldRow = { name?: string; value?: string; type?: string };
 type CustomFieldItem = { title?: string; fields?: CustomFieldRow[] };
@@ -63,35 +68,7 @@ function getMenuItemsFromPost(
     .filter((x) => x.label !== "" && x.url !== "");
 }
 
-function resolveOgImage(post: ContentPostDetail, baseUrl: string): string | undefined {
-  const media = Array.isArray(post.media) ? post.media : [];
-  const metaValues = (post.meta_values ?? {}) as Record<string, unknown>;
-  const thumbIdRaw = metaValues["post_thumbnail_id"];
-  const thumbId =
-    typeof thumbIdRaw === "number"
-      ? thumbIdRaw
-      : typeof thumbIdRaw === "string"
-        ? parseInt(thumbIdRaw, 10)
-        : NaN;
-
-  for (const item of media) {
-    const row = item as { id?: number; meta_values?: Record<string, unknown> };
-    const id = row.id;
-    if (thumbId && !Number.isNaN(thumbId) && id !== thumbId) continue;
-    const meta = row.meta_values ?? {};
-    const path =
-      (typeof meta["attachment_path"] === "string" && meta["attachment_path"]) ||
-      (typeof meta["attachment_file"] === "string" && meta["attachment_file"]) ||
-      "";
-    if (!path) continue;
-    if (/^https?:\/\//i.test(path)) return path;
-    const normalized = path.startsWith("/") ? path : `/uploads/${path.replace(/^uploads\//, "")}`;
-    return new URL(`/api/media${normalized}`, baseUrl).href;
-  }
-  return undefined;
-}
-
-function toPostView(post: ContentPostDetail, baseUrl: string): ThemePostView {
+function toPostView(post: ContentPostDetail): ThemePostView {
   const metaValues = (post.meta_values ?? {}) as Record<string, unknown>;
   const meta: Record<string, string> = {};
   for (const [k, v] of Object.entries(metaValues)) {
@@ -111,10 +88,19 @@ function toPostView(post: ContentPostDetail, baseUrl: string): ThemePostView {
         : post.published_at
           ? Date.parse(String(post.published_at))
           : null,
-    post_type_slug: String(post.post_type_slug ?? "post"),
-    cover_image: resolveOgImage(post, baseUrl),
+    post_type_slug: String(post["post_type_slug"] ?? "post"),
     meta,
   };
+}
+
+async function enrichPostViewWithCover(
+  view: ThemePostView,
+  source: ContentPostDetail,
+  baseUrl: string,
+  cache: CoverImageAttachmentCache,
+): Promise<ThemePostView> {
+  const cover = await resolveCoverImage(source, baseUrl, db, cache);
+  return cover ? { ...view, cover_image: cover } : view;
 }
 
 function buildBodyClass(route: ResolvedPublicRoute, post?: ThemePostView): string {
@@ -255,7 +241,16 @@ export async function buildThemeRenderContext(
     }),
   ]);
 
-  const posts = listResult.items.map((item) => toPostView(item as ContentPostDetail, baseUrl));
+  const attachmentCache: CoverImageAttachmentCache = new Map();
+  const filteredListPosts = filterPublicThemeListPosts(
+    listResult.items,
+  ) as ContentPostDetail[];
+
+  const posts = await Promise.all(
+    filteredListPosts.map(async (item) =>
+      enrichPostViewWithCover(toPostView(item), item, baseUrl, attachmentCache),
+    ),
+  );
 
   let post: ThemePostView | undefined;
   let seoPost: ContentPostDetail | undefined;
@@ -263,20 +258,30 @@ export async function buildThemeRenderContext(
 
   if (isArchiveRoute) {
     resolvedKind = "archive";
-    seoPost = posts[0] as unknown as ContentPostDetail | undefined;
+    seoPost = filteredListPosts[0];
   } else if (slugPostData) {
     seoPost = slugPostData;
-    post = toPostView(slugPostData, baseUrl);
+    post = await enrichPostViewWithCover(
+      toPostView(slugPostData),
+      slugPostData,
+      baseUrl,
+      attachmentCache,
+    );
     resolvedKind = post.post_type_slug === "post" ? "single" : "page";
   } else if (route.slug) {
     resolvedKind = "404";
   } else if (homePostData) {
-    seoPost = homePostData;
-    post = toPostView(homePostData, baseUrl);
+    seoPost = homePostData as ContentPostDetail;
+    post = await enrichPostViewWithCover(
+      toPostView(seoPost),
+      seoPost,
+      baseUrl,
+      attachmentCache,
+    );
     resolvedKind = "home";
   } else if (route.kind === "home") {
     resolvedKind = "home";
-    seoPost = posts[0] as unknown as ContentPostDetail | undefined;
+    seoPost = filteredListPosts[0];
   }
 
   const archive = {
@@ -317,12 +322,15 @@ export async function buildThemeRenderContext(
   };
 
   const canonicalUrl = new URL(route.path || "/", baseUrl).href;
+  const seoOgImage = seoPost
+    ? await resolveCoverImage(seoPost, baseUrl, db, attachmentCache)
+    : undefined;
   const seo = buildSeoFromPost({
     ...(seoPost ? { post: seoPost as Parameters<typeof buildSeoFromPost>[0]["post"] } : {}),
     fallbackTitle: isArchiveRoute ? archive.title : siteName,
     canonicalUrl,
     siteName,
-    ogImage: post ? resolveOgImage(seoPost ?? ({} as ContentPostDetail), baseUrl) : undefined,
+    ...(seoOgImage ? { ogImage: seoOgImage } : {}),
   });
 
   const localeSwitcher = await buildLocaleSwitcher(

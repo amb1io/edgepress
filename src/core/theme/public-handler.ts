@@ -6,14 +6,6 @@ import { loadThemePackage } from "./theme-package.ts";
 import { buildThemeRenderContext } from "./context.ts";
 import { renderTheme } from "./render.ts";
 import { resolvePublicRoute } from "./resolve-route.ts";
-import { defaultThemePackage } from "../../themes/2026/bundle.ts";
-import { blogRhamsesThemePackage } from "../../themes-default/blog-rhamses/bundle.ts";
-
-const FALLBACK_THEME_SLUG = "2026";
-const BUNDLED_THEMES: Record<string, typeof defaultThemePackage> = {
-  "2026": defaultThemePackage,
-  "blog-rhamses": blogRhamsesThemePackage,
-};
 
 export async function handlePublicThemeRequest(
   request: Request,
@@ -25,27 +17,20 @@ export async function handlePublicThemeRequest(
   const kv = getKvFromLocals(locals);
   const activeTheme = await getActiveThemeFromDb(db);
   const activeSlug = activeTheme.is_active ? activeTheme.meta.theme_slug?.trim() : "";
-  const packageSlug = activeSlug || FALLBACK_THEME_SLUG;
+  const packageSlug = activeSlug || "";
 
-  let pkg = await loadThemePackage(kv, packageSlug);
-  if (!pkg) {
-    pkg = BUNDLED_THEMES[packageSlug] ?? null;
-  }
+  let pkg = packageSlug ? await loadThemePackage(kv, packageSlug) : null;
+
   if (!pkg && activeTheme.id) {
     const snapshot = await getThemeSnapshotById(db, activeTheme.id);
     const legacySlug = parseMetaValues(snapshot?.meta_values ?? null)["manifest_slug"]?.trim();
     if (legacySlug && legacySlug !== packageSlug) {
       pkg = await loadThemePackage(kv, legacySlug);
-      if (!pkg) {
-        pkg = BUNDLED_THEMES[legacySlug] ?? null;
-      }
     }
   }
-  if (!pkg && packageSlug === FALLBACK_THEME_SLUG) {
-    pkg = defaultThemePackage;
-  }
+
   if (!pkg) {
-    return new Response("Theme package not found", {
+    return new Response("No theme installed", {
       status: 503,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });

@@ -1,16 +1,13 @@
 /**
  * Executa migrações e seed durante o build.
- * - Local (sem CI): migrate local + seed local (Node/tsx).
- * - CI (GitHub Actions etc.): migrate remote + seed remote (wrangler d1 execute).
+ * - Local (sem CI): setup:local (migrate + seed).
+ * - CI (GitHub Actions etc.): setup:remote (migrate + seed).
  *
- * Uso: tsx scripts/build-with-seed.ts (chamado pelo npm run build).
+ * Uso: tsx scripts/build-with-seed.ts (chamado pelo npm run build:seed).
  */
 import { execSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 
 const isCI = process.env.CI === "true";
-const seedRemoteFile = join(process.cwd(), "drizzle", "seed", "seed-remote.sql");
 
 function run(cmd: string, description: string): void {
   console.log(`[build-with-seed] ${description}...`);
@@ -19,23 +16,9 @@ function run(cmd: string, description: string): void {
 
 try {
   if (isCI) {
-    run(
-      "npx wrangler d1 migrations apply farramedia --remote -c wrangler.toml",
-      "Migrating remote D1"
-    );
-    run("npm run db:seed:generate-sql", "Generating seed SQL from seed-data");
-    if (existsSync(seedRemoteFile)) {
-      run(
-        "npx wrangler d1 execute farramedia --remote --file=./drizzle/seed/seed-remote.sql -c wrangler.toml",
-        "Seeding remote D1"
-      );
-    }
+    run("npm run setup:remote", "Remote setup (migrate + seed)");
   } else {
-    run(
-      "npx wrangler d1 migrations apply farramedia --local -c wrangler.toml",
-      "Migrating local D1"
-    );
-    run("npm run db:seed", "Seeding local D1.");
+    run("npm run setup:local", "Local setup (migrate + seed)");
   }
 } catch (err) {
   console.error("[build-with-seed] Error:", err);
