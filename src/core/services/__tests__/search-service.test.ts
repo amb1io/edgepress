@@ -63,6 +63,20 @@ describe("search-service", () => {
 
     beforeAll(async () => {
       await client.execute(`
+        CREATE TABLE edp_locales (
+          id INTEGER PRIMARY KEY,
+          language TEXT NOT NULL,
+          hello_world TEXT NOT NULL,
+          locale_code TEXT NOT NULL UNIQUE,
+          country TEXT NOT NULL,
+          timezone TEXT NOT NULL
+        )
+      `);
+      await client.execute(`
+        INSERT INTO edp_locales (id, language, hello_world, locale_code, country, timezone)
+        VALUES (1, 'Portuguese (Brazil)', 'Olá Mundo', 'pt_BR', 'Brazil', 'UTC-3')
+      `);
+      await client.execute(`
         CREATE TABLE edp_post_types (
           id INTEGER PRIMARY KEY,
           slug TEXT NOT NULL,
@@ -124,17 +138,17 @@ describe("search-service", () => {
       await client.execute(`INSERT INTO edp_post_types (id, slug, name) VALUES (1, 'post', 'Post')`);
       await client.execute(`
         INSERT INTO edp_posts (
-          id, post_type_id, title, slug, body, body_blocks, status, created_at, updated_at
+          id, post_type_id, title, slug, body, body_blocks, status, id_locale_code, created_at, updated_at
         ) VALUES (
           1, 1, 'Cloudflare Workers', 'cloudflare-workers',
-          '<p>Edge computing platform</p>', NULL, 'published', 1, 1
+          '<p>Edge computing platform</p>', NULL, 'published', 1, 1, 1
         )
       `);
       await client.execute(`
         INSERT INTO edp_posts (
-          id, post_type_id, title, slug, body, body_blocks, status, created_at, updated_at
+          id, post_type_id, title, slug, body, body_blocks, status, id_locale_code, created_at, updated_at
         ) VALUES (
-          2, 1, 'Draft post', 'draft-post', 'secret', NULL, 'draft', 1, 1
+          2, 1, 'Draft post', 'draft-post', 'secret', NULL, 'draft', 1, 1, 1
         )
       `);
 
@@ -143,19 +157,19 @@ describe("search-service", () => {
     });
 
     it("finds published posts by title/body", async () => {
-      const result = await searchPosts(db, { q: "cloudflare" });
+      const result = await searchPosts(db, { q: "cloudflare", localeId: 1 });
       expect(result?.total).toBe(1);
       expect(result?.hits[0]?.post_id).toBe(1);
     });
 
     it("does not return draft posts", async () => {
-      const result = await searchPosts(db, { q: "secret" });
+      const result = await searchPosts(db, { q: "secret", localeId: 1 });
       expect(result?.total).toBe(0);
     });
 
     it("removePostFromSearchIndex clears entry", async () => {
       await removePostFromSearchIndex(db, 1);
-      const result = await searchPosts(db, { q: "cloudflare" });
+      const result = await searchPosts(db, { q: "cloudflare", localeId: 1 });
       expect(result?.total).toBe(0);
     });
   });

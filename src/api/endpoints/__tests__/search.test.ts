@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import { sanitizeFtsQuery } from "../../../core/services/search-service.ts";
 
 describe("GET /api/search contract", () => {
-  it("requires q query param", () => {
+  it("requires q and locale query params", () => {
     const q = "";
+    const locale = "";
     expect(q.trim()).toBe("");
+    expect(locale.trim()).toBe("");
   });
 
   it("sanitizes search query for FTS MATCH", () => {

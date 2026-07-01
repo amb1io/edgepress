@@ -1,13 +1,15 @@
 /**
  * GET /api/search — Busca full-text pública em posts publicados.
  *
- * Query params: q (obrigatório), page, limit, post_type, locale
+ * Query params obrigatórios: q, locale
+ * Query params opcionais: page, limit, post_type
  */
 import type { APIRoute } from "astro";
 import { inArray } from "drizzle-orm";
 import { db } from "../../db/index.ts";
 import { posts } from "../../db/schema.ts";
 import { searchPosts } from "../../core/services/search-service.ts";
+import { resolveLocaleId } from "../../core/services/post-translation-service.ts";
 import { buildContentPostPayload } from "../../utils/content-post-payload.ts";
 import {
   badRequestResponse,
@@ -33,19 +35,25 @@ export const GET: APIRoute = async ({ url }) => {
     return badRequestResponse("q é obrigatório");
   }
 
+  const locale = url.searchParams.get("locale")?.trim() ?? "";
+  if (!locale) {
+    return badRequestResponse("locale é obrigatório");
+  }
+
+  const localeId = await resolveLocaleId(locale, db);
+  if (localeId == null) {
+    return badRequestResponse("locale inválido");
+  }
+
   const page = parsePositiveInt(url.searchParams.get("page"), 1);
   const limit = Math.min(
     MAX_LIMIT,
     parsePositiveInt(url.searchParams.get("limit"), DEFAULT_LIMIT),
   );
   const post_type = url.searchParams.get("post_type")?.trim() || undefined;
-  const locale = url.searchParams.get("locale")?.trim() || undefined;
 
   try {
-    const result = await searchPosts(db, { q, page, limit, post_type, locale });
-    if (!result) {
-      return badRequestResponse("Termo de busca inválido");
-    }
+    const result = await searchPosts(db, { q, localeId, page, limit, post_type });
 
     if (result.hits.length === 0) {
       return jsonResponse({

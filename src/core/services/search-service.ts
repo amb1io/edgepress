@@ -13,7 +13,6 @@ import {
 } from "../../utils/content-post-payload.ts";
 import { extractPlainTextFromBodyBlocks } from "../../utils/extract-plain-text-from-body-blocks.ts";
 import { getPostTypeId } from "./post-service.ts";
-import { resolveLocaleId } from "./post-translation-service.ts";
 
 export const NON_SEARCHABLE_POST_TYPE_SLUGS = new Set([
   "attachment",
@@ -40,10 +39,10 @@ export type PostSearchDocument = {
 
 export type SearchPostsParams = {
   q: string;
+  localeId: number;
   page?: number;
   limit?: number;
   post_type?: string;
-  locale?: string;
 };
 
 export type SearchPostsHit = {
@@ -285,25 +284,9 @@ export async function searchPosts(db: Database, params: SearchPostsParams): Prom
     }
   }
 
-  let localeId: number | null = null;
-  if (params.locale?.trim()) {
-    localeId = await resolveLocaleId(params.locale.trim(), db);
-    if (localeId == null) {
-      return {
-        hits: [],
-        total: 0,
-        page,
-        limit,
-        totalPages: 0,
-        q: params.q,
-      };
-    }
-  }
-
   const filterPostType =
     postTypeId != null ? sql` AND post_type_id = ${postTypeId}` : sql``;
-  const filterLocale =
-    localeId != null ? sql` AND id_locale_code = ${localeId}` : sql``;
+  const filterLocale = sql` AND id_locale_code = ${params.localeId}`;
 
   const countRows = (await db.all(sql`
     SELECT COUNT(*) AS total
