@@ -64,6 +64,7 @@
   "postType.themes": "Temas",
   "postType.post_type": "Post Type",
   "postType.jobs": "Trabalhos",
+  "postType.menus": "Menus",
   "admin.content.newTitle": "Novo {type}",
   "admin.content.editTitle": "Editar {type}",
   "admin.content.slug": "Slug",
@@ -207,5 +208,19 @@
   "admin.taxonomy.panel.languages": "Idiomas",
   "admin.taxonomy.panel.languagesInfo": "Defina traduções para idiomas do admin e do site.",
   "admin.list.language": "Idioma",
-  "admin.list.order": "Ordem"
+  "admin.list.order": "Ordem",
+  "admin.menus.addItem": "Adicionar mais um menu",
+  "admin.menus.customOption": "Criar um menu personalizado",
+  "admin.menus.customName": "Nome do menu",
+  "admin.menus.customUrl": "URL",
+  "admin.menus.order": "Ordem",
+  "admin.menus.searchPosts": "Buscar post, página, CPT ou taxonomia...",
+  "admin.menus.remove": "Remover item",
+  "admin.menus.typePost": "Post",
+  "admin.menus.typeCustom": "Personalizado",
+  "admin.menus.typeTaxonomy": "Taxonomia",
+  "admin.menus.selectPost": "Selecionar conteúdo",
+  "admin.menus.itemsTitle": "Itens do menu",
+  "admin.menus.slugHint": "O slug define a location do menu no tema (ex.: primary).",
+  "admin.menus.loading": "Buscando..."
 }

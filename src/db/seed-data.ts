@@ -143,6 +143,7 @@ export const MENU_CONFIG: MenuConfigRow[] = [
     icon: "line-md:document-list",
   },
   { typeSlug: "settings", menu_options: ["list", "new", "cache", "import_export"], menu_order: 9, icon: "line-md:cog" },
+  { typeSlug: "menus", menu_options: ["list", "new"], menu_order: 10, icon: "line-md:compass" },
 ];
 
 /** Post types padrão (slug, name, meta_schema). Re-exportado de default-post-types para centralizar dados de seed. */
@@ -150,7 +151,7 @@ export { DEFAULT_POST_TYPES, META_ONLY_POST_TYPE_SLUGS } from "./default-post-ty
 export type { DefaultPostTypeRow } from "./default-post-types.ts";
 
 /** Post types com custom fields habilitados e bloco SEO automático no admin. */
-export const POST_TYPES_WITH_CUSTOM_FIELDS = ["post", "page"] as const;
+export const POST_TYPES_WITH_CUSTOM_FIELDS = ["post", "page", "menus"] as const;
 
 /** Template global de custom field SEO (post tipo custom_fields, sem parent). */
 export const SEO_CUSTOM_FIELD_TEMPLATE = {

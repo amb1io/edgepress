@@ -83,6 +83,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
     // Buscar custom fields (posts filhos do tipo "custom_fields")
     const customFieldsTypeId = await getPostTypeId(db, "custom_fields");
+    const menusTypeId = await getPostTypeId(db, "menus");
     const customFieldsPosts = customFieldsTypeId
       ? await db
           .select()
@@ -92,6 +93,18 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
               eq(posts.parent_id, postId),
               eq(posts.post_type_id, customFieldsTypeId)
             )
+          )
+      : [];
+
+    const menuItemPosts = menusTypeId
+      ? await db
+          .select()
+          .from(posts)
+          .where(
+            and(
+              eq(posts.parent_id, postId),
+              eq(posts.post_type_id, menusTypeId),
+            ),
           )
       : [];
 
@@ -220,6 +233,45 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       // Inserir todos os custom fields duplicados de uma vez
       if (customFieldsToInsert.length > 0) {
         await db.insert(posts).values(customFieldsToInsert);
+      }
+    }
+
+    if (menuItemPosts.length > 0 && menusTypeId) {
+      const menuItemsToInsert = [];
+      for (const menuPost of menuItemPosts) {
+        let menuSlug = `${menuPost.slug}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        let menuSlugExists = true;
+        let menuCounter = 1;
+        while (menuSlugExists) {
+          const [existingMenuSlug] = await db
+            .select({ id: posts.id })
+            .from(posts)
+            .where(eq(posts.slug, menuSlug))
+            .limit(1);
+          menuSlugExists = !!existingMenuSlug;
+          if (menuSlugExists) {
+            menuSlug = `${menuPost.slug}-${Date.now()}-${menuCounter}`;
+            menuCounter++;
+          }
+        }
+        menuItemsToInsert.push({
+          post_type_id: menusTypeId,
+          parent_id: newPostId,
+          author_id: menuPost.author_id,
+          id_locale_code: menuPost.id_locale_code,
+          title: menuPost.title,
+          slug: menuSlug,
+          excerpt: menuPost.excerpt,
+          body: menuPost.body,
+          status: menuPost.status,
+          meta_values: menuPost.meta_values,
+          published_at: menuPost.published_at,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+      if (menuItemsToInsert.length > 0) {
+        await db.insert(posts).values(menuItemsToInsert);
       }
     }
 

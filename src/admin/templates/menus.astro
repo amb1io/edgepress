@@ -1,0 +1,298 @@
+---
+import AdminLayout from "../layouts/AdminLayout.astro";
+import ContentEditorSidebar from "../components/ContentEditorSidebar.astro";
+import ContentFormNotification from "../components/ContentFormNotification.astro";
+import CustomFieldsWrapper from "../components/CustomFieldsWrapper.astro";
+import { db } from "../../db/index.ts";
+import type { MenuItem } from "../../utils/menu.ts";
+import {
+  getContentPageData,
+  isContentPageRedirect,
+} from "../../core/services/content-page-data.ts";
+import { t, type Locale } from "../../i18n/index.ts";
+
+export interface Props {
+  locale: string;
+  postTypeSlug: string;
+  action: string;
+  idParam: string | null;
+  menuItems: MenuItem[];
+  currentUser: {
+    id?: string;
+    email?: string;
+    name?: string;
+  };
+}
+
+const { locale, postTypeSlug, action, idParam, menuItems, currentUser } = Astro.props;
+const currentLocale = locale as Locale;
+const isEdit = action === "edit";
+const asideAccordionName = "menus-aside";
+
+const result = await getContentPageData({
+  db,
+  locale,
+  postTypeSlug,
+  action,
+  idParam,
+  userId: String(currentUser?.id ?? ""),
+});
+
+if (isContentPageRedirect(result)) {
+  return Astro.redirect(result.url);
+}
+
+const pageTitle = result.pageTitle;
+const initialTitle = result.initialTitle;
+const initialSlug = result.initialSlug;
+const initialStatus = result.initialStatus || "draft";
+const initialAuthorId = result.initialAuthorId;
+const initialLocaleId = result.initialLocaleId;
+const postId = result.post?.id ?? null;
+const hasCustomFields = result.hasCustomFields;
+const initialCustomFields = result.initialCustomFields;
+const templateCustomFieldsList = result.templateCustomFieldsList;
+
+const menuLabels = {
+  customOption: t(currentLocale, "admin.menus.customOption"),
+  customName: t(currentLocale, "admin.menus.customName"),
+  customUrl: t(currentLocale, "admin.menus.customUrl"),
+  order: t(currentLocale, "admin.menus.order"),
+  searchPosts: t(currentLocale, "admin.menus.searchPosts"),
+  addItem: t(currentLocale, "admin.menus.addItem"),
+  remove: t(currentLocale, "admin.menus.remove"),
+  typePost: t(currentLocale, "admin.menus.typePost"),
+  typeCustom: t(currentLocale, "admin.menus.typeCustom"),
+  typeTaxonomy: t(currentLocale, "admin.menus.typeTaxonomy"),
+  selectPost: t(currentLocale, "admin.menus.selectPost"),
+};
+
+const initialMenuItemsJson = JSON.stringify(
+  result.initialMenuItems.map((item, index) => ({
+    clientId: `menu-${item.id ?? index}`,
+    ...item,
+  })),
+);
+---
+
+<AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={currentUser}>
+  <script
+    define:vars={{
+      initialTitle: String(initialTitle || ""),
+      initialSlug: String(initialSlug || ""),
+      initialExcerpt: "",
+      initialStatus: String(initialStatus || "draft"),
+      initialAuthorId: String(initialAuthorId || ""),
+      thumbnailPath: "",
+      thumbnailUrl: "",
+      initialThumbnailAttachmentId: 0,
+      locale,
+      initialMenuItems: initialMenuItemsJson,
+      menuLabels,
+    }}
+  >
+    window.__menusFormProps = {
+      initialTitle,
+      initialSlug,
+      initialExcerpt,
+      initialStatus,
+      initialAuthorId,
+      thumbnailPath,
+      thumbnailUrl,
+      initialThumbnailAttachmentId,
+      locale,
+      initialMenuItems: JSON.parse(initialMenuItems),
+      labels: menuLabels,
+    };
+  </script>
+  <script>
+    import "../../shared/scripts/menus-form-init.ts";
+  </script>
+
+  <div class="flex-1 flex flex-col min-h-0 py-6 pl-6 pr-0">
+    <form
+      method="post"
+      action="/api/posts"
+      class="flex flex-col gap-4 w-full min-h-0 flex-1 menus-form"
+      x-data="menusForm"
+      data-is-edit={String(isEdit)}
+      x-init="if ($el.dataset.isEdit !== 'true') slug = (window.slugify && window.slugify(title)) || ''"
+    >
+      <ContentFormNotification />
+      <div id="content-form-error" class="mr-6 min-h-[1.5rem]" aria-live="polite"></div>
+
+      <div class="flex gap-6 w-full min-h-0 flex-1">
+        <input type="hidden" name="post_type" value={postTypeSlug} />
+        <input type="hidden" name="action" value={action} />
+        {postId && <input type="hidden" name="id" value={postId} />}
+        <input type="hidden" name="locale" value={locale} />
+        <input type="hidden" name="menu_items_data" value="" />
+
+        <div class="flex-1 min-w-0 flex flex-col gap-4 min-h-0">
+          <div class="form-control">
+            <label for="menu-title" class="label">
+              <span class="label-text">{t(currentLocale, "admin.list.titleColumn")}</span>
+            </label>
+            <input
+              id="menu-title"
+              type="text"
+              name="title"
+              class="input input-bordered w-full"
+              required
+              x-model="title"
+              @input="slug = (window.slugify && window.slugify(title)) || ''"
+              value={initialTitle}
+            />
+          </div>
+
+          <div class="border border-base-300 rounded-box p-4 flex flex-col gap-4">
+            <h2 class="text-lg font-semibold">{t(currentLocale, "admin.menus.itemsTitle")}</h2>
+
+            <div class="flex flex-col gap-3" id="menu-items-tree">
+              <template x-for="(item, index) in sortedItems()" :key="item.clientId">
+                <div
+                  class="border border-base-300 rounded-lg p-3 bg-base-100 flex flex-col gap-2"
+                  draggable="true"
+                  @dragstart="onDragStart(index)"
+                  @dragover="onDragOver($event)"
+                  @drop="onDrop(index)"
+                >
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex-1 min-w-0">
+                      <p class="font-medium truncate" x-text="item.label"></p>
+                      <p class="text-xs text-base-content/60 font-mono truncate">
+                        <span x-text="itemTypeLabel(item)"></span>
+                        <span x-show="item.link_type === 'post'">
+                          · <span x-text="item.target_post_type"></span> · <span x-text="item.target_slug"></span>
+                        </span>
+                        <span x-show="item.link_type === 'taxonomy'">
+                          · <span x-text="item.target_taxonomy_type"></span> · <span x-text="item.target_slug"></span>
+                        </span>
+                        <span x-show="item.link_type === 'custom'">
+                          · <span x-text="item.custom_url"></span>
+                        </span>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-xs btn-circle shrink-0"
+                      :aria-label="labels.remove"
+                      @click="removeItem(item.clientId)"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div class="form-control max-w-[8rem]">
+                    <label class="label py-0">
+                      <span class="label-text text-xs" x-text="labels.order"></span>
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      class="input input-bordered input-sm w-full"
+                      :value="item.order"
+                      @change="updateOrder(item.clientId, $event.target.value)"
+                    />
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <div
+              x-show="showCustomForm"
+              class="border border-primary/30 rounded-lg p-4 bg-primary/5 flex flex-col gap-3"
+            >
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text" x-text="labels.customName"></span>
+                </label>
+                <input type="text" class="input input-bordered w-full" x-model="customName" />
+              </div>
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text" x-text="labels.customUrl"></span>
+                </label>
+                <input type="text" class="input input-bordered w-full" x-model="customUrl" placeholder="https:// ou /caminho" />
+              </div>
+              <div class="flex gap-2">
+                <button type="button" class="btn btn-primary btn-sm" @click="confirmCustomItem()">
+                  {t(currentLocale, "admin.content.saveNew")}
+                </button>
+                <button type="button" class="btn btn-ghost btn-sm" @click="showCustomForm = false">
+                  {t(currentLocale, "admin.content.cancel")}
+                </button>
+              </div>
+            </div>
+
+            <div
+              x-show="pickerOpen"
+              class="border border-base-300 rounded-lg p-3 bg-base-100 flex flex-col gap-2"
+              @click.outside="pickerOpen = false"
+            >
+              <input
+                type="text"
+                class="input input-bordered input-sm w-full"
+                :placeholder="labels.searchPosts"
+                x-model="pickerSearch"
+                @input.debounce.300ms="searchPosts()"
+              />
+              <ul class="menu menu-sm max-h-64 overflow-y-auto w-full p-0">
+                <li>
+                  <button type="button" class="font-medium text-primary" @click="chooseCustomOption()">
+                    <span x-text="labels.customOption"></span>
+                  </button>
+                </li>
+                <template x-if="pickerLoading">
+                  <li><span class="text-base-content/60">{t(currentLocale, "admin.menus.loading")}</span></li>
+                </template>
+                <template x-for="result in pickerResults" :key="result.kind + '-' + result.id">
+                  <li>
+                    <button type="button" @click="selectPickerResult(result)">
+                      <span class="font-medium" x-text="result.title"></span>
+                      <span class="text-xs opacity-60 block font-mono" x-text="resultSubtitle(result)"></span>
+                    </button>
+                  </li>
+                </template>
+              </ul>
+            </div>
+
+            <div class="flex justify-center pt-2">
+              <button
+                type="button"
+                class="btn btn-primary"
+                @click="togglePicker()"
+              >
+                <span x-text="labels.addItem"></span>
+              </button>
+            </div>
+          </div>
+
+          {hasCustomFields && (
+            <CustomFieldsWrapper
+              initialData={initialCustomFields}
+              templateCustomFields={templateCustomFieldsList}
+            />
+          )}
+        </div>
+
+        <ContentEditorSidebar
+          locale={locale}
+          asideAccordionName={asideAccordionName}
+          action={action}
+          users={result.users}
+          initialLocaleId={initialLocaleId}
+          initialParentId={null}
+          parentPostOptions={[]}
+          initialSlug={initialSlug}
+          initialExcerpt=""
+          initialOrder=""
+          hasPostThumbnail={false}
+          thumbnailUrl=""
+          taxonomyBlocks={[]}
+          selectedTermIds={[]}
+          variant="menus"
+        />
+      </div>
+    </form>
+  </div>
+</AdminLayout>

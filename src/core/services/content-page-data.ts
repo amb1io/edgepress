@@ -20,10 +20,11 @@ import {
 import { t } from "../../i18n/index.ts";
 import { POST_TYPES_WITH_CUSTOM_FIELDS } from "../../db/seed-data.ts";
 import { buildDefaultSeoCustomFieldBlock } from "./seo-metadata-service.ts";
+import { mergeDiretoresCustomFieldsFromMeta, postHasDiretoresCategory } from "../../utils/diretores-custom-fields.ts";
 import {
-  mergeDiretoresCustomFieldsFromMeta,
-  postHasDiretoresCategory,
-} from "../../utils/diretores-custom-fields.ts";
+  getMenuItemsForPost,
+  type MenuItemFormRow,
+} from "./menu-items-service.ts";
 
 export type TypeRow = { id: number; name: string; meta_schema: unknown };
 
@@ -101,6 +102,7 @@ export type ContentPageDataResult = {
   customFieldsTypeId: number | null;
   initialCustomFields: InitialCustomFieldItem[];
   templateCustomFieldsList: TemplateCustomFieldItem[];
+  initialMenuItems: MenuItemFormRow[];
 };
 
 export type ContentPageRedirect = { redirect: true; url: string };
@@ -111,6 +113,10 @@ export function isContentPageRedirect(
   r: ContentPageDataResponse
 ): r is ContentPageRedirect {
   return "redirect" in r && r.redirect === true;
+}
+
+function redirect(url: string): ContentPageRedirect {
+  return { redirect: true, url };
 }
 
 /**
@@ -278,6 +284,7 @@ export async function getContentPageData(params: {
   let thumbnailUrl = "";
   let thumbnailAttachmentId: number | null = null;
   let initialCustomFields: InitialCustomFieldItem[] = [];
+  let initialMenuItems: MenuItemFormRow[] = [];
   let initialOrder = "";
   const templateCustomFieldsList: TemplateCustomFieldItem[] = [];
 
@@ -481,6 +488,10 @@ export async function getContentPageData(params: {
         );
       }
     }
+
+    if (postTypeSlug === "menus") {
+      initialMenuItems = await getMenuItemsForPost(db, post.id, typeId);
+    }
   }
 
   if (
@@ -558,5 +569,6 @@ export async function getContentPageData(params: {
     customFieldsTypeId,
     initialCustomFields,
     templateCustomFieldsList,
+    initialMenuItems,
   };
 }
