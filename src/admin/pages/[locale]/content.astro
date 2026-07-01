@@ -9,6 +9,7 @@ import AttachmentTemplate from "../../../admin/templates/attachment.astro";
 import TranslationsTemplate from "../../../admin/templates/translations_languages.astro";
 import SettingsTemplate from "../../../admin/templates/settings.astro";
 import ThemesTemplate from "../../../admin/templates/themes.astro";
+import MenusTemplate from "../../../admin/templates/menus.astro";
 import { db } from "../../../db/index.ts";
 import { getRecordById } from "../../../utils/content-source.ts";
 import TaxonomyAddModal from "../../../admin/components/TaxonomyAddModal.astro";
@@ -84,6 +85,7 @@ const showAttachmentTemplate = postTypeSlug === "attachment";
 const showTranslationsTemplate = postTypeSlug === "translations_languages";
 const showSettingsTemplate = postTypeSlug === "settings";
 const showThemesTemplate = postTypeSlug === "themes";
+const showMenusTemplate = postTypeSlug === "menus";
 
 /** Registro da configuração para SettingsTemplate (edit). */
 let settingsRecord: { id: number; name: string; value: string; autoload: boolean } | null = null;
@@ -142,7 +144,7 @@ let hasCustomFields = false;
 let initialCustomFields: Array<{ id: number; title: string; rows: Array<{ id: number; name: string; value: string; type?: string }> }> = [];
 let templateCustomFieldsList: Array<{ id: number; title: string; meta_values: string | null }> = [];
 
-if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate && !showSettingsTemplate) {
+if (!showUserTemplate && !showAttachmentTemplate && !showTranslationsTemplate && !showSettingsTemplate && !showMenusTemplate) {
   const result = await getContentPageData({
     db,
     locale,
@@ -200,7 +202,8 @@ const showAlternateTemplate =
   showAttachmentTemplate ||
   showTranslationsTemplate ||
   showSettingsTemplate ||
-  showThemesTemplate;
+  showThemesTemplate ||
+  showMenusTemplate;
 ---
 {showUserTemplate && <UserTemplate {...templateProps} />}
 {showAttachmentTemplate && <AttachmentTemplate {...templateProps} />}
@@ -209,6 +212,7 @@ const showAlternateTemplate =
   <SettingsTemplate {...templateProps} record={settingsRecord} />
 )}
 {showThemesTemplate && <ThemesTemplate {...templateProps} />}
+{showMenusTemplate && <MenusTemplate {...templateProps} />}
 {!showAlternateTemplate && (
 <AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={layoutUser}>
   <!-- Dados iniciais para o form (script sem import para não quebrar como módulo) -->

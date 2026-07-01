@@ -84,6 +84,10 @@ import { importThemeFromGitHub } from "../../core/services/theme-importer.ts";
 import { syncSeoMetadataFromPostSave } from "../../core/services/seo-metadata-service.ts";
 import { syncPostSearchIndex } from "../../core/services/search-service.ts";
 import {
+  persistMenuItems,
+  type MenuItemFormRow,
+} from "../../core/services/menu-items-service.ts";
+import {
   adminUrlLocaleToDbCode,
   dbLocaleCodeToAdminUrl,
 } from "../../utils/admin-locale-constants.ts";
@@ -225,6 +229,7 @@ export async function POST({
     }
     const customFieldsDataRaw = getString(formData, "custom_fields_data");
     const customFieldsToDeleteRaw = getString(formData, "custom_fields_to_delete");
+    const menuItemsDataRaw = getString(formData, "menu_items_data");
     let themeCanonicalMeta: ThemeCanonicalMeta | null = null;
     let shouldQueueThemeImport = false;
 
@@ -650,6 +655,31 @@ export async function POST({
       }
     }
 
+    let menuChildIds: number[] = [];
+    if (postId && post_type === "menus") {
+      const menusTypeId = postTypeId;
+      let menuItems: MenuItemFormRow[] = [];
+      if (menuItemsDataRaw !== "") {
+        try {
+          const parsed = JSON.parse(menuItemsDataRaw) as MenuItemFormRow[];
+          if (Array.isArray(parsed)) {
+            menuItems = parsed;
+          }
+        } catch {
+          // ignore parse errors
+        }
+      }
+      menuChildIds = await persistMenuItems(db, {
+        menuPostId: postId,
+        menusTypeId,
+        items: menuItems,
+        parentLocaleId: localeId,
+        status,
+        author_id,
+        now,
+      });
+    }
+
     if (postId && post_type !== "custom_fields") {
       await syncSeoMetadataFromPostSave(db, postId, {
         title,
@@ -659,6 +689,9 @@ export async function POST({
     }
 
     // Atualizar cache KV com o post atual (create ou update)
+    for (const childId of menuChildIds) {
+      await syncPostCache(locals, db, childId);
+    }
     await syncPostCache(locals, db, postId);
     if (postId) {
       await syncPostSearchIndex(db, postId);

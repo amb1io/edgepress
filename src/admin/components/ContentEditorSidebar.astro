@@ -34,6 +34,8 @@ interface Props {
   thumbnailUrl: string;
   taxonomyBlocks: TaxonomyBlock[];
   selectedTermIds: number[];
+  /** Sidebar reduzido para CPT menus: overview (status, slug, autor) e idioma. */
+  variant?: "default" | "menus";
 }
 
 const {
@@ -53,7 +55,10 @@ const {
   thumbnailUrl,
   taxonomyBlocks,
   selectedTermIds,
+  variant = "default",
 } = Astro.props;
+
+const isMenusVariant = variant === "menus";
 
 const siteLocaleIds = await getSiteLocaleIdsFromSettings(db);
 ---
@@ -112,22 +117,29 @@ const siteLocaleIds = await getSiteLocaleIdsFromSettings(db);
                 value={initialSlug}
                 x-model="slug"
               />
+              {isMenusVariant && (
+                <p class="text-xs text-base-content/50 mt-1">
+                  {t(locale, "admin.menus.slugHint")}
+                </p>
+              )}
             </div>
 
-            <div class="form-control">
-              <label for="order" class="label py-0">
-                <span class="label-text text-xs">Order</span>
-              </label>
-              <input
-                type="number"
-                id="order"
-                name="meta_order"
-                class="input input-bordered input-sm w-full font-mono text-sm"
-                value={_initialOrder}
-                x-model="order"
-                min="0"
-              />
-            </div>
+            {!isMenusVariant && (
+              <div class="form-control">
+                <label for="order" class="label py-0">
+                  <span class="label-text text-xs">Order</span>
+                </label>
+                <input
+                  type="number"
+                  id="order"
+                  name="meta_order"
+                  class="input input-bordered input-sm w-full font-mono text-sm"
+                  value={_initialOrder}
+                  x-model="order"
+                  min="0"
+                />
+              </div>
+            )}
 
             <div class="form-control">
               <label for="author_id" class="label py-0">
@@ -146,30 +158,33 @@ const siteLocaleIds = await getSiteLocaleIdsFromSettings(db);
               </select>
             </div>
 
-            <div class="form-control">
-              <label for="excerpt" class="label py-0">
-                <span class="label-text text-xs">
-                  {t(locale, "admin.content.excerpt")}
-                  <span class="text-base-content/50">(250)</span>
-                </span>
-              </label>
-              <textarea
-                id="excerpt"
-                name="excerpt"
-                rows="4"
-                maxlength="250"
-                class="textarea textarea-bordered textarea-sm w-full text-sm resize-y"
-                placeholder={t(locale, "admin.content.excerpt")}
-                x-model="excerpt"
-              >
-                {initialExcerpt}
-              </textarea>
-              <p class="text-xs text-base-content/50 mt-1" x-text="excerpt.length + '/250'" />
-            </div>
+            {!isMenusVariant && (
+              <div class="form-control">
+                <label for="excerpt" class="label py-0">
+                  <span class="label-text text-xs">
+                    {t(locale, "admin.content.excerpt")}
+                    <span class="text-base-content/50">(250)</span>
+                  </span>
+                </label>
+                <textarea
+                  id="excerpt"
+                  name="excerpt"
+                  rows="4"
+                  maxlength="250"
+                  class="textarea textarea-bordered textarea-sm w-full text-sm resize-y"
+                  placeholder={t(locale, "admin.content.excerpt")}
+                  x-model="excerpt"
+                >
+                  {initialExcerpt}
+                </textarea>
+                <p class="text-xs text-base-content/50 mt-1" x-text="excerpt.length + '/250'" />
+              </div>
+            )}
           </div>
         </div>
       </div>
 
+      {!isMenusVariant && (
       <TaxonomiesBlocks
         taxonomyBlocks={taxonomyBlocks}
         selectedTermIds={selectedTermIds}
@@ -177,6 +192,7 @@ const siteLocaleIds = await getSiteLocaleIdsFromSettings(db);
         accordionName={asideAccordionName}
         siblings
       />
+      )}
 
       <div class="collapse collapse-arrow join-item border border-base-300 language-accordion">
         <input
@@ -204,6 +220,7 @@ const siteLocaleIds = await getSiteLocaleIdsFromSettings(db);
               </p>
             </div>
 
+            {!isMenusVariant && (
             <div class="form-control">
               <label for="meta_translation_key" class="label py-0">
                 <span class="label-text text-xs">{t(locale, "admin.content.translationKey")}</span>
@@ -247,10 +264,12 @@ const siteLocaleIds = await getSiteLocaleIdsFromSettings(db);
                   : t(locale, "admin.content.translationKeyHint")}
               </p>
             </div>
+            )}
           </div>
         </div>
       </div>
 
+      {!isMenusVariant && (
       <div class="collapse collapse-arrow join-item border border-base-300 overflow-visible parent-post-accordion">
         <input
           type="radio"
@@ -282,8 +301,9 @@ const siteLocaleIds = await getSiteLocaleIdsFromSettings(db);
           </div>
         </div>
       </div>
+      )}
 
-      {hasPostThumbnail && (
+      {!isMenusVariant && hasPostThumbnail && (
         <div class="collapse collapse-arrow join-item border border-base-300">
           <input
             type="radio"

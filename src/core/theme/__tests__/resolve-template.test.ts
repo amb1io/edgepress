@@ -83,6 +83,7 @@ describe("resolve-template", () => {
       "index",
     ]);
     expect(buildTemplateCandidates("404")).toEqual(["404", "index"]);
+    expect(buildTemplateCandidates("search")).toEqual(["search", "archive", "index"]);
   });
 
   it("prefers taxonomy-specific templates for taxonomy routes", () => {
