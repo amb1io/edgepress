@@ -20,6 +20,7 @@ import {
   TAXONOMY_TYPE_I18N_NAMESPACE,
 } from "../../../core/services/taxonomy-type-registry.ts";
 import { upsertNamespaceTranslationRows } from "../../../utils/translation-upsert.ts";
+import { reindexPostsByTaxonomyId } from "../../../core/services/search-service.ts";
 
 export const prerender = false;
 
@@ -135,6 +136,8 @@ async function handleTaxonomyUpdate(
         updated_at: now,
       })
       .where(eq(taxonomies.id, termId));
+
+    await reindexPostsByTaxonomyId(db, termId);
 
     await invalidateContentListByTable(locals, "taxonomies");
     const translationRows = await parseTaxonomyTranslationRows(formData);

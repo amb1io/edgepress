@@ -82,6 +82,7 @@ import {
 } from "../../core/services/theme-service.ts";
 import { importThemeFromGitHub } from "../../core/services/theme-importer.ts";
 import { syncSeoMetadataFromPostSave } from "../../core/services/seo-metadata-service.ts";
+import { syncPostSearchIndex } from "../../core/services/search-service.ts";
 import {
   adminUrlLocaleToDbCode,
   dbLocaleCodeToAdminUrl,
@@ -659,6 +660,9 @@ export async function POST({
 
     // Atualizar cache KV com o post atual (create ou update)
     await syncPostCache(locals, db, postId);
+    if (postId) {
+      await syncPostSearchIndex(db, postId);
+    }
     if (post_type === "themes") {
       await syncThemeStatusCacheByPostId(locals, db, postId);
       await syncThemeCache(locals, db);

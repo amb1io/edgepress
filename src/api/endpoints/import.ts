@@ -10,6 +10,7 @@ import {
   restoreImport,
   type ArchiveKvLike,
 } from "../../core/services/edgepress-archive.ts";
+import { backfillAllSearchIndexes } from "../../core/services/search-service.ts";
 import { requireMinRole } from "../../utils/api-auth.ts";
 import { internalServerErrorResponse } from "../../utils/http-responses.ts";
 
@@ -103,6 +104,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const buffer = await file.arrayBuffer();
     const kv = cfEnv.CACHE as ArchiveKvLike | undefined;
     const result = await restoreImport(db, bucket, buffer, kv);
+    try {
+      await backfillAllSearchIndexes(db);
+    } catch (backfillErr) {
+      console.warn("[import] FTS backfill skipped:", backfillErr);
+    }
     return new Response(
       JSON.stringify({
         ok: true,

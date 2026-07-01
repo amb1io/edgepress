@@ -59,6 +59,7 @@
     "seed": "tsx scripts/seed-local.ts",
     "db:seed": "tsx scripts/seed-local.ts",
     "theme:backfill-body": "tsx scripts/backfill-post-body-html.ts",
+    "db:backfill:search": "tsx scripts/backfill-post-search-index.ts",
     "db:dedupe-locales": "tsx scripts/deduplicate-locales.ts",
     "db:seed:generate-sql": "tsx scripts/generate-seed-sql.ts",
     "db:import:csv:generate-sql": "tsx scripts/generate-csv-import-sql.ts",
