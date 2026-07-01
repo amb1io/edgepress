@@ -236,6 +236,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     });
     await upsertSeoMetadata(db, newPostId, seoResolved);
 
+    const { syncPostSearchIndex } = await import("../../../../core/services/search-service.ts");
+    await syncPostSearchIndex(db, newPostId);
+
     if (request.headers.get("HX-Request") === "true") {
       return htmxRefreshResponse();
     }

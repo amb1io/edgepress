@@ -11,6 +11,7 @@ import { eq } from "drizzle-orm";
 import { requireMinRole } from "../../../utils/api-auth.ts";
 import { htmxRefreshResponse } from "../../../utils/http-responses.ts";
 import { invalidatePostCache } from "../../../utils/kv-cache-sync.ts";
+import { removePostFromSearchIndex } from "../../../core/services/search-service.ts";
 
 export const prerender = false;
 
@@ -75,6 +76,8 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
     
     // Deletar o post
     await db.delete(posts).where(eq(posts.id, postId));
+
+    await removePostFromSearchIndex(db, postId);
 
     if (targetPost) {
       await invalidatePostCache(locals, db, targetPost);
