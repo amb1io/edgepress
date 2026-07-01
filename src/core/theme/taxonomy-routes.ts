@@ -50,6 +50,12 @@ export function buildTaxonomyPublicPath(
   return `${prefix}/${taxonomyBase}/${termSlug}`;
 }
 
+/** Maps DB taxonomy type to URL segment (category/tag use fixed bases; custom types use type slug). */
+export function taxonomyTypeToUrlBase(type: string): string {
+  const entry = Object.entries(TAXONOMY_URL_BASES).find(([, t]) => t === type);
+  return entry?.[0] ?? type;
+}
+
 export type PublicTaxonomyTerm = {
   id: number;
   name: string;

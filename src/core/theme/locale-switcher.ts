@@ -17,6 +17,12 @@ export function buildLocaleSwitcherUrl(
   if (kind === "archive") {
     return buildArchivePublicPath(archivePostType ?? "post", prefix);
   }
+  if (kind === "search") {
+    const path = `${prefix}/search`;
+    const q = route.searchQuery?.trim() ?? "";
+    if (q) return `${path}?q=${encodeURIComponent(q)}`;
+    return path;
+  }
   if (route.slug) {
     return `${prefix}/${route.slug}`;
   }

@@ -71,6 +71,8 @@ export function buildTemplateCandidates(
       candidates.push("taxonomy", `archive-${type}`, "archive", "index");
       return candidates;
     }
+    case "search":
+      return ["search", "archive", "index"];
     case "404":
       return ["404", "index"];
     default:

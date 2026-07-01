@@ -115,4 +115,45 @@ describe("resolvePublicRoute", () => {
       path: "/category/bad slug",
     });
   });
+
+  it("resolves search route at /search", () => {
+    expect(resolvePublicRoute("/search", new URLSearchParams())).toEqual({
+      kind: "search",
+      locale: "pt-br",
+      path: "/search",
+      searchQuery: "",
+      page: 1,
+    });
+  });
+
+  it("resolves localized search route at /en/search", () => {
+    expect(resolvePublicRoute("/en/search", new URLSearchParams())).toEqual({
+      kind: "search",
+      locale: "en",
+      path: "/en/search",
+      searchQuery: "",
+      page: 1,
+    });
+  });
+
+  it("reads q and page from search query params", () => {
+    expect(resolvePublicRoute("/search", new URLSearchParams("q=foo"))).toEqual({
+      kind: "search",
+      locale: "pt-br",
+      path: "/search",
+      searchQuery: "foo",
+      page: 1,
+    });
+    expect(resolvePublicRoute("/search", new URLSearchParams("q=foo&page=2"))).toEqual({
+      kind: "search",
+      locale: "pt-br",
+      path: "/search",
+      searchQuery: "foo",
+      page: 2,
+    });
+  });
+
+  it("treats /search as search route, not page slug", () => {
+    expect(resolvePublicRoute("/search", new URLSearchParams()).kind).toBe("search");
+  });
 });
