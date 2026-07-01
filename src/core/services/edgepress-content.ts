@@ -27,7 +27,20 @@ import {
 } from "./post-translation-service.ts";
 import { parseMetaValues } from "../../utils/meta-parser.ts";
 import { isValidSlug } from "../../utils/validation.ts";
-import type { GetTableListParams } from "../../utils/list-table-dynamic.ts";
+import { getRelatedPostIdsBySharedCategories } from "./taxonomy-service.ts";
+import {
+  buildRelatedPostsCacheKey,
+  getRelatedPostsFromCache,
+  normalizeRelatedPostsLimit,
+  putRelatedPostsCache,
+} from "../../utils/related-posts-cache.ts";
+import {
+  buildAuthorCacheKey,
+  getAuthorFromCache,
+  putAuthorCache,
+} from "../../utils/author-cache.ts";
+import { getPublicAuthorById } from "./user-service.ts";
+import type { ThemeAuthorView } from "../theme/types.ts";
 
 // --- Erros (APIs HTTP podem mapear para Response) ---
 
@@ -624,6 +637,134 @@ export class EdgepressContent {
     }
   }
 
+  async getRelatedPosts(
+    idOrSlug: string | number,
+    params: { limit?: number; locale?: string; status?: "published" } = {},
+  ): Promise<ContentPostDetail[]> {
+    const { kv } = this.runtime();
+    const status = params.status ?? "published";
+    const limit = normalizeRelatedPostsLimit(params.limit);
+    const localeCode = params.locale?.trim() || undefined;
+
+    let sourcePost: ContentPostDetail;
+    try {
+      if (isNumericPostIdentifier(idOrSlug)) {
+        sourcePost = (await this.getItem("posts", idOrSlug, {
+          status,
+          locale: localeCode,
+        })) as ContentPostDetail;
+      } else {
+        sourcePost = await this.getBySlug(String(idOrSlug), { status, locale: localeCode });
+      }
+    } catch (err) {
+      if (err instanceof ContentNotFoundError || err instanceof ContentBadRequestError) {
+        return [];
+      }
+      throw err;
+    }
+
+    const sourcePostId = Number(sourcePost.id);
+    if (!Number.isFinite(sourcePostId) || sourcePostId <= 0) {
+      return [];
+    }
+
+    const postTypeSlug = String(
+      sourcePost.post_type_slug ?? sourcePost.post_types_slug ?? "post",
+    ).trim();
+
+    const cacheKey = buildRelatedPostsCacheKey({
+      postId: sourcePostId,
+      localeCode: localeCode ?? "_",
+      limit,
+      status,
+    });
+
+    let relatedIds = await getRelatedPostsFromCache(kv, cacheKey);
+    if (relatedIds === null) {
+      relatedIds = await getRelatedPostIdsBySharedCategories(db, sourcePostId, {
+        limit,
+        taxonomyType: "category",
+        localeCode,
+        postTypeSlug,
+      });
+      await putRelatedPostsCache(kv, cacheKey, relatedIds);
+    }
+
+    if (relatedIds.length === 0) {
+      return [];
+    }
+
+    const items: ContentPostDetail[] = [];
+    for (const id of relatedIds) {
+      try {
+        const row = (await this.getItem("posts", id, {
+          status,
+          locale: localeCode,
+        })) as ContentPostDetail;
+        items.push(row);
+      } catch (err) {
+        if (err instanceof ContentNotFoundError) continue;
+        throw err;
+      }
+    }
+    return items;
+  }
+
+  async getAuthorForPost(
+    idOrSlug: string | number,
+    params: { locale?: string; status?: "published" } = {},
+  ): Promise<ThemeAuthorView | null> {
+    const { kv } = this.runtime();
+    const status = params.status ?? "published";
+    const localeCode = params.locale?.trim() || undefined;
+
+    let sourcePost: ContentPostDetail;
+    try {
+      if (isNumericPostIdentifier(idOrSlug)) {
+        sourcePost = (await this.getItem("posts", idOrSlug, {
+          status,
+          locale: localeCode,
+        })) as ContentPostDetail;
+      } else {
+        sourcePost = await this.getBySlug(String(idOrSlug), { status, locale: localeCode });
+      }
+    } catch (err) {
+      if (err instanceof ContentNotFoundError || err instanceof ContentBadRequestError) {
+        return null;
+      }
+      throw err;
+    }
+
+    const authorId = sourcePost.author_id != null ? String(sourcePost.author_id).trim() : "";
+    if (!authorId) return null;
+
+    const cacheKey = buildAuthorCacheKey(authorId);
+    const cached = await getAuthorFromCache(kv, cacheKey);
+    if (cached) return cached;
+
+    const author = await getPublicAuthorById(db, authorId);
+    if (!author) return null;
+
+    await putAuthorCache(kv, cacheKey, author);
+    return author;
+  }
+
+  async getAuthorByUserId(userId: string): Promise<ThemeAuthorView | null> {
+    const { kv } = this.runtime();
+    const id = userId.trim();
+    if (!id) return null;
+
+    const cacheKey = buildAuthorCacheKey(id);
+    const cached = await getAuthorFromCache(kv, cacheKey);
+    if (cached) return cached;
+
+    const author = await getPublicAuthorById(db, id);
+    if (!author) return null;
+
+    await putAuthorCache(kv, cacheKey, author);
+    return author;
+  }
+
   async getTaxonomies(post_type: string, taxonomy_name: string): Promise<TaxonomiesResponse> {
     const postTypesRes = await this.getList<{
       id?: number;
@@ -685,6 +826,11 @@ export class EdgepressContent {
     const res = await this.getMedia(pathOrId);
     return res.blob();
   }
+}
+
+export function isNumericPostIdentifier(value: string | number): boolean {
+  if (typeof value === "number") return Number.isFinite(value);
+  return /^\d+$/.test(String(value).trim());
 }
 
 export function createEdgepressContent(

@@ -124,8 +124,7 @@ export async function syncPostCache(
   }
 
   await invalidateContentListByTable(locals, "posts");
-
-  // Themes exigem projeção de cache dedicada para resolver tema ativo no runtime.
+  await invalidateRelatedPostsCache(locals);
   try {
     const [postRow] = await db
       .select({ post_type_id: posts.post_type_id })
@@ -203,6 +202,7 @@ export async function invalidatePostCache(
   }
 
   await invalidateContentListByTable(locals, "posts");
+  await invalidateRelatedPostsCache(locals);
 
   try {
     const [typeRow] = await db
@@ -229,6 +229,31 @@ export async function invalidateContentListByTable(
   if (!kv) return;
   const prefix = `content:${table}:`;
   await deleteKvKeysByPrefix(kv, prefix);
+}
+
+/** Invalida cache de listas de posts relacionados (prefixo related:post:). */
+export async function invalidateRelatedPostsCache(locals: App.Locals): Promise<void> {
+  const kv = getKvFromLocals(locals);
+  if (!kv) return;
+  await deleteKvKeysByPrefix(kv, "related:post:");
+}
+
+/** Invalida cache de autor (prefixo author:user: ou chave específica). */
+export async function invalidateAuthorCache(
+  locals: App.Locals,
+  userId?: string,
+): Promise<void> {
+  const kv = getKvFromLocals(locals);
+  if (!kv) return;
+  if (userId?.trim()) {
+    try {
+      await kv.delete?.(`author:user:${userId.trim()}`);
+    } catch {
+      // ignora
+    }
+    return;
+  }
+  await deleteKvKeysByPrefix(kv, "author:user:");
 }
 
 /**
