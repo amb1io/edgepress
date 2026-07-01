@@ -1,6 +1,7 @@
 import type { LocaleSwitcherItem, ResolvedPublicRoute, ThemeRouteKind } from "./types.ts";
 import { publicLocaleHomeUrl, publicLocaleUrlPrefix } from "./resolve-route.ts";
 import { buildArchivePublicPath } from "./post-type-routes.ts";
+import { buildTaxonomyPublicPath } from "./taxonomy-routes.ts";
 
 /** URL for switching to `targetLocale` while preserving the current public route shape. */
 export function buildLocaleSwitcherUrl(
@@ -10,6 +11,9 @@ export function buildLocaleSwitcherUrl(
   archivePostType?: string,
 ): string {
   const prefix = publicLocaleUrlPrefix(targetLocale);
+  if (kind === "taxonomy" && route.taxonomyBase && route.taxonomySlug) {
+    return buildTaxonomyPublicPath(route.taxonomyBase, route.taxonomySlug, prefix);
+  }
   if (kind === "archive") {
     return buildArchivePublicPath(archivePostType ?? "post", prefix);
   }

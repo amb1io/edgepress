@@ -1,4 +1,4 @@
-export type ThemeRouteKind = "home" | "single" | "page" | "archive" | "404";
+export type ThemeRouteKind = "home" | "single" | "page" | "archive" | "taxonomy" | "404";
 
 export type ThemeManifest = {
   name: string;
@@ -27,6 +27,17 @@ export type MenuItem = {
   label: string;
   url: string;
   active: boolean;
+};
+
+export type ThemeTaxonomyView = {
+  name: string;
+  slug: string;
+};
+
+export type ThemeAuthorView = {
+  name: string;
+  image: string;
+  description: string;
 };
 
 export type ThemePostView = {
@@ -93,6 +104,10 @@ export type ThemeRenderContext = {
     kind: ThemeRouteKind;
     path: string;
     locale: string;
+    /** DB taxonomy type when `kind` is `taxonomy` (e.g. `category`). */
+    taxonomy_type?: string;
+    /** Term slug when `kind` is `taxonomy` (e.g. `visum`). */
+    taxonomy_slug?: string;
   };
   body_class: string;
   /** Language switcher links (pt-br, en). */
@@ -116,6 +131,12 @@ export type ThemeRenderContext = {
   is_archive: boolean;
   is_404: boolean;
   have_posts: boolean;
+  /** Fetch taxonomy terms for a post type (used by {% get_taxonomies %} tag). */
+  get_taxonomies?: (postType: string, taxonomyType: string) => Promise<ThemeTaxonomyView[]>;
+  /** Fetch related posts by shared category (used by {% get_related_posts %} tag). */
+  get_related_posts?: (idOrSlug: string | number, limit?: number) => Promise<ThemePostView[]>;
+  /** Fetch author for a post (used by {% get_author %} tag). */
+  get_author?: (idOrSlug: string | number) => Promise<ThemeAuthorView | null>;
   /** Injected by layout wrapper */
   content?: string;
 };
@@ -127,4 +148,7 @@ export type ResolvedPublicRoute = {
   slug?: string;
   postType?: string;
   page?: number;
+  taxonomyType?: string;
+  taxonomySlug?: string;
+  taxonomyBase?: string;
 };
