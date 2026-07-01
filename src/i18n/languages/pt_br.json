@@ -108,6 +108,7 @@
   "admin.user.formName": "Nome",
   "admin.user.formEmail": "E-mail",
   "admin.user.formImage": "URL da imagem",
+  "admin.user.formDescription": "Descrição",
   "admin.user.formRole": "Função",
   "admin.user.role.administrador": "Administrador",
   "admin.user.role.editor": "Editor",

@@ -84,4 +84,29 @@ describe("resolve-template", () => {
     ]);
     expect(buildTemplateCandidates("404")).toEqual(["404", "index"]);
   });
+
+  it("prefers taxonomy-specific templates for taxonomy routes", () => {
+    const templates = {
+      ...baseTemplates,
+      "taxonomy-category-visum": "<div>visum</div>",
+      "taxonomy-category": "<div>category</div>",
+      taxonomy: "<div>taxonomy</div>",
+    };
+    expect(
+      resolveTemplateKey("taxonomy", templates, {
+        taxonomyType: "category",
+        taxonomySlug: "visum",
+      }),
+    ).toBe("taxonomy-category-visum");
+    expect(
+      buildTemplateCandidates("taxonomy", { taxonomyType: "category", taxonomySlug: "visum" }),
+    ).toEqual([
+      "taxonomy-category-visum",
+      "taxonomy-category",
+      "taxonomy",
+      "archive-category",
+      "archive",
+      "index",
+    ]);
+  });
 });

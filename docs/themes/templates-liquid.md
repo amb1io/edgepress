@@ -69,6 +69,7 @@ O core escolhe o template verificando quais arquivos existem em `templates/` do 
 | `single` | `single-{type}-{slug}` → `single-{type}` → `single` → `singular` → `index` |
 | `page` | `page-{slug}` → `page` → `singular` → `index` |
 | `archive` | `archive-{type}` → `archive` → `index` |
+| `taxonomy` | `taxonomy-{type}-{slug}` → `taxonomy-{type}` → `taxonomy` → `archive-{type}` → `archive` → `index` |
 | `404` | `404` → `index` |
 
 Exemplos de nomes de arquivo:
@@ -90,6 +91,8 @@ O roteamento público segue três camadas:
 |-----|--------------|-----------------|
 | `/` | `home` | `home.liquid` ou `front-page.liquid` |
 | `/posts` | `archive` (tipo `post`) | `archive.liquid` ou `archive-post.liquid` |
+| `/category/{term-slug}` | `taxonomy` (type `category`) | `taxonomy-category-{slug}.liquid` → `taxonomy.liquid` → `archive.liquid` |
+| `/tag/{term-slug}` | `taxonomy` (type `tag`) | `taxonomy-tag-{slug}.liquid` → `taxonomy.liquid` → `archive.liquid` |
 | `/{post-type-slug}` | `archive` (CPT arquivável) | `archive-{type}.liquid` → `archive.liquid` |
 | `/{post-type-slug}?page=2` | `archive` paginado | `archive.liquid` |
 | `/meu-slug` | `single` ou `page` | `single.liquid` / `page.liquid` |
@@ -247,7 +250,7 @@ Sempre disponíveis. Use em qualquer template para decidir o que renderizar:
 | `is_single` | Post do tipo `post` |
 | `is_page` | Página estática |
 | `is_singular` | `is_single` ou `is_page` |
-| `is_archive` | Listagem `/posts`, `/{cpt}` arquivável, etc. |
+| `is_archive` | Listagem `/posts`, `/{cpt}` arquivável, `/category/{slug}`, `/tag/{slug}`, etc. (`route.kind` pode ser `archive` ou `taxonomy`) |
 | `is_404` | Slug não encontrado |
 | `have_posts` | `posts` tem pelo menos um item |
 
@@ -391,6 +394,132 @@ Equivalente a `body_class()`. Emite `class="route-home locale-pt_br ..."` ou str
 ### `{% page_content %}`
 
 Placeholder do layout. Insere o HTML da página renderizada. **Não use** em templates de rota — apenas em `layouts/*.liquid`.
+
+---
+
+## Funções de tema
+
+Funções assíncronas que consultam o CMS em tempo de renderização. Cada uma popula uma variável no template via `as`.
+
+### `{% get_taxonomies %}`
+
+Lista termos de taxonomia associados a um post type. O segundo argumento deve ser o **type exato** cadastrado no banco (`category`, `tag`, `categorias`, etc.), conforme o `meta_schema.taxonomy` do post type.
+
+**Sintaxe:**
+
+```liquid
+{% get_taxonomies 'post', 'category' as categories %}
+```
+
+| Parâmetro | Descrição |
+|-----------|-----------|
+| 1º argumento | Slug do post type (`post`, `jobs`, …) |
+| 2º argumento | Type da taxonomia no banco (`category`, `tag`, …) |
+| `as` | Nome da variável que receberá o array |
+
+**Formato de cada item:**
+
+```json
+{ "name": "Tecnologia", "slug": "tecnologia" }
+```
+
+Termos que são pais de outros (raízes de hierarquia) são excluídos automaticamente.
+
+**Exemplos:**
+
+```liquid
+{% get_taxonomies 'post', 'category' as categories %}
+<ul class="categories">
+  {% for cat in categories %}
+    <li><a href="/category/{{ cat.slug }}">{{ cat.name }}</a></li>
+  {% endfor %}
+</ul>
+
+{% get_taxonomies 'post', 'tag' as tags %}
+<div class="tags">
+  {% for tag in tags %}
+    <span class="tag">{{ tag.name }}</span>
+  {% endfor %}
+</div>
+```
+
+Se o post type não tiver o taxonomy type no `meta_schema`, a variável recebe `[]`.
+
+### `{% get_related_posts %}`
+
+Lista posts publicados que compartilham **pelo menos uma categoria** (`type: category`) com o post informado. O post atual nunca entra na lista.
+
+**Sintaxe:**
+
+```liquid
+{% get_related_posts post.id as related %}
+{% get_related_posts post.id, 6 as related %}
+{% get_related_posts post.slug as related %}
+```
+
+| Parâmetro | Descrição |
+|-----------|-----------|
+| 1º argumento | ID ou slug do post (expressão Liquid ou literal) |
+| 2º argumento (opcional) | Quantidade máxima; padrão **4** |
+| `as` | Nome da variável que recebe o array |
+
+**Formato de cada item:** mesmo shape de `post` / itens em `posts` (`ThemePostView`: `id`, `title`, `slug`, `excerpt`, `cover_image`, etc.).
+
+**Exemplo em `single.liquid`:**
+
+```liquid
+{% get_related_posts post.id as related %}
+{% if related.size > 0 %}
+  <aside class="related-posts">
+    <h2>Leia também</h2>
+    <ul>
+      {% for item in related %}
+        <li><a href="{{ site.locale_prefix }}/{{ item.slug }}">{{ item.title }}</a></li>
+      {% endfor %}
+    </ul>
+  </aside>
+{% endif %}
+```
+
+Post inexistente ou sem categorias → `[]`. Em produção, a lista de IDs é cacheada no KV (`related:post:id:...`); cada post relacionado reutiliza o cache individual `post:id:...`.
+
+### `{% get_author %}`
+
+Retorna o autor de um post (via ID ou slug). Se o post não existir ou não tiver `author_id`, a variável recebe **`null`**.
+
+**Sintaxe:**
+
+```liquid
+{% get_author post.id as author %}
+{% get_author post.slug as author %}
+{% get_author 'hello-world' as author %}
+```
+
+| Parâmetro | Descrição |
+|-----------|-----------|
+| 1º argumento | ID ou slug do post (expressão Liquid ou literal) |
+| `as` | Nome da variável que recebe o objeto ou `null` |
+
+**Formato quando encontrado:** `{ name, image, description }` — strings vazias quando o campo não está preenchido no banco.
+
+**Exemplo em `single.liquid`:**
+
+```liquid
+{% get_author post.id as author %}
+{% if author %}
+  <aside class="author-box">
+    {% if author.image != blank %}
+      <img src="{{ author.image }}" alt="{{ author.name }}" />
+    {% endif %}
+    <h3>{{ author.name }}</h3>
+    {% if author.description != blank %}
+      <p>{{ author.description }}</p>
+    {% endif %}
+  </aside>
+{% endif %}
+```
+
+Em produção, dados do autor são cacheados no KV (`author:user:{userId}`).
 
 ---
 

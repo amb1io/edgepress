@@ -1,4 +1,5 @@
 import { isValidSlug } from "../../utils/validation.ts";
+import { resolveTaxonomyFromSegments } from "./taxonomy-routes.ts";
 import type { ResolvedPublicRoute } from "./types.ts";
 
 const LOCALE_PREFIXES = new Set(["pt_br", "pt-br", "pt", "en_us", "en-us", "en", "es_es", "es-es", "es"]);
@@ -68,6 +69,22 @@ export function resolvePublicRoute(pathname: string, searchParams: URLSearchPara
       postType: "post",
       page,
     };
+  }
+
+  if (rest.length === 2) {
+    const resolved = resolveTaxonomyFromSegments(rest);
+    if (resolved && isValidSlug(resolved.termSlug)) {
+      const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
+      return {
+        kind: "taxonomy",
+        locale,
+        path,
+        page,
+        taxonomyBase: resolved.taxonomyBase,
+        taxonomyType: resolved.taxonomyType,
+        taxonomySlug: resolved.termSlug,
+      };
+    }
   }
 
   const slug = rest.join("/");

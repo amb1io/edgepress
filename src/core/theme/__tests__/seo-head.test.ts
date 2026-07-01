@@ -76,4 +76,17 @@ describe("resolveThemeSeoContext", () => {
     expect(seo.title).toBe("Article title");
     expect(seo.og_type).toBe("article");
   });
+
+  it("uses taxonomy term name for taxonomy archive routes", () => {
+    const seo = resolveThemeSeoContext({
+      resolvedKind: "taxonomy",
+      isArchiveRoute: true,
+      archiveTitle: "Visum",
+      homeListPosts: false,
+      siteName,
+      siteDescription,
+      canonicalUrl: "http://localhost:8787/category/visum",
+    });
+    expect(seo.title).toBe("Visum");
+  });
 });

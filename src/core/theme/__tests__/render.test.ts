@@ -154,4 +154,89 @@ describe("renderTheme", () => {
 
     expect(html).toContain("index fallback");
   });
+
+  it("assigns taxonomy terms via get_taxonomies tag", async () => {
+    const pkg = minimalPackage({
+      home: `{% get_taxonomies 'post', 'category' as cats %}
+<ul>{% for cat in cats %}<li>{{ cat.name }}:{{ cat.slug }}</li>{% endfor %}</ul>`,
+    });
+
+    const html = await renderTheme(
+      pkg,
+      baseContext({
+        get_taxonomies: async () => [{ name: "Categoria", slug: "categoria" }],
+      }),
+    );
+
+    expect(html).toContain("Categoria:categoria");
+  });
+
+  it("assigns related posts via get_related_posts tag", async () => {
+    const pkg = minimalPackage({
+      home: `{% get_related_posts post.id, 2 as related %}
+<ul>{% for item in related %}<li>{{ item.title }}</li>{% endfor %}</ul>`,
+    });
+
+    const html = await renderTheme(
+      pkg,
+      baseContext({
+        post: {
+          id: 1,
+          title: "Current",
+          slug: "current",
+          excerpt: "",
+          body_html: "",
+          author_name: "",
+          published_at: null,
+          post_type_slug: "post",
+          meta: {},
+        },
+        get_related_posts: async () => [
+          {
+            id: 2,
+            title: "Related One",
+            slug: "related-one",
+            excerpt: "",
+            body_html: "",
+            author_name: "",
+            published_at: null,
+            post_type_slug: "post",
+            meta: {},
+          },
+        ],
+      }),
+    );
+
+    expect(html).toContain("Related One");
+  });
+
+  it("assigns author via get_author tag", async () => {
+    const pkg = minimalPackage({
+      home: `{% get_author post.id as author %}{% if author %}{{ author.name }}:{{ author.description }}{% else %}none{% endif %}`,
+    });
+
+    const html = await renderTheme(
+      pkg,
+      baseContext({
+        post: {
+          id: 1,
+          title: "Current",
+          slug: "current",
+          excerpt: "",
+          body_html: "",
+          author_name: "",
+          published_at: null,
+          post_type_slug: "post",
+          meta: {},
+        },
+        get_author: async () => ({
+          name: "Rhamses",
+          image: "https://example.com/a.jpg",
+          description: "Bio do autor",
+        }),
+      }),
+    );
+
+    expect(html).toContain("Rhamses:Bio do autor");
+  });
 });

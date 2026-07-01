@@ -2,6 +2,7 @@ import { Liquid, type Tag, type TagToken } from "liquidjs";
 import sanitizeHtml from "sanitize-html";
 import type { ThemeRenderContext } from "./types.ts";
 import { renderSeoHead } from "./seo-head.ts";
+import { registerGetTaxonomiesTag, registerGetRelatedPostsTag, registerGetAuthorTag } from "./theme-functions.ts";
 
 type TagImpl = {
   render: (ctx: ThemeRenderContext) => string;
@@ -165,4 +166,8 @@ export function registerThemeApi(liquid: Liquid): void {
   });
 
   liquid.registerFilter("escape", (value: unknown) => escapeHtml(String(value ?? "")));
+
+  registerGetTaxonomiesTag(liquid);
+  registerGetRelatedPostsTag(liquid);
+  registerGetAuthorTag(liquid);
 }

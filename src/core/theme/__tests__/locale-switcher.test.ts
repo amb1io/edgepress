@@ -63,4 +63,18 @@ describe("locale-switcher", () => {
     };
     expect(buildLocaleSwitcherUrl("en", route, "404")).toBe("/en/missing");
   });
+
+  it("builds taxonomy archive URLs", () => {
+    const route: ResolvedPublicRoute = {
+      kind: "taxonomy",
+      locale: "pt-br",
+      path: "/category/visum",
+      page: 1,
+      taxonomyBase: "category",
+      taxonomyType: "category",
+      taxonomySlug: "visum",
+    };
+    expect(buildLocaleSwitcherUrl("pt-br", route, "taxonomy")).toBe("/category/visum");
+    expect(buildLocaleSwitcherUrl("en", route, "taxonomy")).toBe("/en/category/visum");
+  });
 });

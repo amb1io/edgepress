@@ -36,6 +36,7 @@ const AUTH_TABLE_STATEMENTS = [
     "email" text NOT NULL,
     "email_verified" integer DEFAULT 0 NOT NULL,
     "image" text,
+    "description" text,
     "role" integer DEFAULT 3,
     "created_at" integer NOT NULL,
     "updated_at" integer NOT NULL

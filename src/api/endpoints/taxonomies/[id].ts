@@ -13,7 +13,7 @@ import {
   jsonResponse,
 } from "../../../utils/http-responses.ts";
 import { HTTP_STATUS_CODES } from "../../../shared/constants/index.ts";
-import { invalidateContentListByTable, invalidateI18nCache } from "../../../utils/kv-cache-sync.ts";
+import { invalidateContentListByTable, invalidateI18nCache, invalidateRelatedPostsCache } from "../../../utils/kv-cache-sync.ts";
 import { invalidateTranslationsCache } from "../../../i18n/translations.ts";
 import {
   removeTaxonomyTypeTranslationNamespaces,
@@ -140,6 +140,7 @@ async function handleTaxonomyUpdate(
     await reindexPostsByTaxonomyId(db, termId);
 
     await invalidateContentListByTable(locals, "taxonomies");
+    await invalidateRelatedPostsCache(locals);
     const translationRows = await parseTaxonomyTranslationRows(formData);
     if (translationRows.length > 0) {
       if (previousSlug && previousSlug !== slug) {
@@ -248,6 +249,7 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
     }
 
     await invalidateContentListByTable(locals, "taxonomies");
+    await invalidateRelatedPostsCache(locals);
     await invalidateI18nCache(locals);
     invalidateTranslationsCache();
     return htmlResponse("", 200);
