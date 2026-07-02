@@ -38,7 +38,7 @@ import { searchPosts } from "../services/search-service.ts";
 import { resolveLocaleId } from "../services/post-translation-service.ts";
 import { buildContentPostPayload } from "../../utils/content-post-payload.ts";
 import { inArray } from "drizzle-orm";
-import { posts as postsTable } from "../../db/schema.ts";
+import { injectCategoryMeta } from "./post-category-meta.ts";
 
 function buildThemeMenusRecord(
   menusByLocation: Record<string, { label: string; url: string }[]>,
@@ -64,6 +64,11 @@ function toPostView(post: ContentPostDetail): ThemePostView {
   for (const [k, v] of Object.entries(metaValues)) {
     if (v != null) meta[k] = String(v);
   }
+
+  const taxonomies = post.taxonomies as
+    | Array<{ type?: string; slug?: string; name?: string }>
+    | undefined;
+  injectCategoryMeta(meta, taxonomies);
 
   return {
     id: Number(post.id),
