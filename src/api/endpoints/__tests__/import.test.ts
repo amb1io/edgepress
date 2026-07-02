@@ -10,6 +10,10 @@ vi.mock("../../../utils/api-auth.ts", () => ({
   requireMinRole: vi.fn().mockResolvedValue(mockAuthUser),
 }));
 
+vi.mock("../../../core/services/search-service.ts", () => ({
+  backfillAllSearchIndexes: vi.fn().mockResolvedValue(0),
+}));
+
 const restoreImportMock = vi.fn();
 
 vi.mock("../../../core/services/edgepress-archive.ts", () => ({
@@ -33,6 +37,9 @@ describe("import API", () => {
     restoreImportMock.mockResolvedValue({
       counts: { posts: 2 },
       mediaCount: 1,
+      themeCount: 0,
+      includes: { database: true, media: true, themes: true },
+      ftsRestored: false,
     });
     env.MEDIA_BUCKET = {
       list: vi.fn(),
