@@ -64,6 +64,7 @@
   "postType.themes": "Themes",
   "postType.post_type": "Post Type",
   "postType.jobs": "Jobs",
+  "postType.menus": "Menus",
   "admin.content.newTitle": "New {type}",
   "admin.content.editTitle": "Edit {type}",
   "admin.content.slug": "Slug",
@@ -207,5 +208,19 @@
   "admin.taxonomy.panel.languages": "Languages",
   "admin.taxonomy.panel.languagesInfo": "Set translations for admin and site locales.",
   "admin.list.language": "Language",
-  "admin.list.order": "Order"
+  "admin.list.order": "Order",
+  "admin.menus.addItem": "Add another menu item",
+  "admin.menus.customOption": "Create a custom menu",
+  "admin.menus.customName": "Menu name",
+  "admin.menus.customUrl": "URL",
+  "admin.menus.order": "Order",
+  "admin.menus.searchPosts": "Search post, page, CPT or taxonomy...",
+  "admin.menus.remove": "Remove item",
+  "admin.menus.typePost": "Post",
+  "admin.menus.typeCustom": "Custom",
+  "admin.menus.typeTaxonomy": "Taxonomy",
+  "admin.menus.selectPost": "Select content",
+  "admin.menus.itemsTitle": "Menu items",
+  "admin.menus.slugHint": "The slug defines the menu location in the theme (e.g. primary).",
+  "admin.menus.loading": "Searching..."
 }

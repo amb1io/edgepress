@@ -15,6 +15,7 @@ const t = (locale: string, key: string) => {
     "postType.dashboard": "Dashboard",
     "postType.settings": "Configurações",
     "postType.post_type": "Post Type",
+    "postType.menus": "Menus",
     "menu.option.post_types": "Tipos de post",
     "menu.option.post_type_taxonomies": "Taxonomias",
   };

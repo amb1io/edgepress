@@ -24,7 +24,7 @@ import {
 } from "./resolve-route.ts";
 import { getArchivablePostTypes, resolveArchivePostTypeFromRoute } from "./post-type-routes.ts";
 import { buildLocaleSwitcher } from "./locale-switcher.ts";
-import { filterPublicThemeListPosts } from "./post-filters.ts";
+import { filterPublicThemeListPosts, isPublicThemeListPost } from "./post-filters.ts";
 import {
   resolveCoverImage,
   type CoverImageAttachmentCache,
@@ -33,34 +33,29 @@ import { createGetTaxonomiesHandler, createGetRelatedPostsHandler, createGetAuth
 import { getPublicTaxonomyTerm } from "./taxonomy-routes.ts";
 import type { ThemeRouteKind } from "./types.ts";
 import type { EdgepressContent } from "../services/edgepress-content.ts";
+import { loadPublishedMenusByLocation } from "../services/menu-items-service.ts";
+import { searchPosts } from "../services/search-service.ts";
+import { resolveLocaleId } from "../services/post-translation-service.ts";
+import { buildContentPostPayload } from "../../utils/content-post-payload.ts";
+import { inArray } from "drizzle-orm";
+import { posts as postsTable } from "../../db/schema.ts";
 
-type CustomFieldRow = { name?: string; value?: string; type?: string };
-type CustomFieldItem = { title?: string; fields?: CustomFieldRow[] };
-
-function normalizeTitle(v: unknown): string {
-  return String(v ?? "").trim().toLowerCase();
-}
-
-function getMenuItemsFromPost(
-  post: { custom_fields?: CustomFieldItem[] },
-  customFieldTitle: string,
+function buildThemeMenusRecord(
+  menusByLocation: Record<string, { label: string; url: string }[]>,
   currentPath: string,
-): MenuItem[] {
-  const blocks = Array.isArray(post.custom_fields) ? post.custom_fields : [];
-  const block = blocks.find((b) => normalizeTitle(b?.title) === normalizeTitle(customFieldTitle));
-  const rows = Array.isArray(block?.fields) ? block!.fields! : [];
-
-  return rows
-    .map((r) => {
-      const label = String(r?.name ?? "").trim();
-      const url = String(r?.value ?? "").trim();
-      return {
-        label,
-        url,
-        active: url !== "" && currentPath === url.replace(/\/+$/, ""),
-      };
-    })
-    .filter((x) => x.label !== "" && x.url !== "");
+): Record<string, MenuItem[]> {
+  const normPath = currentPath.replace(/\/+$/, "") || "/";
+  const menus: Record<string, MenuItem[]> = {};
+  for (const [location, items] of Object.entries(menusByLocation)) {
+    menus[location] = items.map((item) => ({
+      label: item.label,
+      url: item.url,
+      active:
+        item.url !== "" &&
+        normPath === item.url.replace(/\/+$/, ""),
+    }));
+  }
+  return menus;
 }
 
 function toPostView(post: ContentPostDetail): ThemePostView {
@@ -152,6 +147,18 @@ function buildArchivePageUrl(pathname: string, page: number): string {
   return `${url.pathname}${qs ? `?${qs}` : ""}`;
 }
 
+function buildSearchPageUrl(pathname: string, q: string, page: number, postType?: string): string {
+  const url = new URL(pathname, "http://localhost");
+  if (q) url.searchParams.set("q", q);
+  else url.searchParams.delete("q");
+  if (postType) url.searchParams.set("post_type", postType);
+  else url.searchParams.delete("post_type");
+  if (page <= 1) url.searchParams.delete("page");
+  else url.searchParams.set("page", String(page));
+  const qs = url.searchParams.toString();
+  return `${url.pathname}${qs ? `?${qs}` : ""}`;
+}
+
 export async function buildThemeRenderContext(
   locals: App.Locals,
   requestUrl: URL,
@@ -175,17 +182,13 @@ export async function buildThemeRenderContext(
   const homeContentKey = pkg.manifest.home_content_key ?? "hello-world";
   const homeListPosts = pkg.manifest.home_list_posts === true;
 
-  const menuListPromise = content.getListWithDetails("posts", {
-    limit: 500,
-    locale: dbLocale,
-    filter: { post_type: "menus", status: "published" },
-  });
+  const menusPromise = loadPublishedMenusByLocation(db, dbLocale);
 
   if (route.kind === "taxonomy" && route.taxonomyType && route.taxonomySlug) {
     const listPage = route.page ?? 1;
-    const [term, menuList, listResult] = await Promise.all([
+    const [term, menusByLocation, listResult] = await Promise.all([
       getPublicTaxonomyTerm(db, route.taxonomyType, route.taxonomySlug),
-      menuListPromise,
+      menusPromise,
       content.getListWithDetails("posts", {
         page: listPage,
         limit: 10,
@@ -231,11 +234,7 @@ export async function buildThemeRenderContext(
     };
 
     const is_archive = resolvedKind === "taxonomy";
-    const menus: Record<string, MenuItem[]> = {
-      primary: menuList.items.flatMap((item) =>
-        getMenuItemsFromPost(item as { custom_fields?: CustomFieldItem[] }, "menu navigation", route.path),
-      ),
-    };
+    const menus = buildThemeMenusRecord(menusByLocation, route.path);
     const canonicalUrl = new URL(route.path || "/", baseUrl).href;
     const seo = resolveThemeSeoContext({
       resolvedKind,
@@ -284,7 +283,171 @@ export async function buildThemeRenderContext(
       is_page: false,
       is_singular: false,
       is_archive,
+      is_search: false,
       is_404: resolvedKind === "404",
+      have_posts: posts.length > 0,
+      get_taxonomies: createGetTaxonomiesHandler(async (postType, taxonomyType) => {
+        const res = await content.getTaxonomies(postType, taxonomyType);
+        return res.items;
+      }),
+      get_related_posts: buildGetRelatedPostsHandler(content, dbLocale, baseUrl),
+      get_author: buildGetAuthorHandler(content, dbLocale),
+    };
+  }
+
+  if (route.kind === "search") {
+    const q = route.searchQuery ?? "";
+    const page = route.page ?? 1;
+    const postTypeFilter = requestUrl.searchParams.get("post_type")?.trim() || undefined;
+    const localeId = await resolveLocaleId(dbLocale, db);
+    const searchLimit = 20;
+
+    const [menusByLocation, searchResult] = await Promise.all([
+      menusPromise,
+      localeId != null
+        ? searchPosts(db, {
+            q,
+            localeId,
+            page,
+            limit: searchLimit,
+            ...(postTypeFilter ? { post_type: postTypeFilter } : {}),
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const attachmentCache: CoverImageAttachmentCache = new Map();
+    const hits = searchResult?.hits ?? [];
+    const total = searchResult?.total ?? 0;
+    const totalPages = Math.max(0, searchResult?.totalPages ?? 0);
+    const currentPage = searchResult?.page ?? page;
+
+    let posts: ThemePostView[] = [];
+    if (hits.length > 0) {
+      const postIds = hits.map((hit) => hit.post_id);
+      const postRows = await db
+        .select({
+          id: postsTable.id,
+          post_type_id: postsTable.post_type_id,
+          parent_id: postsTable.parent_id,
+          author_id: postsTable.author_id,
+          title: postsTable.title,
+          slug: postsTable.slug,
+          excerpt: postsTable.excerpt,
+          body: postsTable.body,
+          body_blocks: postsTable.body_blocks,
+          status: postsTable.status,
+          meta_values: postsTable.meta_values,
+          published_at: postsTable.published_at,
+          created_at: postsTable.created_at,
+          updated_at: postsTable.updated_at,
+        })
+        .from(postsTable)
+        .where(inArray(postsTable.id, postIds));
+
+      const postById = new Map(postRows.map((row) => [row.id, row]));
+      posts = (
+        await Promise.all(
+          postIds.map(async (postId) => {
+            const row = postById.get(postId);
+            if (!row) return null;
+            const payload = await buildContentPostPayload(
+              db,
+              { ...row, status: row.status ?? "published" },
+              { baseUrl },
+            );
+            const detail = payload as unknown as ContentPostDetail;
+            if (
+              !isPublicThemeListPost({
+                status: String(detail.status ?? "published"),
+                post_type_slug: String(detail["post_type_slug"] ?? detail["post_types_slug"] ?? "post"),
+                meta_values: (detail.meta_values ?? {}) as Record<string, unknown>,
+              })
+            ) {
+              return null;
+            }
+            return enrichPostViewWithCover(toPostView(detail), detail, baseUrl, attachmentCache);
+          }),
+        )
+      ).filter((item): item is ThemePostView => item != null);
+    }
+
+    const archiveTitle = q ? `Busca: ${q}` : "Busca";
+    const paginationPath = route.path;
+    const pagination = {
+      page: currentPage,
+      total_pages: Math.max(1, totalPages || 1),
+      ...(currentPage > 1 && totalPages > 0
+        ? {
+            prev_url: buildSearchPageUrl(
+              paginationPath,
+              q,
+              currentPage - 1,
+              postTypeFilter,
+            ),
+          }
+        : {}),
+      ...(currentPage < totalPages
+        ? {
+            next_url: buildSearchPageUrl(
+              paginationPath,
+              q,
+              currentPage + 1,
+              postTypeFilter,
+            ),
+          }
+        : {}),
+    };
+
+    const menus = buildThemeMenusRecord(menusByLocation, route.path);
+    const canonicalUrl = buildSearchPageUrl(route.path, q, currentPage, postTypeFilter);
+    const canonicalFull = new URL(canonicalUrl, baseUrl).href;
+    const seo = resolveThemeSeoContext({
+      resolvedKind: "search",
+      isArchiveRoute: true,
+      archiveTitle,
+      homeListPosts,
+      siteName,
+      siteDescription,
+      canonicalUrl: canonicalFull,
+      ...(posts[0]?.cover_image ? { ogImage: posts[0].cover_image } : {}),
+    });
+
+    return {
+      site: {
+        title: siteName,
+        description: siteDescription,
+        locale,
+        locale_prefix: localePrefix,
+        home_url: homeUrl,
+        base_url: baseUrl,
+        html_lang: localeToHtmlLang(locale),
+        year: new Date().getFullYear(),
+      },
+      seo,
+      menus,
+      locale_switcher: buildLocaleSwitcher(locale, route, "search"),
+      theme: {
+        slug: pkg.manifest.slug,
+        version: pkg.manifest.version,
+        asset_base_url: assetBase,
+      },
+      route: {
+        kind: "search",
+        path: route.path,
+        locale,
+      },
+      body_class: buildBodyClass(route, undefined, "search"),
+      posts,
+      archive: { title: archiveTitle, type: "search" },
+      pagination,
+      search: { query: q, total },
+      is_front_page: false,
+      is_single: false,
+      is_page: false,
+      is_singular: false,
+      is_archive: false,
+      is_search: true,
+      is_404: false,
       have_posts: posts.length > 0,
       get_taxonomies: createGetTaxonomiesHandler(async (postType, taxonomyType) => {
         const res = await content.getTaxonomies(postType, taxonomyType);
@@ -329,7 +492,7 @@ export async function buildThemeRenderContext(
           })
       : Promise.resolve(null);
 
-  const [listResult, slugPostData, homePostData, menuList] = await Promise.all([
+  const [listResult, slugPostData, homePostData, menusByLocation] = await Promise.all([
     content.getListWithDetails("posts", {
       page: listPage,
       limit: listLimit,
@@ -340,7 +503,7 @@ export async function buildThemeRenderContext(
     }),
     fetchSlugPost,
     fetchHomePost,
-    menuListPromise,
+    menusPromise,
   ]);
 
   const attachmentCache: CoverImageAttachmentCache = new Map();
@@ -417,11 +580,7 @@ export async function buildThemeRenderContext(
   const is_404 = resolvedKind === "404";
   const have_posts = posts.length > 0;
 
-  const menus: Record<string, MenuItem[]> = {
-    primary: menuList.items.flatMap((item) =>
-      getMenuItemsFromPost(item as { custom_fields?: CustomFieldItem[] }, "menu navigation", route.path),
-    ),
-  };
+  const menus = buildThemeMenusRecord(menusByLocation, route.path);
 
   const canonicalUrl = new URL(route.path || "/", baseUrl).href;
   const seoOgImage = seoPost
@@ -484,6 +643,7 @@ export async function buildThemeRenderContext(
     is_page,
     is_singular,
     is_archive,
+    is_search: false,
     is_404,
     have_posts,
     get_taxonomies: createGetTaxonomiesHandler(async (postType, taxonomyType) => {
