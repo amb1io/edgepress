@@ -4,6 +4,7 @@
  */
 import AdminLayout from "../layouts/AdminLayout.astro";
 import AdminFormContainer from "../components/admin/AdminFormContainer.astro";
+import ImportProgressModal from "../components/ImportProgressModal.astro";
 import { t, type Locale } from "../../i18n/index.ts";
 import type { MenuItem } from "../../utils/menu.ts";
 
@@ -32,6 +33,9 @@ const importConfirm = t(currentLocale, "admin.importExport.importConfirm");
 const importLoading = t(currentLocale, "admin.importExport.importLoading");
 const importSuccess = t(currentLocale, "admin.importExport.importSuccess");
 const importError = t(currentLocale, "admin.importExport.importError");
+const importProgressTitle = t(currentLocale, "admin.importExport.importProgressTitle");
+const importPolling = t(currentLocale, "admin.importExport.importPolling");
+const importClose = t(currentLocale, "admin.importExport.importClose");
 ---
 
 <AdminLayout title={pageTitle} locale={locale} menuItems={menuItems} user={currentUser}>
@@ -39,8 +43,16 @@ const importError = t(currentLocale, "admin.importExport.importError");
     <span class="text-sm text-base-content/70">{currentUser.email}</span>
   </div>
 
-  <script define:vars={{ importConfirm, importError, importSuccess, exportSelectWarning }}>
-    window.__importExportStrings = { importConfirm, importError, importSuccess, exportSelectWarning };
+  <script define:vars={{ importConfirm, importError, importSuccess, exportSelectWarning, importProgressTitle, importPolling, importClose }}>
+    window.__importExportStrings = {
+      importConfirm,
+      importError,
+      importSuccess,
+      exportSelectWarning,
+      importProgressTitle,
+      importPolling,
+      importClose,
+    };
   </script>
   <script>
     import "../scripts/import-export-init.ts";
@@ -153,4 +165,6 @@ const importError = t(currentLocale, "admin.importExport.importError");
       </div>
     </div>
   </AdminFormContainer>
+
+  <ImportProgressModal title={importProgressTitle} pollingLabel={importPolling} closeLabel={importClose} />
 </AdminLayout>
