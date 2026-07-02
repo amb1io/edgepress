@@ -5,6 +5,7 @@ import { createTarGzip, parseTarGzip } from "nanotar";
 import { eq, sql } from "drizzle-orm";
 import {
   account,
+  locales,
   postTypes,
   posts,
   postsMedia,
@@ -93,6 +94,9 @@ const AUTO_INCREMENT_TABLES: EdgepressLogicalTable[] = [
 
 type RowRecord = Record<string, unknown>;
 
+/** Source locale id (string) → locale_code. Used to remap FKs on import (locales are preserved per instance). */
+export type LocaleIdMap = Record<string, string>;
+
 export type EdgepressManifest = {
   format: typeof EDGEPRESS_FORMAT;
   schemaVersion: number;
@@ -101,6 +105,7 @@ export type EdgepressManifest = {
   includes: ExportIncludes;
   tableOrder: EdgepressLogicalTable[];
   counts: Partial<Record<EdgepressLogicalTable, number>>;
+  localeMap?: LocaleIdMap;
   ftsCount?: number;
   mediaCount: number;
   mediaFiles: Array<{ key: string; contentType: string }>;
@@ -594,6 +599,81 @@ export async function resetAutoIncrementSequences(db: Database): Promise<void> {
   }
 }
 
+export async function readLocaleIdMap(db: Database): Promise<LocaleIdMap> {
+  const rows = await db
+    .select({ id: locales.id, locale_code: locales.locale_code })
+    .from(locales);
+  const map: LocaleIdMap = {};
+  for (const row of rows) {
+    map[String(row.id)] = row.locale_code;
+  }
+  return map;
+}
+
+export function remapLocaleId(
+  sourceId: number | null | undefined,
+  sourceLocaleMap: LocaleIdMap,
+  targetByCode: Map<string, number>,
+  targetIds: Set<number>,
+): number | null {
+  if (sourceId == null) return null;
+
+  const localeCode = sourceLocaleMap[String(sourceId)];
+  if (localeCode) {
+    return targetByCode.get(localeCode) ?? null;
+  }
+
+  // Legacy archives without localeMap: keep the id when it already exists on the target.
+  if (targetIds.has(sourceId)) return sourceId;
+  return null;
+}
+
+export async function remapDatabasePayloadLocales(
+  db: Database,
+  manifest: Pick<EdgepressManifest, "localeMap">,
+  payload: EdgepressDatabasePayload,
+): Promise<EdgepressDatabasePayload> {
+  const sourceLocaleMap = manifest.localeMap ?? {};
+  const targetRows = await db
+    .select({ id: locales.id, locale_code: locales.locale_code })
+    .from(locales);
+  const targetByCode = new Map(targetRows.map((row) => [row.locale_code, row.id]));
+  const targetIds = new Set(targetRows.map((row) => row.id));
+
+  const remapRow = (row: RowRecord): RowRecord => {
+    if (row["id_locale_code"] == null) return row;
+    return {
+      ...row,
+      id_locale_code: remapLocaleId(
+        row["id_locale_code"] as number,
+        sourceLocaleMap,
+        targetByCode,
+        targetIds,
+      ),
+    };
+  };
+
+  const tables: EdgepressDatabasePayload["tables"] = { ...payload.tables };
+  if (tables.posts) {
+    tables.posts = tables.posts.map(remapRow);
+  }
+  if (tables.taxonomies) {
+    tables.taxonomies = tables.taxonomies.map(remapRow);
+  }
+
+  const fts = payload.fts?.map((row) => ({
+    ...row,
+    id_locale_code: remapLocaleId(
+      row.id_locale_code,
+      sourceLocaleMap,
+      targetByCode,
+      targetIds,
+    ),
+  }));
+
+  return { tables, fts };
+}
+
 export async function buildExport(
   db: Database,
   bucket: R2BucketLike,
@@ -604,6 +684,7 @@ export async function buildExport(
   const tables: Partial<Record<EdgepressLogicalTable, RowRecord[]>> = {};
   const counts: Partial<Record<EdgepressLogicalTable, number>> = {};
   let ftsRows: FtsRow[] = [];
+  let localeMap: LocaleIdMap | undefined;
 
   if (includes.database) {
     for (const logicalTable of TABLE_ORDER) {
@@ -612,6 +693,7 @@ export async function buildExport(
       counts[logicalTable] = rows.length;
     }
     ftsRows = await readAllFtsRows(db);
+    localeMap = await readLocaleIdMap(db);
   }
 
   const mediaObjects = includes.media ? await readAllR2Objects(bucket) : [];
@@ -626,6 +708,7 @@ export async function buildExport(
     includes,
     tableOrder: [...TABLE_ORDER],
     counts,
+    localeMap,
     ftsCount: includes.database ? ftsRows.length : undefined,
     mediaCount: mediaObjects.length,
     mediaFiles: mediaObjects.map((item) => ({
@@ -728,6 +811,9 @@ export async function restoreImport(
   const databasePayload = databaseBytes
     ? parseEdgepressDatabasePayload(JSON.parse(new TextDecoder().decode(databaseBytes)))
     : { tables: {} };
+  const importPayload = includes.database
+    ? await remapDatabasePayloadLocales(db, manifest, databasePayload)
+    : databasePayload;
 
   if (includes.database) {
     await wipeDatabase(db);
@@ -752,7 +838,7 @@ export async function restoreImport(
     // Self-referential FKs (posts.parent_id, taxonomies.parent_id) are handled via a second
     // pass after all rows are inserted (see restorePostParentIds / restoreTaxonomyParentIds).
     for (const logicalTable of tableOrder) {
-      const rows = databasePayload.tables[logicalTable] ?? [];
+      const rows = importPayload.tables[logicalTable] ?? [];
       await insertRowsInBatches(db, logicalTable, rows);
       counts[logicalTable] = rows.length;
     }
@@ -771,8 +857,8 @@ export async function restoreImport(
   let themeCount = 0;
   let ftsRestored = false;
 
-  if (includes.database && databasePayload.fts && databasePayload.fts.length > 0) {
-    await restoreFtsRows(db, databasePayload.fts);
+  if (includes.database && importPayload.fts && importPayload.fts.length > 0) {
+    await restoreFtsRows(db, importPayload.fts);
     ftsRestored = true;
   }
 

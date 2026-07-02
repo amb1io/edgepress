@@ -11,11 +11,13 @@ import {
   parseEdgepressDatabasePayload,
   parseEdgepressManifest,
   parseThemePackageTarPath,
+  remapDatabasePayloadLocales,
   resolveImportTableOrder,
   type EdgepressLogicalTable,
   type EdgepressManifest,
   type ExportIncludes,
 } from "./edgepress-archive.ts";
+import type { Database } from "../../utils/types/database.ts";
 
 export const IMPORT_STAGING_PREFIX = "imports/";
 
@@ -141,8 +143,13 @@ export async function stageImportArchive(
   bucket: ImportStagingBucket,
   jobId: string,
   archiveBuffer: ArrayBuffer,
+  db?: Database,
 ): Promise<ImportStagingManifest> {
   const parsed = await parseImportArchive(archiveBuffer);
+  const databasePayload =
+    db && parsed.includes.database
+      ? await remapDatabasePayloadLocales(db, parsed.manifest, parsed.databasePayload)
+      : parsed.databasePayload;
   const root = importStagingRoot(jobId);
 
   await bucket.put(importStagingKey(jobId, "manifest.json"), encodeJson(parsed.manifest), {
@@ -164,14 +171,14 @@ export async function stageImportArchive(
   if (parsed.includes.database) {
     const tableOrder = resolveImportTableOrder(parsed.manifest.tableOrder);
     for (const table of tableOrder) {
-      const rows = parsed.databasePayload.tables[table as EdgepressLogicalTable] ?? [];
+      const rows = databasePayload.tables[table as EdgepressLogicalTable] ?? [];
       await bucket.put(importStagingKey(jobId, `tables/${table}.json`), encodeJson(rows), {
         httpMetadata: { contentType: "application/json" },
       });
     }
 
-    if (parsed.databasePayload.fts?.length) {
-      await bucket.put(importStagingKey(jobId, "fts.json"), encodeJson(parsed.databasePayload.fts), {
+    if (databasePayload.fts?.length) {
+      await bucket.put(importStagingKey(jobId, "fts.json"), encodeJson(databasePayload.fts), {
         httpMetadata: { contentType: "application/json" },
       });
     }
