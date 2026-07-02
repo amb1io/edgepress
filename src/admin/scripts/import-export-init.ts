@@ -7,6 +7,7 @@ declare global {
       importConfirm?: string;
       importError?: string;
       importSuccess?: string;
+      exportSelectWarning?: string;
     };
   }
 }
@@ -23,12 +24,27 @@ document.addEventListener("alpine:init", () => {
     importing: false,
     importMessage: "",
     importOk: false,
+    exportDatabase: true,
+    exportMedia: true,
+    exportThemes: true,
+    exportWarning: false,
 
     async exportData() {
+      if (!this.exportDatabase && !this.exportMedia && !this.exportThemes) {
+        this.exportWarning = true;
+        this.importMessage = "";
+        return;
+      }
+
+      this.exportWarning = false;
       this.exporting = true;
       this.importMessage = "";
       try {
-        const res = await fetch("/api/export", { credentials: "same-origin" });
+        const params = new URLSearchParams();
+        if (this.exportDatabase) params.set("database", "1");
+        if (this.exportMedia) params.set("media", "1");
+        if (this.exportThemes) params.set("themes", "1");
+        const res = await fetch(`/api/export?${params.toString()}`, { credentials: "same-origin" });
         if (!res.ok) {
           const err = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
           throw new Error(err.message || err.error || "Export failed");

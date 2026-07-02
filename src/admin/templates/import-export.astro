@@ -21,6 +21,10 @@ const exportTitle = t(currentLocale, "admin.importExport.exportTitle");
 const exportDescription = t(currentLocale, "admin.importExport.exportDescription");
 const exportButton = t(currentLocale, "admin.importExport.exportButton");
 const exportLoading = t(currentLocale, "admin.importExport.exportLoading");
+const exportDatabaseOption = t(currentLocale, "admin.importExport.exportDatabaseOption");
+const exportMediaOption = t(currentLocale, "admin.importExport.exportMediaOption");
+const exportThemesOption = t(currentLocale, "admin.importExport.exportThemesOption");
+const exportSelectWarning = t(currentLocale, "admin.importExport.exportSelectWarning");
 const importTitle = t(currentLocale, "admin.importExport.importTitle");
 const importHint = t(currentLocale, "admin.importExport.importHint");
 const importButton = t(currentLocale, "admin.importExport.importButton");
@@ -35,8 +39,8 @@ const importError = t(currentLocale, "admin.importExport.importError");
     <span class="text-sm text-base-content/70">{currentUser.email}</span>
   </div>
 
-  <script define:vars={{ importConfirm, importError, importSuccess }}>
-    window.__importExportStrings = { importConfirm, importError, importSuccess };
+  <script define:vars={{ importConfirm, importError, importSuccess, exportSelectWarning }}>
+    window.__importExportStrings = { importConfirm, importError, importSuccess, exportSelectWarning };
   </script>
   <script>
     import "../scripts/import-export-init.ts";
@@ -49,6 +53,45 @@ const importError = t(currentLocale, "admin.importExport.importError");
           <h2 class="text-xl font-semibold">{exportTitle}</h2>
           <p class="text-sm text-base-content/70 mt-1">{exportDescription}</p>
         </div>
+        <div class="flex flex-col gap-3">
+          <label class="label cursor-pointer justify-start gap-3 w-fit">
+            <input
+              type="checkbox"
+              class="checkbox checkbox-primary"
+              x-model="exportDatabase"
+              :disabled="exporting || importing"
+            />
+            <span class="label-text">{exportDatabaseOption}</span>
+          </label>
+          <label class="label cursor-pointer justify-start gap-3 w-fit">
+            <input
+              type="checkbox"
+              class="checkbox checkbox-primary"
+              x-model="exportMedia"
+              :disabled="exporting || importing"
+            />
+            <span class="label-text">{exportMediaOption}</span>
+          </label>
+          <label class="label cursor-pointer justify-start gap-3 w-fit">
+            <input
+              type="checkbox"
+              class="checkbox checkbox-primary"
+              x-model="exportThemes"
+              :disabled="exporting || importing"
+            />
+            <span class="label-text">{exportThemesOption}</span>
+          </label>
+        </div>
+
+        <div
+          x-show="exportWarning"
+          x-cloak
+          class="alert alert-warning w-fit"
+          role="alert"
+        >
+          <span>{exportSelectWarning}</span>
+        </div>
+
         <button
           type="button"
           class="btn btn-primary w-fit"
