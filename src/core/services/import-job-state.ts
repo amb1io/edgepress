@@ -15,6 +15,7 @@ export type ImportJobState = {
   stepIndex: number;
   totalSteps: number;
   phaseLabel: string;
+  pollToken: string;
   countsSoFar: Partial<Record<EdgepressLogicalTable, number>>;
   mediaCountSoFar?: number;
   themeCountSoFar?: number;
@@ -35,6 +36,25 @@ export type ImportJobKvLike = {
 
 export function importJobKvKey(jobId: string): string {
   return `${IMPORT_JOB_KV_PREFIX}${jobId}`;
+}
+
+export const IMPORT_POLL_TOKEN_HEADER = "X-Import-Poll-Token";
+
+export function createImportPollToken(): string {
+  return crypto.randomUUID();
+}
+
+export function isImportPollTokenValid(
+  job: Pick<ImportJobState, "pollToken">,
+  token: string | null | undefined,
+): boolean {
+  if (!token || !job.pollToken) return false;
+  if (token.length !== job.pollToken.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < token.length; i++) {
+    mismatch |= token.charCodeAt(i) ^ job.pollToken.charCodeAt(i);
+  }
+  return mismatch === 0;
 }
 
 export async function readImportJob(
