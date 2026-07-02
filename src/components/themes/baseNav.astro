@@ -1,123 +1,41 @@
 ---
-import { createEdgepressContent } from "../../core/services/edgepress-content.ts";
-
-type CustomFieldRow = {
-  name?: string;
-  value?: string;
-  type?: string;
-};
-
-type CustomFieldItem = {
-  title?: string;
-  fields?: CustomFieldRow[];
-};
-
-type PostWithCustomFields = {
-  id?: number;
-  title?: string;
-  slug?: string;
-  custom_fields?: CustomFieldItem[];
-};
+import { db } from "../../db/index.ts";
+import { adminUrlLocaleToDbCode } from "../../utils/admin-locale-constants.ts";
+import { loadPublishedMenusByLocation } from "../../core/services/menu-items-service.ts";
 
 type Props = {
-  /** Ex: "menus" */
-  postType: string;
+  /** Slug do menu pai (location key). Ex: "primary" */
+  menuSlug?: string;
   /** Ex: "pt-br" */
   locale: string;
-  /**
-   * Slug de uma taxonomia para filtrar posts (opcional).
-   * Ex: "header", "main-menu", etc.
-   */
-  taxonomySlug?: string;
-  /**
-   * Tipo da taxonomia (opcional). Se informado, filtra também pelo tipo.
-   * Ex: "category", "tag", "menu"...
-   */
-  taxonomyType?: string;
-  /** Default: "menu navigation" */
-  customFieldTitle?: string;
-  /**
-   * Status dos posts.
-   * Default: "published"
-   */
-  status?: "published" | "draft" | "archived" | (string & {});
-  /**
-   * Se `true`, falha o render quando a API/content falhar.
-   * Default: true (loga e estoura erro para debug).
-   */
-  required?: boolean;
   /** Classe opcional para o <nav> */
   className?: string;
+  /** @deprecated Use menuSlug. Mantido para compatibilidade. */
+  postType?: string;
 };
 
 const {
-  postType,
+  menuSlug = "primary",
   locale,
-  taxonomySlug,
-  taxonomyType,
-  customFieldTitle = "menu navigation",
-  status = "published",
-  required = true,
   className,
 } = Astro.props as Props;
 
-const content = createEdgepressContent(Astro.locals as App.Locals, {
-  baseUrl: Astro.url.origin,
-});
+const dbLocale = adminUrlLocaleToDbCode(locale);
+let items: { label: string; href: string }[] = [];
 
-let list:
-  | Awaited<ReturnType<typeof content.getListWithDetails<PostWithCustomFields>>>
-  | null = null;
 try {
-  list = await content.getListWithDetails<PostWithCustomFields>("posts", {
-    limit: 500,
-    locale,
-    ...(taxonomySlug ? { filter_taxonomy_slug: taxonomySlug } : {}),
-    ...(taxonomyType ? { filter_taxonomy_type: taxonomyType } : {}),
-    filter: {
-      post_type: postType,
-      status,
-    },
-  });
+  const menusByLocation = await loadPublishedMenusByLocation(db, dbLocale);
+  items = (menusByLocation[menuSlug] ?? []).map((item) => ({
+    label: item.label,
+    href: item.url,
+  }));
 } catch (err) {
-  const e = err as { message?: string; stack?: string; status?: number; detail?: unknown };
-  console.error("[edgepress][baseNav] Falha ao carregar menu via content service", {
-    postType,
+  console.error("[edgepress][baseNav] Falha ao carregar menu", {
+    menuSlug,
     locale,
-    status,
-    taxonomySlug,
-    taxonomyType,
-    customFieldTitle,
-    url: Astro.url.href,
-    message: e?.message,
-    statusCode: e?.status,
-    detail: e?.detail,
-    stack: e?.stack,
+    message: err instanceof Error ? err.message : String(err),
   });
-  if (required) throw err;
-  list = null;
 }
-
-const posts = ((list?.items ?? []) as unknown[]) as PostWithCustomFields[];
-
-function normalizeTitle(v: unknown): string {
-  return String(v ?? "").trim().toLowerCase();
-}
-
-function getMenuItemsFromPost(post: PostWithCustomFields): Array<{ label: string; href: string }> {
-  const blocks = Array.isArray(post.custom_fields) ? post.custom_fields : [];
-  const block = blocks.find((b) => normalizeTitle(b?.title) === normalizeTitle(customFieldTitle));
-  const rows = Array.isArray(block?.fields) ? block!.fields! : [];
-
-  return rows
-    .map((r) => ({
-      label: String(r?.name ?? "").trim(),
-      href: String(r?.value ?? "").trim(),
-    }))
-    .filter((x) => x.label !== "" && x.href !== "");
-}
-
-const items = posts.flatMap(getMenuItemsFromPost);
 ---
 
 <nav class={className}>
@@ -129,4 +47,3 @@ const items = posts.flatMap(getMenuItemsFromPost);
     ))}
   </ul>
 </nav>
-

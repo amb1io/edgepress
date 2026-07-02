@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, like, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, like, ne, sql } from "drizzle-orm";
 import {
   locales,
   postTypes,
@@ -133,6 +133,9 @@ export async function getListItems(
     // Excluir posts na lixeira
     ne(posts.status, "trash"),
   ];
+  if (typeSlug === "menus") {
+    conditions.push(isNull(posts.parent_id));
+  }
   if (status) {
     conditions.push(
       eq(posts.status, status as "published" | "draft" | "archived"),

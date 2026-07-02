@@ -70,6 +70,7 @@ O core escolhe o template verificando quais arquivos existem em `templates/` do 
 | `page` | `page-{slug}` → `page` → `singular` → `index` |
 | `archive` | `archive-{type}` → `archive` → `index` |
 | `taxonomy` | `taxonomy-{type}-{slug}` → `taxonomy-{type}` → `taxonomy` → `archive-{type}` → `archive` → `index` |
+| `search` | `search` → `archive` → `index` |
 | `404` | `404` → `index` |
 
 Exemplos de nomes de arquivo:
@@ -93,6 +94,7 @@ O roteamento público segue três camadas:
 | `/posts` | `archive` (tipo `post`) | `archive.liquid` ou `archive-post.liquid` |
 | `/category/{term-slug}` | `taxonomy` (type `category`) | `taxonomy-category-{slug}.liquid` → `taxonomy.liquid` → `archive.liquid` |
 | `/tag/{term-slug}` | `taxonomy` (type `tag`) | `taxonomy-tag-{slug}.liquid` → `taxonomy.liquid` → `archive.liquid` |
+| `/search?q={termo}` | `search` | `search.liquid` → `archive.liquid` → `index.liquid` |
 | `/{post-type-slug}` | `archive` (CPT arquivável) | `archive-{type}.liquid` → `archive.liquid` |
 | `/{post-type-slug}?page=2` | `archive` paginado | `archive.liquid` |
 | `/meu-slug` | `single` ou `page` | `single.liquid` / `page.liquid` |
@@ -112,7 +114,9 @@ Exemplo de template específico: `templates/archive-produtos.liquid` para o CPT 
 | `en` | `/en` | `/en` |
 | `es` | `/es` | `/es` |
 
-Exemplos: `/en/posts`, `/en/meu-slug`.
+Exemplos: `/en/posts`, `/en/meu-slug`, `/search?q=termo`, `/en/search?q=termo`.
+
+**Busca:** use o parâmetro `q` (não `s` do WordPress). `/search` sem `q` renderiza a página de busca vazia (HTTP 200). Paginação: `/search?q=foo&page=2`.
 
 Links internos devem usar `{{ site.locale_prefix }}/{{ post.slug }}` para respeitar o idioma ativo.
 
@@ -193,7 +197,7 @@ Preenchido pelo core a partir do post da rota ou fallbacks do site.
 
 | Propriedade | Tipo | Descrição |
 |-------------|------|-----------|
-| `route.kind` | string | `home`, `single`, `page`, `archive`, `404` |
+| `route.kind` | string | `home`, `single`, `page`, `archive`, `taxonomy`, `search`, `404` |
 | `route.path` | string | Path da requisição (ex.: `/posts`, `/en/sobre`) |
 | `route.locale` | string | Locale normalizado da URL |
 
@@ -225,7 +229,16 @@ Sempre disponível. Metadados da listagem atual.
 | Propriedade | Tipo | Descrição |
 |-------------|------|-----------|
 | `archive.title` | string | Título do arquivo (ex.: `Blog`) |
-| `archive.type` | string | Post type filtrado (ex.: `post`) |
+| `archive.type` | string | Post type filtrado (ex.: `post`) ou `search` na rota de busca |
+
+### `search`
+
+Disponível quando `route.kind` é `search` (`is_search` é `true`).
+
+| Propriedade | Tipo | Descrição |
+|-------------|------|-----------|
+| `search.query` | string | Termo de busca (`?q=`) |
+| `search.total` | number | Total de resultados encontrados |
 
 ### `pagination`
 
@@ -240,6 +253,35 @@ Sempre disponível (página 1 fora de rotas de arquivo). Em `archive`, reflete a
 
 Use `{% pagination %}` para renderizar os links automaticamente.
 
+Na rota `search`, `{% pagination %}` preserva `?q=` ao mudar de página (ex.: `/search?q=foo&page=2`).
+
+**Formulário de busca** (`templates/parts/searchform.liquid` ou inline no header):
+
+```liquid
+<form action="{{ site.locale_prefix }}/search" method="get" role="search">
+  <label for="search-field">Buscar</label>
+  <input id="search-field" type="search" name="q" value="{{ search.query }}" />
+  <button type="submit">Buscar</button>
+</form>
+```
+
+**Template de resultados** (`templates/search.liquid`):
+
+```liquid
+{% layout 'layouts/base' %}
+<h1>{% if search.query != blank %}Resultados para “{{ search.query }}”{% else %}Busca{% endif %}</h1>
+<p>{{ search.total }} resultado(s)</p>
+{% for item in posts %}
+  <article>
+    <h2><a href="{{ site.locale_prefix }}/{{ item.slug }}">{{ item.title }}</a></h2>
+    {% if item.excerpt %}<p>{{ item.excerpt }}</p>{% endif %}
+  </article>
+{% else %}
+  <p>Nenhum resultado.</p>
+{% endfor %}
+{% pagination %}
+```
+
 ### Flags condicionais (estilo WordPress)
 
 Sempre disponíveis. Use em qualquer template para decidir o que renderizar:
@@ -251,6 +293,7 @@ Sempre disponíveis. Use em qualquer template para decidir o que renderizar:
 | `is_page` | Página estática |
 | `is_singular` | `is_single` ou `is_page` |
 | `is_archive` | Listagem `/posts`, `/{cpt}` arquivável, `/category/{slug}`, `/tag/{slug}`, etc. (`route.kind` pode ser `archive` ou `taxonomy`) |
+| `is_search` | Rota `/search` (com ou sem `?q=`) |
 | `is_404` | Slug não encontrado |
 | `have_posts` | `posts` tem pelo menos um item |
 
@@ -274,6 +317,7 @@ Array de links PT/EN (e extensível no core). As URLs são derivadas da **rota p
 |---------------------|------------------------|
 | `home` (sem slug) | `/` (pt-br), `/en` (en) |
 | `archive` | `/posts` ou `/{cpt}` com prefixo do locale |
+| `search` | `/search?q=...` com prefixo do locale (preserva `q`) |
 | `single`, `page` ou qualquer rota com `slug` | `/{slug}` com prefixo do locale (mesmo slug em todos os idiomas) |
 | `404` sem slug | home do locale (`/` ou `/en`) |
 
@@ -648,6 +692,7 @@ Todas as variáveis de conteúdo estão **sempre disponíveis** em qualquer rota
 | `/posts`, `/blog` | `archive` | `archive` | aliases do tipo `post` |
 | `/{cpt-slug}` | `archive` | `archive-{type}` | listagem do CPT (prioridade sobre post com mesmo slug) |
 | `/meu-slug` | `single` ou `page` | `single-*` ou `page-*` | `post`, `{% the_content %}` |
+| `/search?q=...` | `search` | `search` | `search.query`, `search.total`, loop em `posts` |
 | slug inexistente | `404` | `404` | mensagem de erro |
 
 **Temas de referência:**

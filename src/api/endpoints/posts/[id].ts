@@ -68,6 +68,9 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
       .where(eq(posts.id, postId))
       .limit(1);
 
+    // Deletar filhos do menu (itens de navegação)
+    await db.delete(posts).where(eq(posts.parent_id, postId));
+
     // Deletar relações de taxonomias
     await db.delete(postsTaxonomies).where(eq(postsTaxonomies.post_id, postId));
     

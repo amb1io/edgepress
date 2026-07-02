@@ -87,6 +87,12 @@ export function resolvePublicRoute(pathname: string, searchParams: URLSearchPara
     }
   }
 
+  if (rest[0] === "search") {
+    const q = searchParams.get("q")?.trim() ?? "";
+    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
+    return { kind: "search", locale, path, searchQuery: q, page };
+  }
+
   const slug = rest.join("/");
   if (!isValidSlug(slug)) {
     return { kind: "404", locale, path };

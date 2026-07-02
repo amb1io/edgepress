@@ -56,6 +56,7 @@ function baseContext(overrides: Partial<ThemeRenderContext> = {}): ThemeRenderCo
     is_page: false,
     is_singular: false,
     is_archive: false,
+    is_search: false,
     is_404: false,
     have_posts: true,
     ...overrides,
