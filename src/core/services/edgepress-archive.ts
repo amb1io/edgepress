@@ -2,7 +2,7 @@
  * Export/import EdgePress database + R2 uploads + theme packages as a .edgepress (tar.gz) archive.
  */
 import { createTarGzip, parseTarGzip } from "nanotar";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   account,
   postTypes,
@@ -152,13 +152,21 @@ const TABLE_INSERTERS: Record<EdgepressLogicalTable, RowInserter> = {
     if (rows.length) await db.insert(account).values(rows as typeof account.$inferInsert[]);
   },
   taxonomies: async (db, rows) => {
-    if (rows.length) await db.insert(taxonomies).values(rows as typeof taxonomies.$inferInsert[]);
+    if (!rows.length) return;
+    // Insert with parent_id = null to avoid self-referential FK violations on D1.
+    // A second pass in restoreImport will update parent_id after all rows are inserted.
+    const nullified = rows.map((r) => ({ ...(r as typeof taxonomies.$inferInsert), parent_id: null }));
+    await db.insert(taxonomies).values(nullified);
   },
   settings: async (db, rows) => {
     if (rows.length) await db.insert(settings).values(rows as typeof settings.$inferInsert[]);
   },
   posts: async (db, rows) => {
-    if (rows.length) await db.insert(posts).values(rows as typeof posts.$inferInsert[]);
+    if (!rows.length) return;
+    // Insert with parent_id = null to avoid self-referential FK violations on D1.
+    // A second pass in restoreImport will update parent_id after all rows are inserted.
+    const nullified = rows.map((r) => ({ ...(r as typeof posts.$inferInsert), parent_id: null }));
+    await db.insert(posts).values(nullified);
   },
   seo_metadata: async (db, rows) => {
     if (rows.length) await db.insert(seoMetadata).values(rows as typeof seoMetadata.$inferInsert[]);
@@ -440,6 +448,31 @@ async function insertRowsInBatches(
   }
 }
 
+/**
+ * Second pass: restores self-referential parent_id for posts and taxonomies.
+ * During the first insert pass, parent_id is set to null to avoid FK violations on D1
+ * (which enforces FK constraints by default, unlike standard SQLite).
+ */
+async function restorePostParentIds(db: Database, rows: RowRecord[]): Promise<void> {
+  for (const row of rows) {
+    if (row["parent_id"] == null) continue;
+    await db
+      .update(posts)
+      .set({ parent_id: row["parent_id"] as number })
+      .where(eq(posts.id, row["id"] as number));
+  }
+}
+
+async function restoreTaxonomyParentIds(db: Database, rows: RowRecord[]): Promise<void> {
+  for (const row of rows) {
+    if (row["parent_id"] == null) continue;
+    await db
+      .update(taxonomies)
+      .set({ parent_id: row["parent_id"] as number })
+      .where(eq(taxonomies.id, row["id"] as number));
+  }
+}
+
 async function resetAutoIncrementSequences(db: Database): Promise<void> {
   for (const logicalTable of AUTO_INCREMENT_TABLES) {
     const physical = tableName(logicalTable);
@@ -568,14 +601,20 @@ export async function restoreImport(
   const counts: Partial<Record<EdgepressLogicalTable, number>> = {};
   const tableOrder = resolveImportTableOrder(manifest.tableOrder);
 
-  // TABLE_ORDER inserts parents before children, so FK constraints are respected
+  // TABLE_ORDER inserts parents before children, so inter-table FK constraints are respected
   // without needing PRAGMA foreign_keys = OFF (unsupported on D1 in production).
+  // Self-referential FKs (posts.parent_id, taxonomies.parent_id) are handled via a second
+  // pass after all rows are inserted (see restorePostParentIds / restoreTaxonomyParentIds).
   for (const logicalTable of tableOrder) {
     const rows = databasePayload.tables[logicalTable] ?? [];
     await insertRowsInBatches(db, logicalTable, rows);
     counts[logicalTable] = rows.length;
   }
   await resetAutoIncrementSequences(db);
+
+  // Second pass: restore self-referential parent_id values nullified during insert.
+  await restorePostParentIds(db, databasePayload.tables["posts"] ?? []);
+  await restoreTaxonomyParentIds(db, databasePayload.tables["taxonomies"] ?? []);
 
   const contentTypeByKey = new Map(
     (manifest.mediaFiles ?? []).map((item) => [item.key, item.contentType] as const),
