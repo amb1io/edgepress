@@ -51,6 +51,7 @@ document.addEventListener("alpine:init", () => {
     exportThemes: true,
     exportWarning: false,
     importJobId: "",
+    importPollToken: "",
     importPercent: 0,
     importPhaseLabel: "",
     importPollingTimer: null as ReturnType<typeof setInterval> | null,
@@ -99,11 +100,12 @@ document.addEventListener("alpine:init", () => {
       }
     },
 
-    async pollImportJob(jobId: string) {
+    async pollImportJob(jobId: string, pollToken: string) {
       const strings = window.__importExportStrings ?? {};
       try {
         const res = await fetch(`/api/import/${encodeURIComponent(jobId)}`, {
           credentials: "same-origin",
+          headers: pollToken ? { "X-Import-Poll-Token": pollToken } : {},
         });
         const data = (await res.json().catch(() => ({}))) as ImportStatusResponse & {
           message?: string;
@@ -150,12 +152,13 @@ document.addEventListener("alpine:init", () => {
       }
     },
 
-    startImportPolling(jobId: string) {
+    startImportPolling(jobId: string, pollToken: string) {
       this.importJobId = jobId;
+      this.importPollToken = pollToken;
       this.stopImportPolling();
-      void this.pollImportJob(jobId);
+      void this.pollImportJob(jobId, pollToken);
       this.importPollingTimer = setInterval(() => {
-        void this.pollImportJob(jobId);
+        void this.pollImportJob(jobId, pollToken);
       }, 1500);
     },
 
@@ -224,12 +227,13 @@ document.addEventListener("alpine:init", () => {
         });
         const data = (await res.json().catch(() => ({}))) as {
           jobId?: string;
+          pollToken?: string;
           message?: string;
           error?: string;
         };
 
-        if (res.status === 202 && data.jobId) {
-          this.startImportPolling(data.jobId);
+        if (res.status === 202 && data.jobId && data.pollToken) {
+          this.startImportPolling(data.jobId, data.pollToken);
           form.reset();
           return;
         }

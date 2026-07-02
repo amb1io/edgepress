@@ -4,15 +4,17 @@
 import type { APIRoute } from "astro";
 import { env as cfEnv } from "cloudflare:workers";
 import { importJobPercent } from "../../../core/services/edgepress-import-job.ts";
-import { readImportJob } from "../../../core/services/import-job-state.ts";
+import {
+  IMPORT_POLL_TOKEN_HEADER,
+  isImportPollTokenValid,
+  readImportJob,
+} from "../../../core/services/import-job-state.ts";
 import { requireMinRole } from "../../../utils/api-auth.ts";
+import { unauthorizedResponse } from "../../../utils/http-responses.ts";
 
 export const prerender = false;
 
 export const GET: APIRoute = async ({ params, request, locals }) => {
-  const authResult = await requireMinRole(request, 0, locals);
-  if (authResult instanceof Response) return authResult;
-
   const jobId = params.jobId?.trim();
   if (!jobId) {
     return new Response(JSON.stringify({ error: "Missing jobId" }), {
@@ -40,6 +42,15 @@ export const GET: APIRoute = async ({ params, request, locals }) => {
       status: 404,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  const authResult = await requireMinRole(request, 0, locals);
+  const hasSession = !(authResult instanceof Response);
+  const pollToken = request.headers.get(IMPORT_POLL_TOKEN_HEADER);
+  const hasPollToken = isImportPollTokenValid(job, pollToken);
+
+  if (!hasSession && !hasPollToken) {
+    return authResult instanceof Response ? authResult : unauthorizedResponse();
   }
 
   const percent = importJobPercent(job.stepIndex, job.totalSteps);

@@ -18,9 +18,13 @@ vi.mock("../../../core/services/import-staging.ts", () => ({
   stageImportArchive: (...args: unknown[]) => stageImportArchiveMock(...args),
 }));
 
-vi.mock("../../../core/services/import-job-state.ts", () => ({
-  writeImportJob: (...args: unknown[]) => writeImportJobMock(...args),
-}));
+vi.mock("../../../core/services/import-job-state.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../core/services/import-job-state.ts")>();
+  return {
+    ...actual,
+    writeImportJob: (...args: unknown[]) => writeImportJobMock(...args),
+  };
+});
 
 vi.mock("../../../core/services/edgepress-import-job.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../core/services/edgepress-import-job.ts")>();
@@ -165,8 +169,11 @@ describe("import API", () => {
     const json = await response.json();
     expect(json.status).toBe("queued");
     expect(typeof json.jobId).toBe("string");
-    expect(stageImportArchiveMock).toHaveBeenCalledTimes(1);
+    expect(typeof json.pollToken).toBe("string");
     expect(writeImportJobMock).toHaveBeenCalledTimes(1);
+    const writtenJob = writeImportJobMock.mock.calls[0]?.[2] as { pollToken?: string };
+    expect(writtenJob.pollToken).toBe(json.pollToken);
+    expect(stageImportArchiveMock).toHaveBeenCalledTimes(1);
     expect(env.IMPORT_QUEUE.send).toHaveBeenCalledWith({
       jobId: json.jobId,
       stepIndex: 0,

@@ -9,7 +9,7 @@ import {
   computeImportSteps,
   phaseLabelForStep,
 } from "../../core/services/edgepress-import-job.ts";
-import { writeImportJob, type ImportJobState } from "../../core/services/import-job-state.ts";
+import { writeImportJob, createImportPollToken, type ImportJobState } from "../../core/services/import-job-state.ts";
 import { stageImportArchive, type ImportStagingBucket } from "../../core/services/import-staging.ts";
 import { requireMinRole } from "../../utils/api-auth.ts";
 import { internalServerErrorResponse } from "../../utils/http-responses.ts";
@@ -114,12 +114,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
     const now = Date.now();
     const firstStep = steps[0];
+    const pollToken = createImportPollToken();
     const job: ImportJobState = {
       status: "queued",
       steps,
       stepIndex: 0,
       totalSteps: steps.length,
       phaseLabel: firstStep ? phaseLabelForStep(firstStep, staged.manifest) : "Na fila…",
+      pollToken,
       countsSoFar: {},
       mediaCountSoFar: 0,
       themeCountSoFar: 0,
@@ -130,7 +132,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     await writeImportJob(kv, jobId, job);
     await importQueue.send({ jobId, stepIndex: 0 });
 
-    return new Response(JSON.stringify({ jobId, status: "queued" }), {
+    return new Response(JSON.stringify({ jobId, pollToken, status: "queued" }), {
       status: 202,
       headers: { "Content-Type": "application/json" },
     });

@@ -49,6 +49,7 @@ function buildJob(overrides: Partial<ImportJobState> = {}): ImportJobState {
     stepIndex: 0,
     totalSteps: 3,
     phaseLabel: "queued",
+    pollToken: "poll-token-test",
     countsSoFar: {},
     createdAt: Date.now(),
     updatedAt: Date.now(),
