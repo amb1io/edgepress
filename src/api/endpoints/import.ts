@@ -4,6 +4,7 @@
  */
 import type { APIRoute } from "astro";
 import { env as cfEnv } from "cloudflare:workers";
+import { db } from "../../db/index.ts";
 import {
   computeImportSteps,
   phaseLabelForStep,
@@ -107,7 +108,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   try {
     const buffer = await file.arrayBuffer();
     const jobId = crypto.randomUUID();
-    const staged = await stageImportArchive(bucket, jobId, buffer);
+    const staged = await stageImportArchive(bucket, jobId, buffer, db);
     const steps = computeImportSteps(staged.manifest, staged.includes, {
       themeFileCount: staged.themeFiles.length,
     });

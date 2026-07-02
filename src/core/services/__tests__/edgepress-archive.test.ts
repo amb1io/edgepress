@@ -251,6 +251,7 @@ describe("edgepress-archive integration", () => {
     expect(manifest.tableOrder).toEqual([...TABLE_ORDER]);
     expect(manifest.counts).not.toHaveProperty("locales");
     expect(manifest.counts).not.toHaveProperty("translations");
+    expect(manifest.localeMap).toEqual({ "32": "pt_BR" });
 
     const database = JSON.parse(new TextDecoder().decode(byName.get("database.json")!.data!));
     expect(database.tables.posts).toHaveLength(1);
@@ -259,6 +260,32 @@ describe("edgepress-archive integration", () => {
     expect(database.fts[0].title).toBe("Hello Export");
     expect(database.tables).not.toHaveProperty("locales");
     expect(database.tables).not.toHaveProperty("translations");
+  });
+
+  it("restoreImport remaps id_locale_code when target locale ids differ", async () => {
+    const { db } = await createArchiveTestDb();
+    await seedArchiveFixtures(db);
+
+    const bucket = createMockR2Bucket();
+    const archiveBytes = await buildExport(db, bucket);
+
+    await db.delete(locales).where(eq(locales.id, 32));
+    await db.insert(locales).values({
+      id: 5,
+      language: "Portuguese (Brazil)",
+      hello_world: "Olá Mundo",
+      locale_code: "pt_BR",
+      country: "Brazil",
+      timezone: "UTC-3",
+    });
+
+    await restoreImport(db, bucket, archiveBytes.buffer);
+
+    const restored = await db
+      .select({ id_locale_code: posts.id_locale_code })
+      .from(posts)
+      .where(eq(posts.slug, "hello-export"));
+    expect(restored[0]?.id_locale_code).toBe(5);
   });
 
   it("restoreImport wipes user content, preserves seed tables, and restores R2 media", async () => {
