@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { invalidatePostCache } from "../kv-cache-sync.ts";
+import { invalidatePostCache, invalidateRelatedPostsCache, invalidateAuthorCache } from "../kv-cache-sync.ts";
 import type { Database } from "../types/database.ts";
 
 function createMockKv(initialKeys: string[] = []) {
@@ -90,5 +90,64 @@ describe("invalidatePostCache", () => {
 
     expect(store.has("post:tk:hello-world:locale=pt-br:status=published")).toBe(false);
     expect(store.has("post:tk:hello-world:locale=en:status=published")).toBe(true);
+  });
+});
+
+describe("invalidateRelatedPostsCache", () => {
+  const locals = {} as App.Locals;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("deletes related post list keys", async () => {
+    const { kv, store } = createMockKv([
+      "related:post:id:1:locale=pt_BR:limit=4:status=published",
+      "related:post:id:2:locale=en_US:limit=6:status=published",
+      "post:id:1",
+    ]);
+    vi.mocked(getKvFromLocals).mockReturnValue(kv);
+
+    await invalidateRelatedPostsCache(locals);
+
+    expect(store.has("related:post:id:1:locale=pt_BR:limit=4:status=published")).toBe(false);
+    expect(store.has("related:post:id:2:locale=en_US:limit=6:status=published")).toBe(false);
+    expect(store.has("post:id:1")).toBe(true);
+  });
+});
+
+describe("invalidateAuthorCache", () => {
+  const locals = {} as App.Locals;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("deletes a specific author key when userId is provided", async () => {
+    const { kv, store } = createMockKv([
+      "author:user:user-1",
+      "author:user:user-2",
+    ]);
+    vi.mocked(getKvFromLocals).mockReturnValue(kv);
+
+    await invalidateAuthorCache(locals, "user-1");
+
+    expect(store.has("author:user:user-1")).toBe(false);
+    expect(store.has("author:user:user-2")).toBe(true);
+  });
+
+  it("deletes all author keys when userId is omitted", async () => {
+    const { kv, store } = createMockKv([
+      "author:user:user-1",
+      "author:user:user-2",
+      "post:id:1",
+    ]);
+    vi.mocked(getKvFromLocals).mockReturnValue(kv);
+
+    await invalidateAuthorCache(locals);
+
+    expect(store.has("author:user:user-1")).toBe(false);
+    expect(store.has("author:user:user-2")).toBe(false);
+    expect(store.has("post:id:1")).toBe(true);
   });
 });

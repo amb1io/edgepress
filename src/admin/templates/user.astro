@@ -38,6 +38,7 @@ let editUser: {
   email: string;
   emailVerified: boolean;
   image: string | null;
+  description: string | null;
   role: number | null;
 } | null = null;
 
@@ -49,6 +50,7 @@ if (action === "edit" && idParam) {
       email: userTable.email,
       emailVerified: userTable.emailVerified,
       image: userTable.image,
+      description: userTable.description,
       role: userTable.role,
     })
     .from(userTable)
@@ -61,6 +63,7 @@ if (action === "edit" && idParam) {
       email: row.email,
       emailVerified: Boolean(row.emailVerified),
       image: row.image,
+      description: row.description,
       role: row.role,
     };
   }
@@ -70,6 +73,7 @@ const initialName = editUser?.name ?? "";
 const initialEmail = editUser?.email ?? "";
 const initialEmailVerified = editUser?.emailVerified ?? false;
 const initialImage = editUser?.image ?? "";
+const initialDescription = editUser?.description ?? "";
 const initialRole = editUser?.role ?? 3; // 3 = leitor
 ---
 
@@ -84,6 +88,7 @@ const initialRole = editUser?.role ?? 3; // 3 = leitor
       initialEmail,
       initialEmailVerified,
       initialImage,
+      initialDescription,
       initialRole,
     }}
   >
@@ -93,6 +98,7 @@ const initialRole = editUser?.role ?? 3; // 3 = leitor
         email: initialEmail,
         emailVerified: initialEmailVerified,
         image: initialImage,
+        description: initialDescription,
         role: initialRole,
       }));
     });
@@ -184,6 +190,19 @@ const initialRole = editUser?.role ?? 3; // 3 = leitor
           placeholder="https://..."
           x-model="image"
         />
+      </div>
+
+      <div class="form-control">
+        <label for="user-description" class="label">
+          <span class="label-text">{t(currentLocale, "admin.user.formDescription")}</span>
+        </label>
+        <textarea
+          id="user-description"
+          name="description"
+          rows={4}
+          class="textarea textarea-bordered w-full"
+          x-model="description"
+        ></textarea>
       </div>
 
       <div class="form-control">

@@ -1,5 +1,5 @@
-import { eq, and, like, inArray, or, isNull } from "drizzle-orm";
-import { taxonomies, postsTaxonomies } from "../../db/schema.ts";
+import { eq, and, like, inArray, or, isNull, ne, sql, desc } from "drizzle-orm";
+import { taxonomies, postsTaxonomies, posts, postTypes, locales } from "../../db/schema.ts";
 import type { Database } from "../../shared/types/database.ts";
 import type { Taxonomy, TaxonomyCreatePayload, TaxonomyUpdatePayload } from "../../shared/types/taxonomy.ts";
 
@@ -162,6 +162,65 @@ export async function getPostsByTaxonomies(
     .where(inArray(postsTaxonomies.term_id, taxonomyIds));
   
   return results.map(r => r.post_id);
+}
+
+export type GetRelatedPostIdsOptions = {
+  limit?: number;
+  taxonomyType?: string;
+  localeCode?: string;
+  postTypeSlug?: string;
+};
+
+const SHOW_IN_MENU_SQL = sql`(json_extract(${posts.meta_values}, '$.show_in_menu') IS NULL OR (json_extract(${posts.meta_values}, '$.show_in_menu') != 1 AND json_extract(${posts.meta_values}, '$.show_in_menu') != '1' AND lower(coalesce(json_extract(${posts.meta_values}, '$.show_in_menu'), '')) != 'true'))`;
+
+/**
+ * Published posts sharing at least one category (or taxonomy type) with the source post.
+ */
+export async function getRelatedPostIdsBySharedCategories(
+  db: Database,
+  sourcePostId: number,
+  options: GetRelatedPostIdsOptions = {},
+): Promise<number[]> {
+  const limit = Math.max(1, options.limit ?? 4);
+  const taxonomyType = (options.taxonomyType ?? "category").trim();
+
+  const sourceTerms = await db
+    .select({ term_id: postsTaxonomies.term_id })
+    .from(postsTaxonomies)
+    .innerJoin(taxonomies, eq(postsTaxonomies.term_id, taxonomies.id))
+    .where(
+      and(eq(postsTaxonomies.post_id, sourcePostId), eq(taxonomies.type, taxonomyType)),
+    );
+
+  const termIds = sourceTerms.map((row) => row.term_id);
+  if (termIds.length === 0) return [];
+
+  const whereParts = [
+    eq(posts.status, "published"),
+    ne(posts.id, sourcePostId),
+    inArray(postsTaxonomies.term_id, termIds),
+    SHOW_IN_MENU_SQL,
+  ];
+
+  if (options.postTypeSlug?.trim()) {
+    whereParts.push(eq(postTypes.slug, options.postTypeSlug.trim()));
+  }
+
+  if (options.localeCode?.trim()) {
+    whereParts.push(eq(locales.locale_code, options.localeCode.trim()));
+  }
+
+  const rows = await db
+    .selectDistinct({ id: posts.id })
+    .from(posts)
+    .innerJoin(postTypes, eq(posts.post_type_id, postTypes.id))
+    .innerJoin(postsTaxonomies, eq(postsTaxonomies.post_id, posts.id))
+    .leftJoin(locales, eq(posts.id_locale_code, locales.id))
+    .where(and(...whereParts))
+    .orderBy(desc(sql`COALESCE(${posts.published_at}, ${posts.created_at})`))
+    .limit(limit);
+
+  return rows.map((row) => row.id);
 }
 
 /**

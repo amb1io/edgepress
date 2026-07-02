@@ -4,6 +4,8 @@ export type TemplateResolveHints = {
   postTypeSlug?: string;
   postSlug?: string;
   archiveType?: string;
+  taxonomyType?: string;
+  taxonomySlug?: string;
 };
 
 /** Normalizes manifest template paths to KV keys (without `templates/` prefix or `.liquid`). */
@@ -59,6 +61,15 @@ export function buildTemplateCandidates(
     case "archive": {
       const type = hints?.archiveType ?? hints?.postTypeSlug ?? "post";
       return [`archive-${type}`, "archive", "index"];
+    }
+    case "taxonomy": {
+      const type = hints?.taxonomyType ?? hints?.archiveType ?? "category";
+      const slug = hints?.taxonomySlug?.trim();
+      const candidates: string[] = [];
+      if (type && slug) candidates.push(`taxonomy-${type}-${slug}`);
+      if (type) candidates.push(`taxonomy-${type}`);
+      candidates.push("taxonomy", `archive-${type}`, "archive", "index");
+      return candidates;
     }
     case "404":
       return ["404", "index"];

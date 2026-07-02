@@ -55,6 +55,8 @@ export async function renderTheme(
     postTypeSlug: ctx.post?.post_type_slug,
     postSlug: ctx.post?.slug,
     archiveType: ctx.archive.type,
+    taxonomyType: ctx.route.taxonomy_type,
+    taxonomySlug: ctx.route.taxonomy_slug,
   });
   if (!templateKey) {
     throw new Error(`No template for route kind: ${ctx.route.kind}`);

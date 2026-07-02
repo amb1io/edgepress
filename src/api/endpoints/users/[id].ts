@@ -16,7 +16,7 @@ import {
   deleteUser,
   userExists,
 } from "../../../core/services/user-service.ts";
-import { invalidateContentListByTable } from "../../../utils/kv-cache-sync.ts";
+import { invalidateContentListByTable, invalidateAuthorCache } from "../../../utils/kv-cache-sync.ts";
 
 export const prerender = false;
 
@@ -35,6 +35,7 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
     }
 
     await deleteUser(db, id);
+    await invalidateAuthorCache(locals, id);
     await invalidateContentListByTable(locals, "user");
     return htmxRefreshResponse();
   } catch (err) {
@@ -59,6 +60,8 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
     const email = getString(formData, "email");
     const imageRaw = getString(formData, "image");
     const image = imageRaw === "" ? null : imageRaw;
+    const descriptionRaw = getString(formData, "description");
+    const description = descriptionRaw === "" ? null : descriptionRaw;
     const emailVerified = getBoolean(formData, "emailVerified", false);
     const roleNum = getNumber(formData, "role", null);
     const role = roleNum ?? undefined;
@@ -89,10 +92,12 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
       name,
       email,
       image,
+      description,
       emailVerified,
       role,
     });
 
+    await invalidateAuthorCache(locals, id);
     await invalidateContentListByTable(locals, "user");
     return htmxRefreshResponse();
   } catch (err) {

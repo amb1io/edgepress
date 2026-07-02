@@ -221,6 +221,9 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
     });
     await upsertSeoMetadata(db, newPostId, seoResolved);
 
+    const { syncPostSearchIndex } = await import("../../../../core/services/search-service.ts");
+    await syncPostSearchIndex(db, newPostId);
+
     const editUrl = `/admin/${adminLocale}/content?post_type=${encodeURIComponent(postTypeSlug)}&action=edit&id=${newPostId}`;
 
     if (request.headers.get("HX-Request") === "true") {

@@ -6,6 +6,7 @@ export type UserCreatePayload = {
   name: string;
   email: string;
   image?: string | null;
+  description?: string | null;
   emailVerified?: boolean;
   role?: number;
 };
@@ -14,6 +15,7 @@ export type UserUpdatePayload = {
   name: string;
   email: string;
   image?: string | null;
+  description?: string | null;
   emailVerified?: boolean;
   role?: number;
 };
@@ -56,18 +58,48 @@ export async function emailExists(
 export async function getUserById(
   db: Database,
   id: string
-): Promise<{ id: string; name: string; email: string; role: number | null } | null> {
+): Promise<{
+  id: string;
+  name: string;
+  email: string;
+  image: string | null;
+  description: string | null;
+  role: number | null;
+} | null> {
   const [row] = await db
     .select({
       id: userTable.id,
       name: userTable.name,
       email: userTable.email,
+      image: userTable.image,
+      description: userTable.description,
       role: userTable.role,
     })
     .from(userTable)
     .where(eq(userTable.id, id))
     .limit(1);
   return row ?? null;
+}
+
+export async function getPublicAuthorById(
+  db: Database,
+  id: string,
+): Promise<{ name: string; image: string; description: string } | null> {
+  const [row] = await db
+    .select({
+      name: userTable.name,
+      image: userTable.image,
+      description: userTable.description,
+    })
+    .from(userTable)
+    .where(eq(userTable.id, id))
+    .limit(1);
+  if (!row) return null;
+  return {
+    name: String(row.name ?? ""),
+    image: String(row.image ?? ""),
+    description: String(row.description ?? ""),
+  };
 }
 
 /**
@@ -84,6 +116,7 @@ export async function createUser(db: Database, payload: UserCreatePayload): Prom
     email: payload.email,
     emailVerified: payload.emailVerified ? 1 : 0,
     image: payload.image ?? null,
+    description: payload.description ?? null,
     role,
     createdAt: now,
     updatedAt: now,
@@ -105,6 +138,7 @@ export async function updateUser(db: Database, userId: string, payload: UserUpda
       name: payload.name,
       email: payload.email,
       image: payload.image ?? null,
+      description: payload.description ?? null,
       emailVerified: payload.emailVerified ? 1 : 0,
       role,
       updatedAt: now,

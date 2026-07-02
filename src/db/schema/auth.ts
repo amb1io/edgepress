@@ -28,6 +28,7 @@ export const user = sqliteTable(tableName("user"), {
   email: text().notNull().unique(),
   emailVerified: int("email_verified", { mode: "boolean" }).notNull().default(false),
   image: text(),
+  description: text(),
   role: int().default(3), // 0=administrador, 1=editor, 2=autor, 3=leitor
   createdAt: timestampInt("created_at").notNull(),
   updatedAt: timestampInt("updated_at").notNull(),
