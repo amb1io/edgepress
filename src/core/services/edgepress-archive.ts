@@ -213,21 +213,21 @@ const TABLE_INSERTERS: Record<EdgepressLogicalTable, RowInserter> = {
   },
 };
 
-const DEFAULT_INSERT_BATCH_SIZE = 10;
+export const DEFAULT_INSERT_BATCH_SIZE = 10;
 /**
  * D1 allows at most 100 bound parameters per statement. Multi-row inserts cut the number of
  * sequential D1 round-trips (a large import doing one insert per row can run for minutes and is
  * prone to transient D1 errors). Posts have 15 columns → 4 rows = 60 params, keeping the statement
  * small enough even when bodies carry large HTML.
  */
-const INSERT_BATCH_SIZE: Partial<Record<EdgepressLogicalTable, number>> = {
+export const INSERT_BATCH_SIZE: Partial<Record<EdgepressLogicalTable, number>> = {
   posts: 4,
   post_types: 5,
   taxonomies: 8,
   settings: 20,
 };
 
-function resolveImportTableOrder(manifestOrder?: string[]): EdgepressLogicalTable[] {
+export function resolveImportTableOrder(manifestOrder?: string[]): EdgepressLogicalTable[] {
   const preserved = new Set<string>(PRESERVED_TABLES);
   const source = manifestOrder?.length ? manifestOrder : TABLE_ORDER;
   const seen = new Set<EdgepressLogicalTable>();
@@ -267,7 +267,7 @@ const IMAGE_MIME_MAP: Record<string, string> = {
   ".ogg": "audio/ogg",
 };
 
-function inferContentType(key: string): string {
+export function inferContentType(key: string): string {
   const ext = key.includes(".") ? key.slice(key.lastIndexOf(".")).toLowerCase() : "";
   return IMAGE_MIME_MAP[ext] ?? "application/octet-stream";
 }
@@ -306,11 +306,11 @@ async function readAllFtsRows(db: Database): Promise<FtsRow[]> {
   }));
 }
 
-async function wipeFtsTable(db: Database): Promise<void> {
+export async function wipeFtsTable(db: Database): Promise<void> {
   await runSql(db, sql.raw(`DELETE FROM ${FTS_TABLE}`));
 }
 
-async function restoreFtsRows(db: Database, rows: FtsRow[]): Promise<void> {
+export async function restoreFtsRows(db: Database, rows: FtsRow[]): Promise<void> {
   // One multi-row INSERT per batch to minimize D1 round-trips.
   // 9 columns × FTS_INSERT_BATCH_SIZE (8) = 72 bound params, under D1's 100 limit.
   for (let i = 0; i < rows.length; i += FTS_INSERT_BATCH_SIZE) {
@@ -389,7 +389,7 @@ async function readAllR2Objects(bucket: R2BucketLike): Promise<
   return readAllR2ByPrefix(bucket, MEDIA_PREFIX);
 }
 
-async function wipeR2ByPrefix(bucket: R2BucketLike, prefix: string): Promise<number> {
+export async function wipeR2ByPrefix(bucket: R2BucketLike, prefix: string): Promise<number> {
   let deleted = 0;
   let cursor: string | undefined;
 
@@ -411,7 +411,7 @@ async function wipeR2ByPrefix(bucket: R2BucketLike, prefix: string): Promise<num
   return deleted;
 }
 
-async function wipeR2Uploads(bucket: R2BucketLike): Promise<number> {
+export async function wipeR2Uploads(bucket: R2BucketLike): Promise<number> {
   return wipeR2ByPrefix(bucket, MEDIA_PREFIX);
 }
 
@@ -487,7 +487,7 @@ async function deleteKvKeysByPrefix(kv: ArchiveKvLike, prefix: string): Promise<
   } while (cursor);
 }
 
-async function wipeThemeKvCache(kv: ArchiveKvLike): Promise<void> {
+export async function wipeThemeKvCache(kv: ArchiveKvLike): Promise<void> {
   await wipeThemeKvPackages(kv);
   if (kv.delete) {
     try {
@@ -503,17 +503,17 @@ function themePackageTarPath(slug: string): string {
   return `${THEME_PKG_TAR_PREFIX}${slug}/${THEME_PACKAGE_JSON}`;
 }
 
-function parseThemePackageTarPath(path: string): string | null {
+export function parseThemePackageTarPath(path: string): string | null {
   const match = path.match(/^themes\/([^/]+)\/package\.json$/);
   return match?.[1]?.trim().toLowerCase() ?? null;
 }
 
-function isThemeAssetTarPath(path: string): boolean {
+export function isThemeAssetTarPath(path: string): boolean {
   if (!path.startsWith(THEME_ASSET_TAR_PREFIX)) return false;
   return !path.endsWith(`/${THEME_PACKAGE_JSON}`);
 }
 
-async function syncThemeCacheAfterImport(db: Database, kv: ArchiveKvLike): Promise<void> {
+export async function syncThemeCacheAfterImport(db: Database, kv: ArchiveKvLike): Promise<void> {
   try {
     const activeTheme = await getActiveThemeFromDb(db);
     await kv.put(THEME_ACTIVE_KV_KEY, JSON.stringify(activeTheme));
@@ -532,7 +532,7 @@ async function syncThemeCacheAfterImport(db: Database, kv: ArchiveKvLike): Promi
   }
 }
 
-async function wipeDatabase(db: Database): Promise<void> {
+export async function wipeDatabase(db: Database): Promise<void> {
   // WIPE_ORDER is the reverse of TABLE_ORDER (children before parents),
   // so FK constraints are respected without needing PRAGMA foreign_keys = OFF.
   // D1 in production does not support PRAGMA statements via the HTTP API.
@@ -542,7 +542,7 @@ async function wipeDatabase(db: Database): Promise<void> {
   }
 }
 
-async function insertRowsInBatches(
+export async function insertRowsInBatches(
   db: Database,
   logicalTable: EdgepressLogicalTable,
   rows: RowRecord[],
@@ -560,7 +560,7 @@ async function insertRowsInBatches(
  * During the first insert pass, parent_id is set to null to avoid FK violations on D1
  * (which enforces FK constraints by default, unlike standard SQLite).
  */
-async function restorePostParentIds(db: Database, rows: RowRecord[]): Promise<void> {
+export async function restorePostParentIds(db: Database, rows: RowRecord[]): Promise<void> {
   for (const row of rows) {
     if (row["parent_id"] == null) continue;
     await db
@@ -570,7 +570,7 @@ async function restorePostParentIds(db: Database, rows: RowRecord[]): Promise<vo
   }
 }
 
-async function restoreTaxonomyParentIds(db: Database, rows: RowRecord[]): Promise<void> {
+export async function restoreTaxonomyParentIds(db: Database, rows: RowRecord[]): Promise<void> {
   for (const row of rows) {
     if (row["parent_id"] == null) continue;
     await db
@@ -580,7 +580,7 @@ async function restoreTaxonomyParentIds(db: Database, rows: RowRecord[]): Promis
   }
 }
 
-async function resetAutoIncrementSequences(db: Database): Promise<void> {
+export async function resetAutoIncrementSequences(db: Database): Promise<void> {
   for (const logicalTable of AUTO_INCREMENT_TABLES) {
     const physical = tableName(logicalTable);
     await runSql(
@@ -668,7 +668,7 @@ export async function buildExport(
   return createTarGzip(tarEntries);
 }
 
-function parseManifest(raw: unknown): EdgepressManifest {
+export function parseEdgepressManifest(raw: unknown): EdgepressManifest {
   if (!raw || typeof raw !== "object") {
     throw new Error("manifest.json inválido");
   }
@@ -688,7 +688,7 @@ function parseManifest(raw: unknown): EdgepressManifest {
   };
 }
 
-function parseDatabasePayload(raw: unknown): EdgepressDatabasePayload {
+export function parseEdgepressDatabasePayload(raw: unknown): EdgepressDatabasePayload {
   if (!raw || typeof raw !== "object") {
     throw new Error("database.json inválido");
   }
@@ -718,7 +718,7 @@ export async function restoreImport(
     throw new Error("Arquivo .edgepress incompleto (manifest.json ausente)");
   }
 
-  const manifest = parseManifest(JSON.parse(new TextDecoder().decode(manifestBytes)));
+  const manifest = parseEdgepressManifest(JSON.parse(new TextDecoder().decode(manifestBytes)));
   const includes = manifest.includes;
   const databaseBytes = entryMap.get("database.json");
   if (includes.database && !databaseBytes) {
@@ -726,7 +726,7 @@ export async function restoreImport(
   }
 
   const databasePayload = databaseBytes
-    ? parseDatabasePayload(JSON.parse(new TextDecoder().decode(databaseBytes)))
+    ? parseEdgepressDatabasePayload(JSON.parse(new TextDecoder().decode(databaseBytes)))
     : { tables: {} };
 
   if (includes.database) {
