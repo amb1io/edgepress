@@ -83,7 +83,7 @@ Public reads use KV cache for visitors; authenticated users query D1 directly.
 
 - Node.js 18+
 - npm or pnpm
-- Cloudflare account (D1, KV, R2) for deployment
+- Cloudflare account with **Workers Paid plan** (D1, KV, R2, **Queues** for chunked import)
 
 ## Installation
 
@@ -117,8 +117,9 @@ In production, set secrets in the Cloudflare dashboard or via `wrangler secret p
 | Binding | Purpose |
 |---------|---------|
 | `DB` (D1) | Primary database, migrations in `./drizzle` |
-| `CACHE` (KV) | Read cache and Astro sessions |
-| `MEDIA_BUCKET` (R2) | Uploads and attachments |
+| `CACHE` (KV) | Read cache, Astro sessions, and import job state |
+| `MEDIA_BUCKET` (R2) | Uploads, attachments, and import staging |
+| `IMPORT_QUEUE` (Queue) | Chunked `.edgepress` import processing |
 
 Update `database_id`, KV `id`, and bucket name for your account.
 

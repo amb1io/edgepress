@@ -1,0 +1,52 @@
+---
+/**
+ * Full-screen import progress overlay with polling-driven status updates.
+ */
+export interface Props {
+  title: string;
+  pollingLabel: string;
+  closeLabel: string;
+}
+const { title, pollingLabel, closeLabel } = Astro.props;
+---
+
+<div
+  id="import-progress-modal"
+  class="fixed inset-0 hidden flex-col items-center justify-center bg-white/40 z-[110] px-6"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="import-progress-title"
+  aria-live="polite"
+>
+  <div class="card bg-base-100 shadow-xl w-full max-w-lg">
+    <div class="card-body gap-4">
+      <h2 id="import-progress-title" class="card-title text-lg">{title}</h2>
+
+      <progress
+        id="import-progress-bar"
+        class="progress progress-primary w-full"
+        value="0"
+        max="100"
+      ></progress>
+
+      <p id="import-progress-phase" class="text-sm text-base-content/80 min-h-[1.25rem]">
+        {pollingLabel}
+      </p>
+
+      <div id="import-progress-error" class="alert alert-error hidden" role="alert">
+        <span id="import-progress-error-text"></span>
+      </div>
+
+      <div class="card-actions justify-end">
+        <button
+          type="button"
+          id="import-progress-close"
+          class="btn btn-ghost hidden"
+          aria-label={closeLabel}
+        >
+          {closeLabel}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

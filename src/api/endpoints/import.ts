@@ -1,16 +1,15 @@
 /**
  * POST /api/import
- * Restaura banco D1 + imagens R2 + pacotes de tema a partir de um arquivo .edgepress (tar.gz).
- * Substitui todos os dados atuais (wipe + restore). Requer autenticação de administrador.
+ * Stages a .edgepress archive in R2, creates a KV-backed import job, and enqueues chunked processing.
  */
 import type { APIRoute } from "astro";
 import { env as cfEnv } from "cloudflare:workers";
-import { db } from "../../db/index.ts";
 import {
-  restoreImport,
-  type ArchiveKvLike,
-} from "../../core/services/edgepress-archive.ts";
-import { backfillAllSearchIndexes } from "../../core/services/search-service.ts";
+  computeImportSteps,
+  phaseLabelForStep,
+} from "../../core/services/edgepress-import-job.ts";
+import { writeImportJob, type ImportJobState } from "../../core/services/import-job-state.ts";
+import { stageImportArchive, type ImportStagingBucket } from "../../core/services/import-staging.ts";
 import { requireMinRole } from "../../utils/api-auth.ts";
 import { internalServerErrorResponse } from "../../utils/http-responses.ts";
 
@@ -18,38 +17,43 @@ export const prerender = false;
 
 const MAX_ARCHIVE_SIZE = 100 * 1024 * 1024; // 100 MB
 
+type ImportQueueBinding = {
+  send: (message: { jobId: string; stepIndex: number }) => Promise<void>;
+};
+
 export const POST: APIRoute = async ({ request, locals }) => {
   const authResult = await requireMinRole(request, 0, locals);
   if (authResult instanceof Response) return authResult;
 
-  const bucket = cfEnv.MEDIA_BUCKET as
+  const bucket = cfEnv.MEDIA_BUCKET as ImportStagingBucket | undefined;
+  const kv = cfEnv.CACHE as
     | {
-        list: (options?: {
-          prefix?: string;
-          cursor?: string;
-          limit?: number;
-        }) => Promise<{
-          objects: Array<{ key: string }>;
-          truncated: boolean;
-          cursor?: string;
-        }>;
-        get: (
-          key: string,
-        ) => Promise<{
-          body: ReadableStream<Uint8Array> | null;
-          httpMetadata?: { contentType?: string };
-        } | null>;
+        get: (key: string, type?: "text" | "json") => Promise<unknown>;
         put: (
           key: string,
-          value: BodyInit,
-          options?: { httpMetadata?: { contentType?: string } },
+          value: string,
+          options?: { expirationTtl?: number },
         ) => Promise<void>;
-        delete: (key: string | string[]) => Promise<void>;
       }
     | undefined;
+  const importQueue = cfEnv.IMPORT_QUEUE as ImportQueueBinding | undefined;
 
   if (!bucket) {
     return new Response(JSON.stringify({ error: "R2 bucket not configured" }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  if (!kv) {
+    return new Response(JSON.stringify({ error: "KV cache not configured" }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  if (!importQueue) {
+    return new Response(JSON.stringify({ error: "Import queue not configured" }), {
       status: 503,
       headers: { "Content-Type": "application/json" },
     });
@@ -102,32 +106,40 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   try {
     const buffer = await file.arrayBuffer();
-    const kv = cfEnv.CACHE as ArchiveKvLike | undefined;
-    const result = await restoreImport(db, bucket, buffer, kv);
-    if (result.includes.database && !result.ftsRestored) {
-      try {
-        await backfillAllSearchIndexes(db);
-      } catch (backfillErr) {
-        console.warn("[import] FTS backfill skipped:", backfillErr);
-      }
-    }
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        message: "Import completed successfully",
-        counts: result.counts,
-        mediaCount: result.mediaCount,
-        themeCount: result.themeCount,
-      }),
-      { status: 200, headers: { "Content-Type": "application/json" } },
-    );
+    const jobId = crypto.randomUUID();
+    const staged = await stageImportArchive(bucket, jobId, buffer);
+    const steps = computeImportSteps(staged.manifest, staged.includes, {
+      themeFileCount: staged.themeFiles.length,
+    });
+    const now = Date.now();
+    const firstStep = steps[0];
+    const job: ImportJobState = {
+      status: "queued",
+      steps,
+      stepIndex: 0,
+      totalSteps: steps.length,
+      phaseLabel: firstStep ? phaseLabelForStep(firstStep, staged.manifest) : "Na fila…",
+      countsSoFar: {},
+      mediaCountSoFar: 0,
+      themeCountSoFar: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await writeImportJob(kv, jobId, job);
+    await importQueue.send({ jobId, stepIndex: 0 });
+
+    return new Response(JSON.stringify({ jobId, status: "queued" }), {
+      status: 202,
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (err) {
     const error = err as (Error & { cause?: unknown }) | undefined;
     const cause = error?.cause;
     const causeMessage =
       cause instanceof Error ? cause.message : typeof cause === "string" ? cause : undefined;
     console.error(
-      "[import] failed:",
+      "[import] staging failed:",
       error?.message,
       "| cause:",
       causeMessage ?? cause,

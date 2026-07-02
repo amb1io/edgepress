@@ -10,19 +10,25 @@ vi.mock("../../../utils/api-auth.ts", () => ({
   requireMinRole: vi.fn().mockResolvedValue(mockAuthUser),
 }));
 
-vi.mock("../../../core/services/search-service.ts", () => ({
-  backfillAllSearchIndexes: vi.fn().mockResolvedValue(0),
+const stageImportArchiveMock = vi.fn();
+const writeImportJobMock = vi.fn();
+const computeImportStepsMock = vi.fn();
+
+vi.mock("../../../core/services/import-staging.ts", () => ({
+  stageImportArchive: (...args: unknown[]) => stageImportArchiveMock(...args),
 }));
 
-const restoreImportMock = vi.fn();
-
-vi.mock("../../../core/services/edgepress-archive.ts", () => ({
-  restoreImport: (...args: unknown[]) => restoreImportMock(...args),
+vi.mock("../../../core/services/import-job-state.ts", () => ({
+  writeImportJob: (...args: unknown[]) => writeImportJobMock(...args),
 }));
 
-vi.mock("../../../db/index.ts", () => ({
-  db: { marker: "test-db" },
-}));
+vi.mock("../../../core/services/edgepress-import-job.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../core/services/edgepress-import-job.ts")>();
+  return {
+    ...actual,
+    computeImportSteps: (...args: unknown[]) => computeImportStepsMock(...args),
+  };
+});
 
 function clearTestEnv() {
   for (const key of Object.keys(env)) {
@@ -34,23 +40,49 @@ describe("import API", () => {
   beforeEach(() => {
     clearTestEnv();
     vi.clearAllMocks();
-    restoreImportMock.mockResolvedValue({
-      counts: { posts: 2 },
-      mediaCount: 1,
-      themeCount: 0,
+    stageImportArchiveMock.mockResolvedValue({
+      manifest: {
+        includes: { database: true, media: true, themes: true },
+        counts: { posts: 2 },
+        mediaCount: 1,
+        themeCount: 0,
+      },
       includes: { database: true, media: true, themes: true },
-      ftsRestored: false,
+      mediaFiles: [],
+      themeFiles: [],
     });
+    computeImportStepsMock.mockReturnValue([
+      { type: "wipe_database" },
+      { type: "finalize" },
+    ]);
     env.MEDIA_BUCKET = {
       list: vi.fn(),
       get: vi.fn(),
       put: vi.fn(),
       delete: vi.fn(),
     };
+    env.CACHE = {
+      get: vi.fn(),
+      put: vi.fn(),
+    };
+    env.IMPORT_QUEUE = {
+      send: vi.fn(),
+    };
   });
 
   it("returns 503 when R2 bucket is not configured", async () => {
     delete env.MEDIA_BUCKET;
+    const { POST } = await import("../import.ts");
+    const response = await POST({
+      request: new Request("http://localhost/api/import", { method: "POST" }),
+      locals: {} as Parameters<typeof POST>[0]["locals"],
+    } as Parameters<typeof POST>[0]);
+
+    expect(response.status).toBe(503);
+  });
+
+  it("returns 503 when import queue is not configured", async () => {
+    delete env.IMPORT_QUEUE;
     const { POST } = await import("../import.ts");
     const response = await POST({
       request: new Request("http://localhost/api/import", { method: "POST" }),
@@ -112,7 +144,7 @@ describe("import API", () => {
     expect(json).toEqual({ error: "Invalid file type. Use .edgepress" });
   });
 
-  it("imports valid .edgepress file", async () => {
+  it("queues valid .edgepress file and returns 202 + jobId", async () => {
     const formData = new FormData();
     formData.set(
       "file",
@@ -129,19 +161,20 @@ describe("import API", () => {
       locals: {} as Parameters<typeof POST>[0]["locals"],
     } as Parameters<typeof POST>[0]);
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
     const json = await response.json();
-    expect(json).toMatchObject({
-      ok: true,
-      message: "Import completed successfully",
-      counts: { posts: 2 },
-      mediaCount: 1,
+    expect(json.status).toBe("queued");
+    expect(typeof json.jobId).toBe("string");
+    expect(stageImportArchiveMock).toHaveBeenCalledTimes(1);
+    expect(writeImportJobMock).toHaveBeenCalledTimes(1);
+    expect(env.IMPORT_QUEUE.send).toHaveBeenCalledWith({
+      jobId: json.jobId,
+      stepIndex: 0,
     });
-    expect(restoreImportMock).toHaveBeenCalledTimes(1);
   });
 
-  it("returns 500 when restoreImport throws", async () => {
-    restoreImportMock.mockRejectedValue(new Error("Import failed"));
+  it("returns 500 when staging throws", async () => {
+    stageImportArchiveMock.mockRejectedValue(new Error("Import failed"));
 
     const formData = new FormData();
     formData.set(

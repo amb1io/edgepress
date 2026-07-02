@@ -61,6 +61,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const isApi = pathname.startsWith("/api");
   const isAuthApi = pathname.startsWith("/api/auth");
   const isSetupApi = pathname === "/api/setup";
+  const isImportApi = pathname === "/api/import" || pathname.startsWith("/api/import/");
 
   // Admin aceita apenas locale de URL (pt-br|es|en).
   // Ex.: /admin/pt_BR/list -> /admin/pt-br/list
@@ -83,8 +84,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   // Locale público na raiz (/pt_BR, /en_US) é tratado pelo catch-all Liquid ([...slug].ts).
 
-  // Permitir APIs de auth e setup mesmo quando setup não está completo
-  if (isAuthApi || isSetupApi) {
+  // Permitir APIs de auth, setup e import mesmo quando setup não está completo
+  // (import apaga settings no primeiro step, incluindo setup_done — polling precisa continuar)
+  if (isAuthApi || isSetupApi || isImportApi) {
     return next();
   }
 
