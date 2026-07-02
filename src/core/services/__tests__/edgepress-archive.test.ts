@@ -615,6 +615,75 @@ describe("edgepress-archive integration", () => {
     expect(ftsRows[0]?.title).toBe("Hello Export");
   });
 
+  it("restores many FTS rows across the multi-row batch boundary", async () => {
+    const { db } = await createArchiveTestDb();
+    const now = Date.now();
+
+    await db.insert(locales).values({
+      id: 32,
+      language: "Portuguese (Brazil)",
+      hello_world: "Olá Mundo",
+      locale_code: "pt_BR",
+      country: "Brazil",
+      timezone: "UTC-3",
+    });
+    await db.insert(postTypes).values({
+      id: 1,
+      slug: "post",
+      name: "Post",
+      meta_schema: "[]",
+      created_at: now,
+      updated_at: now,
+    });
+
+    const total = 21; // > FTS_INSERT_BATCH_SIZE (8) to cross batch boundaries
+    for (let postId = 1; postId <= total; postId++) {
+      await db.insert(posts).values({
+        id: postId,
+        post_type_id: 1,
+        title: `Episode ${postId}`,
+        slug: `episode-${postId}`,
+        status: "published",
+        id_locale_code: 32,
+        body: `Body content ${postId}`,
+        created_at: now,
+        updated_at: now,
+      });
+      await db.run(sql`
+        INSERT INTO edp_posts_fts (
+          rowid, post_id, post_type_id, status, id_locale_code,
+          title, body, taxonomy, custom_fields
+        ) VALUES (
+          ${postId}, ${postId}, 1, 'published', 32,
+          ${`Episode ${postId}`}, ${`Body content ${postId}`}, '', ''
+        )
+      `);
+    }
+
+    const bucket = createMockR2Bucket();
+    const archiveBytes = await buildExport(db, bucket, null, {
+      database: true,
+      media: false,
+      themes: false,
+    });
+
+    await db.run(sql`DELETE FROM edp_posts_fts`);
+    await db.delete(posts);
+
+    const result = await restoreImport(db, bucket, archiveBytes.buffer);
+    expect(result.ftsRestored).toBe(true);
+
+    const [{ total: ftsTotal }] = (await db.all(sql`
+      SELECT COUNT(*) AS total FROM edp_posts_fts
+    `)) as Array<{ total: number }>;
+    expect(Number(ftsTotal)).toBe(total);
+
+    const hits = (await db.all(sql`
+      SELECT post_id FROM edp_posts_fts WHERE edp_posts_fts MATCH '"Episode"'
+    `)) as Array<{ post_id: number }>;
+    expect(hits).toHaveLength(total);
+  });
+
   it("media-only import does not wipe database rows", async () => {
     const { db } = await createArchiveTestDb();
     await seedArchiveFixtures(db);
