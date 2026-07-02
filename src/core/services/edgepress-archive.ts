@@ -21,8 +21,37 @@ import { getActiveThemeFromDb, THEME_ACTIVE_KV_KEY, THEME_META_KV_PREFIX } from 
 import { upsertActiveThemeSetting } from "./settings-service.ts";
 
 export const EDGEPRESS_FORMAT = "edgepress" as const;
-export const EDGEPRESS_SCHEMA_VERSION = 1;
+export const EDGEPRESS_SCHEMA_VERSION = 2;
 export const APP_VERSION = "0.0.1";
+
+export type ExportOptions = {
+  database: boolean;
+  media: boolean;
+  themes: boolean;
+};
+
+export type ExportIncludes = ExportOptions;
+
+export const DEFAULT_EXPORT_INCLUDES: ExportIncludes = {
+  database: true,
+  media: true,
+  themes: true,
+};
+
+export type FtsRow = {
+  rowid: number;
+  post_id: number;
+  post_type_id: number;
+  status: string;
+  id_locale_code: number | null;
+  title: string;
+  body: string;
+  taxonomy: string;
+  custom_fields: string;
+};
+
+export const FTS_TABLE = "edp_posts_fts";
+export const FTS_INSERT_BATCH_SIZE = 8;
 export const MEDIA_PREFIX = "uploads/";
 export const MEDIA_TAR_PREFIX = "media/uploads/";
 export const THEME_PKG_TAR_PREFIX = "themes/";
@@ -69,8 +98,10 @@ export type EdgepressManifest = {
   schemaVersion: number;
   exportedAt: string;
   appVersion: string;
+  includes: ExportIncludes;
   tableOrder: EdgepressLogicalTable[];
   counts: Partial<Record<EdgepressLogicalTable, number>>;
+  ftsCount?: number;
   mediaCount: number;
   mediaFiles: Array<{ key: string; contentType: string }>;
   themeCount: number;
@@ -79,12 +110,15 @@ export type EdgepressManifest = {
 
 export type EdgepressDatabasePayload = {
   tables: Partial<Record<EdgepressLogicalTable, RowRecord[]>>;
+  fts?: FtsRow[];
 };
 
 export type EdgepressImportResult = {
+  includes: ExportIncludes;
   counts: Partial<Record<EdgepressLogicalTable, number>>;
   mediaCount: number;
   themeCount: number;
+  ftsRestored: boolean;
 };
 
 export type ArchiveKvLike = {
@@ -243,6 +277,79 @@ async function runSql(db: Database, statement: ReturnType<typeof sql.raw> | Retu
     return;
   }
   await db.all(statement);
+}
+
+async function readAllFtsRows(db: Database): Promise<FtsRow[]> {
+  const rows = (await db.all(
+    sql.raw(`
+      SELECT rowid, post_id, post_type_id, status, id_locale_code,
+             title, body, taxonomy, custom_fields
+      FROM ${FTS_TABLE}
+      ORDER BY rowid
+    `),
+  )) as FtsRow[];
+  return rows.map((row) => ({
+    rowid: Number(row.rowid),
+    post_id: Number(row.post_id),
+    post_type_id: Number(row.post_type_id),
+    status: String(row.status ?? ""),
+    id_locale_code: row.id_locale_code == null ? null : Number(row.id_locale_code),
+    title: String(row.title ?? ""),
+    body: String(row.body ?? ""),
+    taxonomy: String(row.taxonomy ?? ""),
+    custom_fields: String(row.custom_fields ?? ""),
+  }));
+}
+
+async function wipeFtsTable(db: Database): Promise<void> {
+  await runSql(db, sql.raw(`DELETE FROM ${FTS_TABLE}`));
+}
+
+async function restoreFtsRows(db: Database, rows: FtsRow[]): Promise<void> {
+  for (let i = 0; i < rows.length; i += FTS_INSERT_BATCH_SIZE) {
+    const batch = rows.slice(i, i + FTS_INSERT_BATCH_SIZE);
+    for (const row of batch) {
+      await runSql(
+        db,
+        sql`
+          INSERT INTO edp_posts_fts (
+            rowid, post_id, post_type_id, status, id_locale_code,
+            title, body, taxonomy, custom_fields
+          ) VALUES (
+            ${row.rowid},
+            ${row.post_id},
+            ${row.post_type_id},
+            ${row.status},
+            ${row.id_locale_code},
+            ${row.title},
+            ${row.body},
+            ${row.taxonomy},
+            ${row.custom_fields}
+          )
+        `,
+      );
+    }
+  }
+}
+
+function resolveExportIncludes(options?: Partial<ExportOptions>): ExportIncludes {
+  return {
+    database: options?.database ?? DEFAULT_EXPORT_INCLUDES.database,
+    media: options?.media ?? DEFAULT_EXPORT_INCLUDES.media,
+    themes: options?.themes ?? DEFAULT_EXPORT_INCLUDES.themes,
+  };
+}
+
+function resolveManifestIncludes(manifest: Partial<EdgepressManifest>): ExportIncludes {
+  if (manifest.includes) {
+    return {
+      database: Boolean(manifest.includes.database),
+      media: Boolean(manifest.includes.media),
+      themes: Boolean(manifest.includes.themes),
+    };
+  }
+  // Legacy v1 archives always included everything.
+  return { ...DEFAULT_EXPORT_INCLUDES };
 }
 
 async function readAllR2ByPrefix(
@@ -491,27 +598,35 @@ export async function buildExport(
   db: Database,
   bucket: R2BucketLike,
   kv?: ArchiveKvLike | null,
+  options?: Partial<ExportOptions>,
 ): Promise<Uint8Array> {
+  const includes = resolveExportIncludes(options);
   const tables: Partial<Record<EdgepressLogicalTable, RowRecord[]>> = {};
   const counts: Partial<Record<EdgepressLogicalTable, number>> = {};
+  let ftsRows: FtsRow[] = [];
 
-  for (const logicalTable of TABLE_ORDER) {
-    const rows = await TABLE_READERS[logicalTable](db);
-    tables[logicalTable] = rows;
-    counts[logicalTable] = rows.length;
+  if (includes.database) {
+    for (const logicalTable of TABLE_ORDER) {
+      const rows = await TABLE_READERS[logicalTable](db);
+      tables[logicalTable] = rows;
+      counts[logicalTable] = rows.length;
+    }
+    ftsRows = await readAllFtsRows(db);
   }
 
-  const mediaObjects = await readAllR2Objects(bucket);
-  const themePackages = kv ? await readAllThemePackages(kv) : [];
-  const themeAssets = await readAllR2ByPrefix(bucket, THEME_ASSET_TAR_PREFIX);
+  const mediaObjects = includes.media ? await readAllR2Objects(bucket) : [];
+  const themePackages = includes.themes && kv ? await readAllThemePackages(kv) : [];
+  const themeAssets = includes.themes ? await readAllR2ByPrefix(bucket, THEME_ASSET_TAR_PREFIX) : [];
 
   const manifest: EdgepressManifest = {
     format: EDGEPRESS_FORMAT,
     schemaVersion: EDGEPRESS_SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     appVersion: APP_VERSION,
+    includes,
     tableOrder: [...TABLE_ORDER],
     counts,
+    ftsCount: includes.database ? ftsRows.length : undefined,
     mediaCount: mediaObjects.length,
     mediaFiles: mediaObjects.map((item) => ({
       key: item.key,
@@ -520,23 +635,35 @@ export async function buildExport(
     themeCount: themePackages.length,
     themePackages: themePackages.map((item) => ({ slug: item.slug })),
   };
-  const databasePayload: EdgepressDatabasePayload = { tables };
-  const tarEntries: TarEntryInput[] = [
-    { name: "manifest.json", data: encodeJson(manifest) },
-    { name: "database.json", data: encodeJson(databasePayload) },
-    ...mediaObjects.map((item) => ({
-      name: `${MEDIA_TAR_PREFIX}${item.key.slice(MEDIA_PREFIX.length)}`,
-      data: item.data,
-    })),
-    ...themePackages.map((item) => ({
-      name: themePackageTarPath(item.slug),
-      data: item.data,
-    })),
-    ...themeAssets.map((item) => ({
-      name: item.key,
-      data: item.data,
-    })),
-  ];
+
+  const tarEntries: TarEntryInput[] = [{ name: "manifest.json", data: encodeJson(manifest) }];
+
+  if (includes.database) {
+    const databasePayload: EdgepressDatabasePayload = { tables, fts: ftsRows };
+    tarEntries.push({ name: "database.json", data: encodeJson(databasePayload) });
+  }
+
+  if (includes.media) {
+    tarEntries.push(
+      ...mediaObjects.map((item) => ({
+        name: `${MEDIA_TAR_PREFIX}${item.key.slice(MEDIA_PREFIX.length)}`,
+        data: item.data,
+      })),
+    );
+  }
+
+  if (includes.themes) {
+    tarEntries.push(
+      ...themePackages.map((item) => ({
+        name: themePackageTarPath(item.slug),
+        data: item.data,
+      })),
+      ...themeAssets.map((item) => ({
+        name: item.key,
+        data: item.data,
+      })),
+    );
+  }
 
   return createTarGzip(tarEntries);
 }
@@ -549,12 +676,16 @@ function parseManifest(raw: unknown): EdgepressManifest {
   if (manifest.format !== EDGEPRESS_FORMAT) {
     throw new Error("Arquivo não é um pacote EdgePress válido");
   }
-  if (manifest.schemaVersion !== EDGEPRESS_SCHEMA_VERSION) {
+  const schemaVersion = manifest.schemaVersion;
+  if (schemaVersion !== 1 && schemaVersion !== EDGEPRESS_SCHEMA_VERSION) {
     throw new Error(
-      `Versão de schema não suportada: ${String(manifest.schemaVersion)} (esperado ${EDGEPRESS_SCHEMA_VERSION})`,
+      `Versão de schema não suportada: ${String(schemaVersion)} (esperado ${EDGEPRESS_SCHEMA_VERSION})`,
     );
   }
-  return manifest as EdgepressManifest;
+  return {
+    ...(manifest as EdgepressManifest),
+    includes: resolveManifestIncludes(manifest),
+  };
 }
 
 function parseDatabasePayload(raw: unknown): EdgepressDatabasePayload {
@@ -583,38 +714,54 @@ export async function restoreImport(
   }
 
   const manifestBytes = entryMap.get("manifest.json");
-  const databaseBytes = entryMap.get("database.json");
-  if (!manifestBytes || !databaseBytes) {
-    throw new Error("Arquivo .edgepress incompleto (manifest.json ou database.json ausente)");
+  if (!manifestBytes) {
+    throw new Error("Arquivo .edgepress incompleto (manifest.json ausente)");
   }
 
   const manifest = parseManifest(JSON.parse(new TextDecoder().decode(manifestBytes)));
-  const databasePayload = parseDatabasePayload(JSON.parse(new TextDecoder().decode(databaseBytes)));
+  const includes = manifest.includes;
+  const databaseBytes = entryMap.get("database.json");
+  if (includes.database && !databaseBytes) {
+    throw new Error("Arquivo .edgepress incompleto (database.json ausente)");
+  }
 
-  await wipeDatabase(db);
-  await wipeR2Uploads(bucket);
-  await wipeR2ByPrefix(bucket, THEME_ASSET_TAR_PREFIX);
-  if (kv) {
-    await wipeThemeKvCache(kv);
+  const databasePayload = databaseBytes
+    ? parseDatabasePayload(JSON.parse(new TextDecoder().decode(databaseBytes)))
+    : { tables: {} };
+
+  if (includes.database) {
+    await wipeDatabase(db);
+    await wipeFtsTable(db);
+  }
+  if (includes.media) {
+    await wipeR2Uploads(bucket);
+  }
+  if (includes.themes) {
+    await wipeR2ByPrefix(bucket, THEME_ASSET_TAR_PREFIX);
+    if (kv) {
+      await wipeThemeKvCache(kv);
+    }
   }
 
   const counts: Partial<Record<EdgepressLogicalTable, number>> = {};
   const tableOrder = resolveImportTableOrder(manifest.tableOrder);
 
-  // TABLE_ORDER inserts parents before children, so inter-table FK constraints are respected
-  // without needing PRAGMA foreign_keys = OFF (unsupported on D1 in production).
-  // Self-referential FKs (posts.parent_id, taxonomies.parent_id) are handled via a second
-  // pass after all rows are inserted (see restorePostParentIds / restoreTaxonomyParentIds).
-  for (const logicalTable of tableOrder) {
-    const rows = databasePayload.tables[logicalTable] ?? [];
-    await insertRowsInBatches(db, logicalTable, rows);
-    counts[logicalTable] = rows.length;
-  }
-  await resetAutoIncrementSequences(db);
+  if (includes.database) {
+    // TABLE_ORDER inserts parents before children, so inter-table FK constraints are respected
+    // without needing PRAGMA foreign_keys = OFF (unsupported on D1 in production).
+    // Self-referential FKs (posts.parent_id, taxonomies.parent_id) are handled via a second
+    // pass after all rows are inserted (see restorePostParentIds / restoreTaxonomyParentIds).
+    for (const logicalTable of tableOrder) {
+      const rows = databasePayload.tables[logicalTable] ?? [];
+      await insertRowsInBatches(db, logicalTable, rows);
+      counts[logicalTable] = rows.length;
+    }
+    await resetAutoIncrementSequences(db);
 
-  // Second pass: restore self-referential parent_id values nullified during insert.
-  await restorePostParentIds(db, databasePayload.tables["posts"] ?? []);
-  await restoreTaxonomyParentIds(db, databasePayload.tables["taxonomies"] ?? []);
+    // Second pass: restore self-referential parent_id values nullified during insert.
+    await restorePostParentIds(db, databasePayload.tables["posts"] ?? []);
+    await restoreTaxonomyParentIds(db, databasePayload.tables["taxonomies"] ?? []);
+  }
 
   const contentTypeByKey = new Map(
     (manifest.mediaFiles ?? []).map((item) => [item.key, item.contentType] as const),
@@ -622,15 +769,23 @@ export async function restoreImport(
 
   let mediaCount = 0;
   let themeCount = 0;
+  let ftsRestored = false;
+
+  if (includes.database && databasePayload.fts && databasePayload.fts.length > 0) {
+    await restoreFtsRows(db, databasePayload.fts);
+    ftsRestored = true;
+  }
 
   for (const [name, data] of entryMap.entries()) {
-    if (name.startsWith(MEDIA_TAR_PREFIX)) {
+    if (includes.media && name.startsWith(MEDIA_TAR_PREFIX)) {
       const r2Key = `${MEDIA_PREFIX}${name.slice(MEDIA_TAR_PREFIX.length)}`;
       const contentType = contentTypeByKey.get(r2Key) ?? inferContentType(r2Key);
       await bucket.put(r2Key, data, { httpMetadata: { contentType } });
       mediaCount++;
       continue;
     }
+
+    if (!includes.themes) continue;
 
     const packageSlug = parseThemePackageTarPath(name);
     if (packageSlug && kv) {
@@ -646,11 +801,11 @@ export async function restoreImport(
     }
   }
 
-  if (kv) {
+  if (includes.themes && kv) {
     await syncThemeCacheAfterImport(db, kv);
   }
 
-  return { counts, mediaCount, themeCount };
+  return { includes, counts, mediaCount, themeCount, ftsRestored };
 }
 
 export function buildExportFilename(): string {

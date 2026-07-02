@@ -12,6 +12,7 @@ import {
 import {
   EDGEPRESS_FORMAT,
   EDGEPRESS_SCHEMA_VERSION,
+  FTS_INSERT_BATCH_SIZE,
   MEDIA_PREFIX,
   MEDIA_TAR_PREFIX,
   PRESERVED_TABLES,
@@ -27,6 +28,7 @@ import { createMockR2Bucket } from "./edgepress-archive-r2.mock.ts";
 import { resolveMenuOption } from "../../../utils/menu.ts";
 import { THEME_PKG_KV_PREFIX } from "../../theme/theme-package.ts";
 import { THEME_ACTIVE_KV_KEY } from "../theme-service.ts";
+import { sql } from "drizzle-orm";
 
 function createMockKv(initial: Record<string, string> = {}): ArchiveKvLike & { store: Map<string, string> } {
   const store = new Map<string, string>(Object.entries(initial));
@@ -109,6 +111,16 @@ async function seedArchiveFixtures(db: Awaited<ReturnType<typeof createArchiveTe
     created_at: now,
     updated_at: now,
   });
+
+  await db.run(sql`
+    INSERT INTO edp_posts_fts (
+      rowid, post_id, post_type_id, status, id_locale_code,
+      title, body, taxonomy, custom_fields
+    ) VALUES (
+      10, 10, 1, 'published', 32,
+      'Hello Export', 'Export me', '', ''
+    )
+  `);
 }
 
 describe("edgepress-archive unit", () => {
@@ -123,6 +135,11 @@ describe("edgepress-archive unit", () => {
 
   it("buildExportFilename returns .edgepress suffix", () => {
     expect(buildExportFilename()).toMatch(/^edgepress-export-.*\.edgepress$/);
+  });
+
+  it("FTS insert batch size stays within D1 parameter limit", () => {
+    const ftsColumnCount = 9;
+    expect(FTS_INSERT_BATCH_SIZE * ftsColumnCount).toBeLessThanOrEqual(100);
   });
 
   it("restoreImport rejects invalid manifest format", async () => {
@@ -225,10 +242,12 @@ describe("edgepress-archive integration", () => {
     const manifest = JSON.parse(new TextDecoder().decode(byName.get("manifest.json")!.data!));
     expect(manifest.format).toBe(EDGEPRESS_FORMAT);
     expect(manifest.schemaVersion).toBe(EDGEPRESS_SCHEMA_VERSION);
+    expect(manifest.includes).toEqual({ database: true, media: true, themes: true });
     expect(manifest.mediaCount).toBe(1);
     expect(manifest.themeCount).toBe(0);
     expect(manifest.themePackages).toEqual([]);
     expect(manifest.counts.posts).toBe(1);
+    expect(manifest.ftsCount).toBe(1);
     expect(manifest.tableOrder).toEqual([...TABLE_ORDER]);
     expect(manifest.counts).not.toHaveProperty("locales");
     expect(manifest.counts).not.toHaveProperty("translations");
@@ -236,6 +255,8 @@ describe("edgepress-archive integration", () => {
     const database = JSON.parse(new TextDecoder().decode(byName.get("database.json")!.data!));
     expect(database.tables.posts).toHaveLength(1);
     expect(database.tables.posts[0].slug).toBe("hello-export");
+    expect(database.fts).toHaveLength(1);
+    expect(database.fts[0].title).toBe("Hello Export");
     expect(database.tables).not.toHaveProperty("locales");
     expect(database.tables).not.toHaveProperty("translations");
   });
@@ -279,6 +300,8 @@ describe("edgepress-archive integration", () => {
     expect(result.counts.posts).toBe(1);
     expect(result.mediaCount).toBe(1);
     expect(result.themeCount).toBe(0);
+    expect(result.ftsRestored).toBe(true);
+    expect(result.includes).toEqual({ database: true, media: true, themes: true });
 
     const restoredPosts = await db.select({ id: posts.id, slug: posts.slug }).from(posts);
     expect(restoredPosts).toEqual([{ id: 10, slug: "hello-export" }]);
@@ -506,6 +529,159 @@ describe("edgepress-archive integration", () => {
     expect(bucket.store.has("themes/2026/assets/theme.css")).toBe(true);
     expect(bucket.store.has("themes/old/assets/old.css")).toBe(false);
     expect(kv.store.has(THEME_ACTIVE_KV_KEY)).toBe(true);
+  });
+
+  it("database-only export includes FTS rows and omits media files", async () => {
+    const { db } = await createArchiveTestDb();
+    await seedArchiveFixtures(db);
+
+    const bucket = createMockR2Bucket({
+      "uploads/demo/photo.png": {
+        data: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+        contentType: "image/png",
+      },
+    });
+
+    const archiveBytes = await buildExport(db, bucket, null, {
+      database: true,
+      media: false,
+      themes: false,
+    });
+    const entries = await parseTarGzip(archiveBytes.buffer);
+    const byName = new Map(entries.map((entry) => [entry.name, entry]));
+
+    expect(byName.has("database.json")).toBe(true);
+    expect([...byName.keys()].some((name) => name.startsWith("media/"))).toBe(false);
+
+    const manifest = JSON.parse(new TextDecoder().decode(byName.get("manifest.json")!.data!));
+    expect(manifest.includes).toEqual({ database: true, media: false, themes: false });
+    expect(manifest.ftsCount).toBe(1);
+
+    const database = JSON.parse(new TextDecoder().decode(byName.get("database.json")!.data!));
+    expect(database.fts).toHaveLength(1);
+  });
+
+  it("media-only export omits database.json", async () => {
+    const { db } = await createArchiveTestDb();
+    await seedArchiveFixtures(db);
+
+    const bucket = createMockR2Bucket({
+      "uploads/demo/photo.png": {
+        data: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+        contentType: "image/png",
+      },
+    });
+
+    const archiveBytes = await buildExport(db, bucket, null, {
+      database: false,
+      media: true,
+      themes: false,
+    });
+    const entries = await parseTarGzip(archiveBytes.buffer);
+    const byName = new Map(entries.map((entry) => [entry.name, entry]));
+
+    expect(byName.has("database.json")).toBe(false);
+    expect(byName.has("media/uploads/demo/photo.png")).toBe(true);
+
+    const manifest = JSON.parse(new TextDecoder().decode(byName.get("manifest.json")!.data!));
+    expect(manifest.includes).toEqual({ database: false, media: true, themes: false });
+  });
+
+  it("round-trip database export restores FTS rows for search", async () => {
+    const { db } = await createArchiveTestDb();
+    await seedArchiveFixtures(db);
+
+    const bucket = createMockR2Bucket();
+    const archiveBytes = await buildExport(db, bucket, null, {
+      database: true,
+      media: false,
+      themes: false,
+    });
+
+    await db.delete(posts).where(eq(posts.id, 10));
+    await db.run(sql`DELETE FROM edp_posts_fts WHERE rowid = 10`);
+
+    const result = await restoreImport(db, bucket, archiveBytes.buffer);
+    expect(result.ftsRestored).toBe(true);
+
+    const ftsRows = (await db.all(sql`
+      SELECT post_id, title
+      FROM edp_posts_fts
+      WHERE edp_posts_fts MATCH '"Hello"'
+    `)) as Array<{ post_id: number; title: string }>;
+
+    expect(ftsRows).toHaveLength(1);
+    expect(Number(ftsRows[0]?.post_id)).toBe(10);
+    expect(ftsRows[0]?.title).toBe("Hello Export");
+  });
+
+  it("media-only import does not wipe database rows", async () => {
+    const { db } = await createArchiveTestDb();
+    await seedArchiveFixtures(db);
+
+    const bucket = createMockR2Bucket({
+      "uploads/demo/photo.png": {
+        data: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+        contentType: "image/png",
+      },
+    });
+
+    const archiveBytes = await buildExport(db, bucket, null, {
+      database: false,
+      media: true,
+      themes: false,
+    });
+
+    await db.insert(posts).values({
+      id: 99,
+      post_type_id: 1,
+      title: "Keep me",
+      slug: "keep-me",
+      status: "draft",
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+    bucket.store.clear();
+
+    await restoreImport(db, bucket, archiveBytes.buffer);
+
+    const postRows = await db.select({ id: posts.id, slug: posts.slug }).from(posts);
+    expect(postRows.some((row) => row.slug === "keep-me")).toBe(true);
+    expect(bucket.store.has("uploads/demo/photo.png")).toBe(true);
+  });
+
+  it("database-only import does not wipe R2 uploads", async () => {
+    const { db } = await createArchiveTestDb();
+    await seedArchiveFixtures(db);
+
+    const bucket = createMockR2Bucket({
+      "uploads/existing/file.png": {
+        data: new Uint8Array([1, 2, 3]),
+        contentType: "image/png",
+      },
+    });
+
+    const archiveBytes = await buildExport(db, bucket, null, {
+      database: true,
+      media: false,
+      themes: false,
+    });
+
+    await db.insert(posts).values({
+      id: 99,
+      post_type_id: 1,
+      title: "Temporary",
+      slug: "temporary-post",
+      status: "draft",
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await restoreImport(db, bucket, archiveBytes.buffer);
+
+    const restoredPosts = await db.select({ id: posts.id, slug: posts.slug }).from(posts);
+    expect(restoredPosts).toEqual([{ id: 10, slug: "hello-export" }]);
+    expect(bucket.store.has("uploads/existing/file.png")).toBe(true);
   });
 });
 
