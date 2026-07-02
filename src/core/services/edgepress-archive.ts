@@ -214,9 +214,14 @@ const TABLE_INSERTERS: Record<EdgepressLogicalTable, RowInserter> = {
 };
 
 const DEFAULT_INSERT_BATCH_SIZE = 10;
-/** D1 allows at most 100 bound parameters per statement. Posts have 15 columns → max 6 rows. */
+/**
+ * D1 allows at most 100 bound parameters per statement. Multi-row inserts cut the number of
+ * sequential D1 round-trips (a large import doing one insert per row can run for minutes and is
+ * prone to transient D1 errors). Posts have 15 columns → 4 rows = 60 params, keeping the statement
+ * small enough even when bodies carry large HTML.
+ */
 const INSERT_BATCH_SIZE: Partial<Record<EdgepressLogicalTable, number>> = {
-  posts: 1,
+  posts: 4,
   post_types: 5,
   taxonomies: 8,
   settings: 20,
@@ -306,29 +311,24 @@ async function wipeFtsTable(db: Database): Promise<void> {
 }
 
 async function restoreFtsRows(db: Database, rows: FtsRow[]): Promise<void> {
+  // One multi-row INSERT per batch to minimize D1 round-trips.
+  // 9 columns × FTS_INSERT_BATCH_SIZE (8) = 72 bound params, under D1's 100 limit.
   for (let i = 0; i < rows.length; i += FTS_INSERT_BATCH_SIZE) {
     const batch = rows.slice(i, i + FTS_INSERT_BATCH_SIZE);
-    for (const row of batch) {
-      await runSql(
-        db,
-        sql`
-          INSERT INTO edp_posts_fts (
-            rowid, post_id, post_type_id, status, id_locale_code,
-            title, body, taxonomy, custom_fields
-          ) VALUES (
-            ${row.rowid},
-            ${row.post_id},
-            ${row.post_type_id},
-            ${row.status},
-            ${row.id_locale_code},
-            ${row.title},
-            ${row.body},
-            ${row.taxonomy},
-            ${row.custom_fields}
-          )
-        `,
-      );
-    }
+    if (batch.length === 0) continue;
+    const valuesGroups = batch.map(
+      (row) =>
+        sql`(${row.rowid}, ${row.post_id}, ${row.post_type_id}, ${row.status}, ${row.id_locale_code}, ${row.title}, ${row.body}, ${row.taxonomy}, ${row.custom_fields})`,
+    );
+    await runSql(
+      db,
+      sql`
+        INSERT INTO edp_posts_fts (
+          rowid, post_id, post_type_id, status, id_locale_code,
+          title, body, taxonomy, custom_fields
+        ) VALUES ${sql.join(valuesGroups, sql`, `)}
+      `,
+    );
   }
 }
 

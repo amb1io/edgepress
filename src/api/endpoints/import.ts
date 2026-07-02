@@ -122,7 +122,20 @@ export const POST: APIRoute = async ({ request, locals }) => {
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Import failed";
+    const error = err as (Error & { cause?: unknown }) | undefined;
+    const cause = error?.cause;
+    const causeMessage =
+      cause instanceof Error ? cause.message : typeof cause === "string" ? cause : undefined;
+    console.error(
+      "[import] failed:",
+      error?.message,
+      "| cause:",
+      causeMessage ?? cause,
+      "| stack:",
+      error?.stack,
+    );
+    const baseMessage = error?.message ?? "Import failed";
+    const message = causeMessage ? `${baseMessage} — cause: ${causeMessage}` : baseMessage;
     return internalServerErrorResponse(message);
   }
 };
