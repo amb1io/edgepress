@@ -418,14 +418,12 @@ async function syncThemeCacheAfterImport(db: Database, kv: ArchiveKvLike): Promi
 }
 
 async function wipeDatabase(db: Database): Promise<void> {
-  await runSql(db, sql`PRAGMA foreign_keys = OFF`);
-  try {
-    for (const logicalTable of WIPE_ORDER) {
-      const physical = tableName(logicalTable);
-      await runSql(db, sql.raw(`DELETE FROM ${physical}`));
-    }
-  } finally {
-    await runSql(db, sql`PRAGMA foreign_keys = ON`);
+  // WIPE_ORDER is the reverse of TABLE_ORDER (children before parents),
+  // so FK constraints are respected without needing PRAGMA foreign_keys = OFF.
+  // D1 in production does not support PRAGMA statements via the HTTP API.
+  for (const logicalTable of WIPE_ORDER) {
+    const physical = tableName(logicalTable);
+    await runSql(db, sql.raw(`DELETE FROM ${physical}`));
   }
 }
 
@@ -570,17 +568,14 @@ export async function restoreImport(
   const counts: Partial<Record<EdgepressLogicalTable, number>> = {};
   const tableOrder = resolveImportTableOrder(manifest.tableOrder);
 
-  await runSql(db, sql`PRAGMA foreign_keys = OFF`);
-  try {
-    for (const logicalTable of tableOrder) {
-      const rows = databasePayload.tables[logicalTable] ?? [];
-      await insertRowsInBatches(db, logicalTable, rows);
-      counts[logicalTable] = rows.length;
-    }
-    await resetAutoIncrementSequences(db);
-  } finally {
-    await runSql(db, sql`PRAGMA foreign_keys = ON`);
+  // TABLE_ORDER inserts parents before children, so FK constraints are respected
+  // without needing PRAGMA foreign_keys = OFF (unsupported on D1 in production).
+  for (const logicalTable of tableOrder) {
+    const rows = databasePayload.tables[logicalTable] ?? [];
+    await insertRowsInBatches(db, logicalTable, rows);
+    counts[logicalTable] = rows.length;
   }
+  await resetAutoIncrementSequences(db);
 
   const contentTypeByKey = new Map(
     (manifest.mediaFiles ?? []).map((item) => [item.key, item.contentType] as const),
