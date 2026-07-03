@@ -3,11 +3,14 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
+import { IMPORT_BUNDLE_UPLOAD_TOKEN_HEADER } from "../../../core/services/import-job-state.ts";
 
 const mockAuthUser = { user: { id: "admin", role: 0 }, session: { id: "s1", userId: "admin" } };
 
+const requireMinRoleMock = vi.fn().mockResolvedValue(mockAuthUser);
+
 vi.mock("../../../utils/api-auth.ts", () => ({
-  requireMinRole: vi.fn().mockResolvedValue(mockAuthUser),
+  requireMinRole: (...args: unknown[]) => requireMinRoleMock(...args),
 }));
 
 const stageImportArchiveMock = vi.fn();
@@ -44,6 +47,7 @@ describe("import API", () => {
   beforeEach(() => {
     clearTestEnv();
     vi.clearAllMocks();
+    requireMinRoleMock.mockResolvedValue(mockAuthUser);
     stageImportArchiveMock.mockResolvedValue({
       manifest: {
         includes: { database: true, media: true, themes: true },
@@ -178,6 +182,187 @@ describe("import API", () => {
       jobId: json.jobId,
       stepIndex: 0,
     });
+  });
+
+  it("returns 400 when bundle media part is uploaded before the base part", async () => {
+    stageImportArchiveMock.mockResolvedValue({
+      manifest: {
+        includes: { database: false, media: true, themes: false },
+        counts: {},
+        mediaCount: 1,
+        themeCount: 0,
+        bundle: {
+          id: "bundle-1",
+          partIndex: 2,
+          partCount: 2,
+          partKind: "media",
+        },
+      },
+      includes: { database: false, media: true, themes: false },
+      mediaFiles: [],
+      themeFiles: [],
+    });
+    (env.CACHE.get as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    const formData = new FormData();
+    formData.set(
+      "file",
+      new Blob([0x1f, 0x8b], { type: "application/gzip" }),
+      "part-002.edgepress",
+    );
+
+    const { POST } = await import("../import.ts");
+    const response = await POST({
+      request: new Request("http://localhost/api/import", {
+        method: "POST",
+        body: formData,
+      }),
+      locals: {} as Parameters<typeof POST>[0]["locals"],
+    } as Parameters<typeof POST>[0]);
+
+    expect(response.status).toBe(400);
+    const json = await response.json();
+    expect(json.error).toMatch(/parte base/i);
+    expect(writeImportJobMock).not.toHaveBeenCalled();
+  });
+
+  it("queues bundle media part with upload token when session is missing", async () => {
+    requireMinRoleMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),
+    );
+    stageImportArchiveMock.mockResolvedValue({
+      manifest: {
+        includes: { database: false, media: true, themes: false },
+        counts: {},
+        mediaCount: 1,
+        themeCount: 0,
+        bundle: {
+          id: "bundle-1",
+          partIndex: 2,
+          partCount: 2,
+          partKind: "media",
+        },
+      },
+      includes: { database: false, media: true, themes: false },
+      mediaFiles: [],
+      themeFiles: [],
+    });
+    (env.CACHE.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      partCount: 2,
+      lastCompletedPart: 1,
+      uploadToken: "bundle-upload-token",
+    });
+
+    const formData = new FormData();
+    formData.set(
+      "file",
+      new Blob([0x1f, 0x8b], { type: "application/gzip" }),
+      "part-002.edgepress",
+    );
+
+    const { POST } = await import("../import.ts");
+    const response = await POST({
+      request: new Request("http://localhost/api/import", {
+        method: "POST",
+        body: formData,
+        headers: {
+          [IMPORT_BUNDLE_UPLOAD_TOKEN_HEADER]: "bundle-upload-token",
+        },
+      }),
+      locals: {} as Parameters<typeof POST>[0]["locals"],
+    } as Parameters<typeof POST>[0]);
+
+    expect(response.status).toBe(202);
+    expect(writeImportJobMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 401 for bundle media part without session or upload token", async () => {
+    requireMinRoleMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),
+    );
+    stageImportArchiveMock.mockResolvedValue({
+      manifest: {
+        includes: { database: false, media: true, themes: false },
+        counts: {},
+        mediaCount: 1,
+        themeCount: 0,
+        bundle: {
+          id: "bundle-1",
+          partIndex: 2,
+          partCount: 2,
+          partKind: "media",
+        },
+      },
+      includes: { database: false, media: true, themes: false },
+      mediaFiles: [],
+      themeFiles: [],
+    });
+    (env.CACHE.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      partCount: 2,
+      lastCompletedPart: 1,
+      uploadToken: "bundle-upload-token",
+    });
+
+    const formData = new FormData();
+    formData.set(
+      "file",
+      new Blob([0x1f, 0x8b], { type: "application/gzip" }),
+      "part-002.edgepress",
+    );
+
+    const { POST } = await import("../import.ts");
+    const response = await POST({
+      request: new Request("http://localhost/api/import", {
+        method: "POST",
+        body: formData,
+      }),
+      locals: {} as Parameters<typeof POST>[0]["locals"],
+    } as Parameters<typeof POST>[0]);
+
+    expect(response.status).toBe(401);
+    expect(writeImportJobMock).not.toHaveBeenCalled();
+  });
+
+  it("returns bundleUploadToken when queueing multi-part base archive", async () => {
+    stageImportArchiveMock.mockResolvedValue({
+      manifest: {
+        includes: { database: true, media: true, themes: false },
+        counts: { posts: 1 },
+        mediaCount: 1,
+        themeCount: 0,
+        bundle: {
+          id: "bundle-1",
+          partIndex: 1,
+          partCount: 2,
+          partKind: "base",
+        },
+      },
+      includes: { database: true, media: true, themes: false },
+      mediaFiles: [],
+      themeFiles: [],
+    });
+    (env.CACHE.get as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    const formData = new FormData();
+    formData.set(
+      "file",
+      new Blob([0x1f, 0x8b], { type: "application/gzip" }),
+      "part-001.edgepress",
+    );
+
+    const { POST } = await import("../import.ts");
+    const response = await POST({
+      request: new Request("http://localhost/api/import", {
+        method: "POST",
+        body: formData,
+      }),
+      locals: {} as Parameters<typeof POST>[0]["locals"],
+    } as Parameters<typeof POST>[0]);
+
+    expect(response.status).toBe(202);
+    const json = await response.json();
+    expect(typeof json.bundleUploadToken).toBe("string");
+    expect(env.CACHE.put).toHaveBeenCalled();
   });
 
   it("returns 500 when staging throws", async () => {

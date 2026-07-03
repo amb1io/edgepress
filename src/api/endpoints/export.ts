@@ -7,8 +7,7 @@ import type { APIRoute } from "astro";
 import { env as cfEnv } from "cloudflare:workers";
 import { db } from "../../db/index.ts";
 import {
-  buildExport,
-  buildExportFilename,
+  buildExportResult,
   type ArchiveKvLike,
   type ExportOptions,
 } from "../../core/services/edgepress-archive.ts";
@@ -72,13 +71,13 @@ export const GET: APIRoute = async ({ request, locals }) => {
 
   try {
     const kv = cfEnv.CACHE as ArchiveKvLike | undefined;
-    const archive = await buildExport(db, bucket, kv, exportOptions);
-    const filename = buildExportFilename();
-    return new Response(archive, {
+    const result = await buildExportResult(db, bucket, kv, exportOptions);
+    const contentType = result.type === "bundle" ? "application/zip" : "application/gzip";
+    return new Response(result.data, {
       status: 200,
       headers: {
-        "Content-Type": "application/gzip",
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Type": contentType,
+        "Content-Disposition": `attachment; filename="${result.filename}"`,
         "Cache-Control": "no-store",
       },
     });

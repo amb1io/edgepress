@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeImportSteps,
+  computeMediaAppendSteps,
   FTS_ROWS_PER_STEP,
   importJobPercent,
   MEDIA_FILES_PER_STEP,
@@ -124,6 +125,46 @@ describe("computeImportSteps", () => {
 
     const mediaSteps = steps.filter((step) => step.type === "restore_media");
     expect(mediaSteps).toHaveLength(2);
+  });
+});
+
+describe("computeMediaAppendSteps", () => {
+  it("skips wipe steps and only restores media for bundle media parts", () => {
+    const manifest = buildManifest({
+      includes: { database: false, media: true, themes: false },
+      mediaCount: MEDIA_FILES_PER_STEP + 5,
+      bundle: {
+        id: "bundle-1",
+        partIndex: 2,
+        partCount: 2,
+        partKind: "media",
+      },
+    });
+
+    const steps = computeMediaAppendSteps(manifest);
+
+    expect(steps.some((step) => step.type === "wipe_database")).toBe(false);
+    expect(steps.some((step) => step.type === "wipe_media")).toBe(false);
+    expect(steps.some((step) => step.type === "wipe_themes")).toBe(false);
+    expect(steps.some((step) => step.type === "restore_media")).toBe(true);
+    expect(steps.at(-1)).toEqual({ type: "finalize" });
+  });
+
+  it("delegates media bundle parts through computeImportSteps", () => {
+    const manifest = buildManifest({
+      includes: { database: false, media: true, themes: false },
+      mediaCount: 10,
+      bundle: {
+        id: "bundle-1",
+        partIndex: 2,
+        partCount: 2,
+        partKind: "media",
+      },
+    });
+
+    const steps = computeImportSteps(manifest, manifest.includes);
+    expect(steps.some((step) => step.type === "wipe_media")).toBe(false);
+    expect(steps.filter((step) => step.type === "restore_media")).toHaveLength(1);
   });
 });
 

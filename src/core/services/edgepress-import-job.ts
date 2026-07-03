@@ -89,11 +89,25 @@ export function phaseLabelForStep(step: ImportStep, manifest: EdgepressManifest)
   }
 }
 
+export function computeMediaAppendSteps(manifest: EdgepressManifest): ImportStep[] {
+  const steps: ImportStep[] = [];
+  const mediaCount = manifest.mediaCount ?? 0;
+  for (const chunk of chunkOffsets(mediaCount, MEDIA_FILES_PER_STEP)) {
+    steps.push({ type: "restore_media", ...chunk });
+  }
+  steps.push({ type: "finalize" });
+  return steps;
+}
+
 export function computeImportSteps(
   manifest: EdgepressManifest,
   includes: ExportIncludes,
   options?: { themeFileCount?: number },
 ): ImportStep[] {
+  if (manifest.bundle?.partKind === "media") {
+    return computeMediaAppendSteps(manifest);
+  }
+
   const steps: ImportStep[] = [];
   const tableOrder = resolveImportTableOrder(manifest.tableOrder);
   const themeFileCount = options?.themeFileCount ?? manifest.themeCount ?? 0;

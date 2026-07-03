@@ -1,7 +1,9 @@
 /**
  * Export/import EdgePress database + R2 uploads + theme packages as a .edgepress (tar.gz) archive.
  */
+import { zipSync } from "fflate";
 import { createTarGzip, parseTarGzip } from "nanotar";
+import { MAX_IMPORT_PART_BYTES } from "./edgepress-import-limits.ts";
 import { eq, sql } from "drizzle-orm";
 import {
   account,
@@ -97,6 +99,13 @@ type RowRecord = Record<string, unknown>;
 /** Source locale id (string) → locale_code. Used to remap FKs on import (locales are preserved per instance). */
 export type LocaleIdMap = Record<string, string>;
 
+export type EdgepressBundleInfo = {
+  id: string;
+  partIndex: number;
+  partCount: number;
+  partKind: "base" | "media";
+};
+
 export type EdgepressManifest = {
   format: typeof EDGEPRESS_FORMAT;
   schemaVersion: number;
@@ -111,7 +120,32 @@ export type EdgepressManifest = {
   mediaFiles: Array<{ key: string; contentType: string }>;
   themeCount: number;
   themePackages: Array<{ slug: string }>;
+  bundle?: EdgepressBundleInfo;
 };
+
+export const EDGEPRESS_BUNDLE_FORMAT = "edgepress-bundle" as const;
+
+export type EdgepressBundleManifest = {
+  format: typeof EDGEPRESS_BUNDLE_FORMAT;
+  bundleId: string;
+  exportedAt: string;
+  partCount: number;
+  parts: Array<{
+    filename: string;
+    partIndex: number;
+    partKind: "base" | "media";
+  }>;
+};
+
+export type ExportPart = {
+  filename: string;
+  data: Uint8Array;
+  manifest: EdgepressManifest;
+};
+
+export type ExportBuildResult =
+  | { type: "single"; data: Uint8Array; filename: string }
+  | { type: "bundle"; data: Uint8Array; filename: string; parts: ExportPart[] };
 
 export type EdgepressDatabasePayload = {
   tables: Partial<Record<EdgepressLogicalTable, RowRecord[]>>;
@@ -674,12 +708,110 @@ export async function remapDatabasePayloadLocales(
   return { tables, fts };
 }
 
-export async function buildExport(
+type MediaObject = { key: string; data: Uint8Array; contentType: string };
+
+function mediaTarEntries(objects: MediaObject[]): TarEntryInput[] {
+  return objects.map((item) => ({
+    name: `${MEDIA_TAR_PREFIX}${item.key.slice(MEDIA_PREFIX.length)}`,
+    data: item.data,
+  }));
+}
+
+function themeTarEntries(
+  themePackages: Array<{ slug: string; data: Uint8Array }>,
+  themeAssets: Array<{ key: string; data: Uint8Array }>,
+): TarEntryInput[] {
+  return [
+    ...themePackages.map((item) => ({
+      name: themePackageTarPath(item.slug),
+      data: item.data,
+    })),
+    ...themeAssets.map((item) => ({
+      name: item.key,
+      data: item.data,
+    })),
+  ];
+}
+
+function buildBaseManifestFields(
+  includes: ExportIncludes,
+  counts: Partial<Record<EdgepressLogicalTable, number>>,
+  localeMap: LocaleIdMap | undefined,
+  ftsRows: FtsRow[],
+  themePackages: Array<{ slug: string }>,
+  exportedAt: string,
+): Omit<EdgepressManifest, "mediaCount" | "mediaFiles" | "bundle"> {
+  return {
+    format: EDGEPRESS_FORMAT,
+    schemaVersion: EDGEPRESS_SCHEMA_VERSION,
+    exportedAt,
+    appVersion: APP_VERSION,
+    includes,
+    tableOrder: [...TABLE_ORDER],
+    counts,
+    localeMap,
+    ftsCount: includes.database ? ftsRows.length : undefined,
+    themeCount: themePackages.length,
+    themePackages: themePackages.map((item) => ({ slug: item.slug })),
+  };
+}
+
+async function createPartArchive(entries: TarEntryInput[]): Promise<Uint8Array> {
+  return createTarGzip(entries);
+}
+
+/** Per-file tar header overhead; gzip barely shrinks already-compressed media. */
+const TAR_ENTRY_OVERHEAD_BYTES = 512;
+const GZIP_SIZE_MARGIN = 1.05;
+
+export function estimateTarGzipBytes(entries: TarEntryInput[]): number {
+  let raw = 0;
+  for (const entry of entries) {
+    const data =
+      typeof entry.data === "string" ? new TextEncoder().encode(entry.data) : entry.data;
+    raw += TAR_ENTRY_OVERHEAD_BYTES + data.byteLength;
+  }
+  return Math.ceil(raw * GZIP_SIZE_MARGIN);
+}
+
+export function chunkMediaByEstimatedSize(
+  mediaObjects: MediaObject[],
+  maxPartBytes: number,
+  firstPartPrefixBytes: number,
+  mediaOnlyPrefixBytes: number,
+): MediaObject[][] {
+  if (mediaObjects.length === 0) return [];
+
+  const chunks: MediaObject[][] = [];
+  let current: MediaObject[] = [];
+  let prefixBytes = firstPartPrefixBytes;
+  let currentSize = prefixBytes;
+
+  for (const item of mediaObjects) {
+    const itemBytes = TAR_ENTRY_OVERHEAD_BYTES + item.data.byteLength;
+    if (current.length > 0 && currentSize + itemBytes > maxPartBytes) {
+      chunks.push(current);
+      current = [];
+      prefixBytes = mediaOnlyPrefixBytes;
+      currentSize = prefixBytes;
+    }
+    current.push(item);
+    currentSize += itemBytes;
+  }
+
+  if (current.length > 0) {
+    chunks.push(current);
+  }
+
+  return chunks;
+}
+
+export async function buildExportParts(
   db: Database,
   bucket: R2BucketLike,
   kv?: ArchiveKvLike | null,
   options?: Partial<ExportOptions>,
-): Promise<Uint8Array> {
+): Promise<ExportPart[]> {
   const includes = resolveExportIncludes(options);
   const tables: Partial<Record<EdgepressLogicalTable, RowRecord[]>> = {};
   const counts: Partial<Record<EdgepressLogicalTable, number>> = {};
@@ -699,56 +831,205 @@ export async function buildExport(
   const mediaObjects = includes.media ? await readAllR2Objects(bucket) : [];
   const themePackages = includes.themes && kv ? await readAllThemePackages(kv) : [];
   const themeAssets = includes.themes ? await readAllR2ByPrefix(bucket, THEME_ASSET_TAR_PREFIX) : [];
+  const exportedAt = new Date().toISOString();
 
-  const manifest: EdgepressManifest = {
-    format: EDGEPRESS_FORMAT,
-    schemaVersion: EDGEPRESS_SCHEMA_VERSION,
-    exportedAt: new Date().toISOString(),
-    appVersion: APP_VERSION,
+  const baseManifestFields = buildBaseManifestFields(
     includes,
-    tableOrder: [...TABLE_ORDER],
     counts,
     localeMap,
-    ftsCount: includes.database ? ftsRows.length : undefined,
+    ftsRows,
+    themePackages,
+    exportedAt,
+  );
+
+  const baseEntries: TarEntryInput[] = [];
+  if (includes.database) {
+    const databasePayload: EdgepressDatabasePayload = { tables, fts: ftsRows };
+    baseEntries.push({ name: "database.json", data: encodeJson(databasePayload) });
+  }
+  if (includes.themes) {
+    baseEntries.push(...themeTarEntries(themePackages, themeAssets));
+  }
+
+  const allMediaManifest: EdgepressManifest = {
+    ...baseManifestFields,
     mediaCount: mediaObjects.length,
     mediaFiles: mediaObjects.map((item) => ({
       key: item.key,
       contentType: item.contentType,
     })),
-    themeCount: themePackages.length,
-    themePackages: themePackages.map((item) => ({ slug: item.slug })),
   };
 
-  const tarEntries: TarEntryInput[] = [{ name: "manifest.json", data: encodeJson(manifest) }];
+  const singleEntries: TarEntryInput[] = [
+    { name: "manifest.json", data: encodeJson(allMediaManifest) },
+    ...baseEntries,
+    ...mediaTarEntries(mediaObjects),
+  ];
+  const singleEstimate = estimateTarGzipBytes(singleEntries);
 
-  if (includes.database) {
-    const databasePayload: EdgepressDatabasePayload = { tables, fts: ftsRows };
-    tarEntries.push({ name: "database.json", data: encodeJson(databasePayload) });
+  if (singleEstimate <= MAX_IMPORT_PART_BYTES) {
+    const singleArchive = await createPartArchive(singleEntries);
+    if (singleArchive.byteLength <= MAX_IMPORT_PART_BYTES) {
+      return [
+        {
+          filename: buildExportFilename(),
+          data: singleArchive,
+          manifest: allMediaManifest,
+        },
+      ];
+    }
   }
 
-  if (includes.media) {
-    tarEntries.push(
-      ...mediaObjects.map((item) => ({
-        name: `${MEDIA_TAR_PREFIX}${item.key.slice(MEDIA_PREFIX.length)}`,
-        data: item.data,
+  const bundleId = crypto.randomUUID();
+  const basePrefixEstimate = estimateTarGzipBytes([
+    { name: "manifest.json", data: encodeJson({ format: EDGEPRESS_FORMAT }) },
+    ...baseEntries,
+  ]);
+  const mediaOnlyPrefixEstimate = estimateTarGzipBytes([
+    { name: "manifest.json", data: encodeJson({ format: EDGEPRESS_FORMAT }) },
+  ]);
+  const mediaChunks = chunkMediaByEstimatedSize(
+    mediaObjects,
+    MAX_IMPORT_PART_BYTES,
+    basePrefixEstimate,
+    mediaOnlyPrefixEstimate,
+  );
+
+  const partCount = mediaChunks.length > 0 ? mediaChunks.length : 1;
+  const parts: ExportPart[] = [];
+  const firstMediaChunk = mediaChunks[0] ?? [];
+  const basePartManifest: EdgepressManifest = {
+    ...baseManifestFields,
+    includes: {
+      database: includes.database,
+      media: firstMediaChunk.length > 0,
+      themes: includes.themes,
+    },
+    mediaCount: firstMediaChunk.length,
+    mediaFiles: firstMediaChunk.map((item) => ({
+      key: item.key,
+      contentType: item.contentType,
+    })),
+    bundle: {
+      id: bundleId,
+      partIndex: 1,
+      partCount,
+      partKind: "base",
+    },
+  };
+
+  const basePartEntries: TarEntryInput[] = [
+    { name: "manifest.json", data: encodeJson(basePartManifest) },
+    ...baseEntries,
+    ...mediaTarEntries(firstMediaChunk),
+  ];
+  parts.push({
+    filename: buildPartFilename(1),
+    data: await createPartArchive(basePartEntries),
+    manifest: basePartManifest,
+  });
+
+  for (let i = 1; i < mediaChunks.length; i++) {
+    const chunk = mediaChunks[i]!;
+    const partIndex = i + 1;
+    const mediaManifest: EdgepressManifest = {
+      format: EDGEPRESS_FORMAT,
+      schemaVersion: EDGEPRESS_SCHEMA_VERSION,
+      exportedAt,
+      appVersion: APP_VERSION,
+      includes: { database: false, media: true, themes: false },
+      tableOrder: [...TABLE_ORDER],
+      counts: {},
+      mediaCount: chunk.length,
+      mediaFiles: chunk.map((item) => ({
+        key: item.key,
+        contentType: item.contentType,
       })),
-    );
+      themeCount: 0,
+      themePackages: [],
+      bundle: {
+        id: bundleId,
+        partIndex,
+        partCount,
+        partKind: "media",
+      },
+    };
+
+    const mediaEntries: TarEntryInput[] = [
+      { name: "manifest.json", data: encodeJson(mediaManifest) },
+      ...mediaTarEntries(chunk),
+    ];
+
+    parts.push({
+      filename: buildPartFilename(partIndex),
+      data: await createPartArchive(mediaEntries),
+      manifest: mediaManifest,
+    });
   }
 
-  if (includes.themes) {
-    tarEntries.push(
-      ...themePackages.map((item) => ({
-        name: themePackageTarPath(item.slug),
-        data: item.data,
-      })),
-      ...themeAssets.map((item) => ({
-        name: item.key,
-        data: item.data,
-      })),
-    );
+  return parts;
+}
+
+export function buildExportBundleManifest(
+  bundleId: string,
+  exportedAt: string,
+  parts: ExportPart[],
+): EdgepressBundleManifest {
+  return {
+    format: EDGEPRESS_BUNDLE_FORMAT,
+    bundleId,
+    exportedAt,
+    partCount: parts.length,
+    parts: parts.map((part) => ({
+      filename: part.filename,
+      partIndex: part.manifest.bundle?.partIndex ?? 0,
+      partKind: part.manifest.bundle?.partKind ?? "base",
+    })),
+  };
+}
+
+export function buildExportBundleZip(parts: ExportPart[]): Uint8Array {
+  const zipEntries: Record<string, Uint8Array> = {};
+  for (const part of parts) {
+    zipEntries[part.filename] = part.data;
+  }
+  return zipSync(zipEntries);
+}
+
+export async function buildExportResult(
+  db: Database,
+  bucket: R2BucketLike,
+  kv?: ArchiveKvLike | null,
+  options?: Partial<ExportOptions>,
+): Promise<ExportBuildResult> {
+  const parts = await buildExportParts(db, bucket, kv, options);
+
+  if (parts.length === 1) {
+    const part = parts[0]!;
+    return {
+      type: "single",
+      data: part.data,
+      filename: part.filename,
+    };
   }
 
-  return createTarGzip(tarEntries);
+  return {
+    type: "bundle",
+    data: buildExportBundleZip(parts),
+    filename: buildExportBundleFilename(),
+    parts,
+  };
+}
+
+/** @deprecated Use buildExportResult for multi-part support. */
+export async function buildExport(
+  db: Database,
+  bucket: R2BucketLike,
+  kv?: ArchiveKvLike | null,
+  options?: Partial<ExportOptions>,
+): Promise<Uint8Array> {
+  const result = await buildExportResult(db, bucket, kv, options);
+  return result.data;
 }
 
 export function parseEdgepressManifest(raw: unknown): EdgepressManifest {
@@ -897,4 +1178,13 @@ export async function restoreImport(
 export function buildExportFilename(): string {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   return `edgepress-export-${stamp}.edgepress`;
+}
+
+export function buildPartFilename(partIndex: number): string {
+  return `part-${String(partIndex).padStart(3, "0")}.edgepress`;
+}
+
+export function buildExportBundleFilename(): string {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return `edgepress-bundle-${stamp}.zip`;
 }
