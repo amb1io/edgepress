@@ -151,7 +151,7 @@
   "admin.cache.clearSearch": "Limpiar",
   "admin.importExport.title": "Import/Export",
   "admin.importExport.exportTitle": "Exportar Datos",
-  "admin.importExport.exportDescription": "Genera un archivo .edgepress o un .zip con varias partes (cada una por debajo de 100 MB) con base de datos, medios y temas.",
+  "admin.importExport.exportDescription": "Genera un archivo .edgepress o un .zip con varias partes (cada una por debajo de 40 MB) con base de datos, medios y temas.",
   "admin.importExport.exportButton": "Haga clic aquí para exportar los datos",
   "admin.importExport.exportLoading": "Exportando…",
   "admin.importExport.exportDatabaseOption": "Exportar base de datos",
