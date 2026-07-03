@@ -1,6 +1,6 @@
 /**
- * Exporta o ambiente local como um arquivo .edgepress (tar.gz).
- * Uso: npm run export:local
+ * Exporta o ambiente local como um arquivo .edgepress (tar.gz) ou bundle .zip multi-parte.
+ * Uso: npx tsx scripts/export-local.ts
  *
  * Requer que o banco local já exista (rode antes: npm run db:migrate:local).
  * Usa as bindings locais do wrangler (D1, R2, KV) via getPlatformProxy.
@@ -10,7 +10,35 @@ import { join } from "node:path";
 import { getPlatformProxy } from "wrangler";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
-import { buildExport, buildExportFilename } from "../src/core/services/edgepress-archive.ts";
+import {
+  buildExportBundleZip,
+  buildExportParts,
+  buildExportBundleFilename,
+} from "../src/core/services/edgepress-archive.ts";
+
+async function writeBufferStreaming(outPath: string, data: Uint8Array): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const stream = createWriteStream(outPath);
+    const CHUNK = 64 * 1024 * 1024;
+    let offset = 0;
+    function writeNext() {
+      while (offset < data.byteLength) {
+        const end = Math.min(offset + CHUNK, data.byteLength);
+        const chunk = data.subarray(offset, end);
+        offset = end;
+        const canContinue = stream.write(chunk);
+        if (!canContinue) {
+          stream.once("drain", writeNext);
+          return;
+        }
+      }
+      stream.end();
+    }
+    stream.on("finish", resolve);
+    stream.on("error", reject);
+    writeNext();
+  });
+}
 
 async function main(): Promise<void> {
   console.log("Iniciando exportação do ambiente local...");
@@ -34,7 +62,6 @@ async function main(): Promise<void> {
     const db = drizzle(env.DB, { schema });
 
     console.log("Lendo dados do D1...");
-    // Testa a conexão com D1 antes de chamar buildExport
     const testResult = await env.DB.prepare("SELECT COUNT(*) as c FROM sqlite_master").first<{ c: number }>();
     console.log(`D1 OK — ${testResult?.c ?? 0} tabelas encontradas.`);
 
@@ -42,39 +69,35 @@ async function main(): Promise<void> {
     const listed = await env.MEDIA_BUCKET.list({ limit: 5 });
     console.log(`R2 OK — primeiros ${listed.objects.length} objetos listados (truncated: ${listed.truncated}).`);
 
-    console.log("Iniciando buildExport (D1 + R2 + KV)...");
-    const archive = await buildExport(db, env.MEDIA_BUCKET, env.CACHE ?? null);
+    console.log("Iniciando buildExportParts (D1 + R2 + KV)...");
+    const parts = await buildExportParts(db, env.MEDIA_BUCKET, env.CACHE ?? null);
+    const cwd = process.cwd();
 
-    const filename = buildExportFilename();
-    const outPath = join(process.cwd(), filename);
+    if (parts.length === 1) {
+      const part = parts[0]!;
+      const outPath = join(cwd, part.filename);
+      await writeBufferStreaming(outPath, part.data);
+      const sizeMb = (part.data.byteLength / 1024 / 1024).toFixed(1);
+      console.log(`\nExportação concluída com sucesso!`);
+      console.log(`Arquivo: ${outPath}`);
+      console.log(`Tamanho: ${sizeMb} MB`);
+      return;
+    }
 
-    // writeFileSync has a 2 GB limit; use streaming write for large archives
-    await new Promise<void>((resolve, reject) => {
-      const stream = createWriteStream(outPath);
-      const CHUNK = 64 * 1024 * 1024; // 64 MB chunks
-      let offset = 0;
-      function writeNext() {
-        while (offset < archive.byteLength) {
-          const end = Math.min(offset + CHUNK, archive.byteLength);
-          const chunk = archive.subarray(offset, end);
-          offset = end;
-          const canContinue = stream.write(chunk);
-          if (!canContinue) {
-            stream.once("drain", writeNext);
-            return;
-          }
-        }
-        stream.end();
-      }
-      stream.on("finish", resolve);
-      stream.on("error", reject);
-      writeNext();
-    });
+    for (const part of parts) {
+      const partPath = join(cwd, part.filename);
+      await writeBufferStreaming(partPath, part.data);
+      const sizeMb = (part.data.byteLength / 1024 / 1024).toFixed(1);
+      console.log(`Parte gravada: ${partPath} (${sizeMb} MB)`);
+    }
 
-    const sizeMb = (archive.byteLength / 1024 / 1024).toFixed(1);
-    console.log(`\nExportação concluída com sucesso!`);
-    console.log(`Arquivo: ${outPath}`);
-    console.log(`Tamanho: ${sizeMb} MB`);
+    const zipData = buildExportBundleZip(parts);
+    const zipPath = join(cwd, buildExportBundleFilename());
+    await writeBufferStreaming(zipPath, zipData);
+    const zipMb = (zipData.byteLength / 1024 / 1024).toFixed(1);
+
+    console.log(`\nExportação multi-parte concluída!`);
+    console.log(`Zip: ${zipPath} (${zipMb} MB, ${parts.length} partes)`);
   } finally {
     await proxy.dispose();
   }

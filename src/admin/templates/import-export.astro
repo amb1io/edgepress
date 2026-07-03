@@ -35,6 +35,7 @@ const importSuccess = t(currentLocale, "admin.importExport.importSuccess");
 const importError = t(currentLocale, "admin.importExport.importError");
 const importProgressTitle = t(currentLocale, "admin.importExport.importProgressTitle");
 const importPolling = t(currentLocale, "admin.importExport.importPolling");
+const importPartProgress = t(currentLocale, "admin.importExport.importPartProgress");
 const importClose = t(currentLocale, "admin.importExport.importClose");
 ---
 
@@ -43,7 +44,7 @@ const importClose = t(currentLocale, "admin.importExport.importClose");
     <span class="text-sm text-base-content/70">{currentUser.email}</span>
   </div>
 
-  <script define:vars={{ importConfirm, importError, importSuccess, exportSelectWarning, importProgressTitle, importPolling, importClose }}>
+  <script define:vars={{ importConfirm, importError, importSuccess, exportSelectWarning, importProgressTitle, importPolling, importPartProgress, importClose }}>
     window.__importExportStrings = {
       importConfirm,
       importError,
@@ -51,6 +52,7 @@ const importClose = t(currentLocale, "admin.importExport.importClose");
       exportSelectWarning,
       importProgressTitle,
       importPolling,
+      importPartProgress,
       importClose,
     };
   </script>
@@ -135,9 +137,9 @@ const importClose = t(currentLocale, "admin.importExport.importClose");
             <input
               id="import-file"
               type="file"
-              name="file"
               accept=".edgepress,.tar.gz,.tgz,application/gzip,application/x-gzip"
               class="file-input file-input-bordered w-full max-w-xl"
+              multiple
               required
               :disabled="importing || exporting"
             />

@@ -9,23 +9,28 @@ import {
   computeImportSteps,
   phaseLabelForStep,
 } from "../../core/services/edgepress-import-job.ts";
-import { writeImportJob, createImportPollToken, type ImportJobState } from "../../core/services/import-job-state.ts";
+import {
+  writeImportJob,
+  createImportPollToken,
+  readImportBundle,
+  validateBundlePartOrder,
+  initImportBundleUpload,
+  isBundleUploadTokenValid,
+  IMPORT_BUNDLE_UPLOAD_TOKEN_HEADER,
+  type ImportJobState,
+} from "../../core/services/import-job-state.ts";
+import { MAX_ARCHIVE_SIZE } from "../../core/services/edgepress-import-limits.ts";
 import { stageImportArchive, type ImportStagingBucket } from "../../core/services/import-staging.ts";
 import { requireMinRole } from "../../utils/api-auth.ts";
-import { internalServerErrorResponse } from "../../utils/http-responses.ts";
+import { internalServerErrorResponse, unauthorizedResponse } from "../../utils/http-responses.ts";
 
 export const prerender = false;
-
-const MAX_ARCHIVE_SIZE = 100 * 1024 * 1024; // 100 MB
 
 type ImportQueueBinding = {
   send: (message: { jobId: string; stepIndex: number }) => Promise<void>;
 };
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const authResult = await requireMinRole(request, 0, locals);
-  if (authResult instanceof Response) return authResult;
-
   const bucket = cfEnv.MEDIA_BUCKET as ImportStagingBucket | undefined;
   const kv = cfEnv.CACHE as
     | {
@@ -109,6 +114,41 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const buffer = await file.arrayBuffer();
     const jobId = crypto.randomUUID();
     const staged = await stageImportArchive(bucket, jobId, buffer, db);
+    const bundle = staged.manifest.bundle;
+    let bundleUploadToken: string | undefined;
+
+    if (bundle?.partKind === "media") {
+      const bundleState = await readImportBundle(kv, bundle.id);
+      const uploadTokenHeader = request.headers.get(IMPORT_BUNDLE_UPLOAD_TOKEN_HEADER);
+      const authResult = await requireMinRole(request, 0, locals);
+      const hasSession = !(authResult instanceof Response);
+      const hasUploadToken = isBundleUploadTokenValid(bundleState ?? {}, uploadTokenHeader);
+
+      if (!hasSession && !hasUploadToken) {
+        return authResult instanceof Response
+          ? authResult
+          : unauthorizedResponse("Autenticação necessária");
+      }
+
+      const bundleError = validateBundlePartOrder(bundle, bundleState);
+      if (bundleError) {
+        return new Response(JSON.stringify({ error: bundleError }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    } else {
+      const authResult = await requireMinRole(request, 0, locals);
+      if (authResult instanceof Response) return authResult;
+
+      if (bundle?.partKind === "base" && bundle.partCount > 1) {
+        const existing = await readImportBundle(kv, bundle.id);
+        bundleUploadToken =
+          existing?.uploadToken ??
+          (await initImportBundleUpload(kv, { id: bundle.id, partCount: bundle.partCount }));
+      }
+    }
+
     const steps = computeImportSteps(staged.manifest, staged.includes, {
       themeFileCount: staged.themeFiles.length,
     });
@@ -132,10 +172,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
     await writeImportJob(kv, jobId, job);
     await importQueue.send({ jobId, stepIndex: 0 });
 
-    return new Response(JSON.stringify({ jobId, pollToken, status: "queued" }), {
-      status: 202,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        jobId,
+        pollToken,
+        ...(bundleUploadToken ? { bundleUploadToken } : {}),
+        status: "queued",
+      }),
+      {
+        status: 202,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   } catch (err) {
     const error = err as (Error & { cause?: unknown }) | undefined;
     const cause = error?.cause;

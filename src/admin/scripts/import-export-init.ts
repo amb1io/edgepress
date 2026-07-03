@@ -10,6 +10,7 @@ declare global {
       exportSelectWarning?: string;
       importProgressTitle?: string;
       importPolling?: string;
+      importPartProgress?: string;
       importClose?: string;
     };
   }
@@ -40,6 +41,48 @@ function getImportModalElements() {
   };
 }
 
+function isEdgepressFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return (
+    name.endsWith(".edgepress") ||
+    name.endsWith(".tar.gz") ||
+    name.endsWith(".tgz")
+  );
+}
+
+function filterEdgepressFiles(files: File[]): File[] {
+  return files.filter(isEdgepressFile);
+}
+
+function partIndexFromFilename(name: string): number | null {
+  const match = name.match(/part-(\d+)/i);
+  if (!match?.[1]) return null;
+  return Number.parseInt(match[1], 10);
+}
+
+function sortImportFiles(files: File[]): File[] {
+  return [...files].sort((a, b) => {
+    const aPart = partIndexFromFilename(a.name);
+    const bPart = partIndexFromFilename(b.name);
+    if (aPart != null && bPart != null) return aPart - bPart;
+    if (aPart != null) return -1;
+    if (bPart != null) return 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function formatPartProgress(
+  template: string,
+  current: number,
+  total: number,
+  filename: string,
+): string {
+  return template
+    .replace("{current}", String(current))
+    .replace("{total}", String(total))
+    .replace("{filename}", filename);
+}
+
 document.addEventListener("alpine:init", () => {
   window.Alpine.data("importExportPage", () => ({
     exporting: false,
@@ -52,6 +95,7 @@ document.addEventListener("alpine:init", () => {
     exportWarning: false,
     importJobId: "",
     importPollToken: "",
+    importBundleUploadToken: "",
     importPercent: 0,
     importPhaseLabel: "",
     importPollingTimer: null as ReturnType<typeof setInterval> | null,
@@ -72,15 +116,18 @@ document.addEventListener("alpine:init", () => {
       modal.classList.remove("flex");
     },
 
-    updateImportModal(status: ImportStatusResponse) {
+    updateImportModal(status: ImportStatusResponse, partLabel?: string) {
       const { bar, phase, errorBox, errorText, closeBtn } = getImportModalElements();
       const percent = typeof status.percent === "number" ? status.percent : 0;
       this.importPercent = percent;
-      this.importPhaseLabel = status.phaseLabel ?? "";
+      this.importPhaseLabel = partLabel ?? status.phaseLabel ?? "";
 
       if (bar) bar.value = percent;
       if (phase) {
-        phase.textContent = status.phaseLabel ?? window.__importExportStrings?.importPolling ?? "";
+        const label = partLabel
+          ? partLabel
+          : (status.phaseLabel ?? window.__importExportStrings?.importPolling ?? "");
+        phase.textContent = label;
       }
 
       if (status.status === "failed") {
@@ -100,66 +147,96 @@ document.addEventListener("alpine:init", () => {
       }
     },
 
-    async pollImportJob(jobId: string, pollToken: string) {
-      const strings = window.__importExportStrings ?? {};
-      try {
-        const res = await fetch(`/api/import/${encodeURIComponent(jobId)}`, {
-          credentials: "same-origin",
-          headers: pollToken ? { "X-Import-Poll-Token": pollToken } : {},
-        });
-        const data = (await res.json().catch(() => ({}))) as ImportStatusResponse & {
-          message?: string;
-          error?: string;
+    waitForImportJob(jobId: string, pollToken: string): Promise<ImportStatusResponse> {
+      return new Promise((resolve, reject) => {
+        const strings = window.__importExportStrings ?? {};
+
+        const poll = async () => {
+          try {
+            const res = await fetch(`/api/import/${encodeURIComponent(jobId)}`, {
+              credentials: "same-origin",
+              headers: pollToken ? { "X-Import-Poll-Token": pollToken } : {},
+            });
+            const data = (await res.json().catch(() => ({}))) as ImportStatusResponse & {
+              message?: string;
+              error?: string;
+            };
+
+            if (!res.ok) {
+              throw new Error(data.message || data.error || strings.importError || "Import failed");
+            }
+
+            this.updateImportModal(data);
+
+            if (data.status === "completed") {
+              this.stopImportPolling();
+              resolve(data);
+              return;
+            }
+
+            if (data.status === "failed") {
+              this.stopImportPolling();
+              const message = data.cause
+                ? `${data.error ?? strings.importError} — cause: ${data.cause}`
+                : (data.error ?? strings.importError ?? "Import failed");
+              reject(new Error(message));
+            }
+          } catch (error) {
+            this.stopImportPolling();
+            reject(error);
+          }
         };
 
-        if (!res.ok) {
-          throw new Error(data.message || data.error || strings.importError || "Import failed");
-        }
-
-        this.updateImportModal(data);
-
-        if (data.status === "completed") {
-          this.stopImportPolling();
-          this.importOk = true;
-          this.importMessage = strings.importSuccess ?? "Import completed";
-          this.importing = false;
-          const { closeBtn } = getImportModalElements();
-          closeBtn?.classList.remove("hidden");
-          setTimeout(() => this.hideImportModal(), 1200);
-          return;
-        }
-
-        if (data.status === "failed") {
-          this.stopImportPolling();
-          this.importOk = false;
-          const message = data.cause
-            ? `${data.error ?? strings.importError} — cause: ${data.cause}`
-            : (data.error ?? strings.importError ?? "Import failed");
-          this.importMessage = message;
-          this.importing = false;
-        }
-      } catch (error) {
+        this.importJobId = jobId;
+        this.importPollToken = pollToken;
         this.stopImportPolling();
-        this.importOk = false;
-        this.importing = false;
-        this.importMessage =
-          error instanceof Error ? error.message : (strings.importError ?? "Import failed");
-        this.updateImportModal({
-          status: "failed",
-          error: this.importMessage,
-          percent: this.importPercent,
-        });
-      }
+        void poll();
+        this.importPollingTimer = setInterval(() => {
+          void poll();
+        }, 1500);
+      });
     },
 
-    startImportPolling(jobId: string, pollToken: string) {
-      this.importJobId = jobId;
-      this.importPollToken = pollToken;
-      this.stopImportPolling();
-      void this.pollImportJob(jobId, pollToken);
-      this.importPollingTimer = setInterval(() => {
-        void this.pollImportJob(jobId, pollToken);
-      }, 1500);
+    async uploadImportFile(
+      file: File,
+      bundleUploadToken?: string,
+    ): Promise<{ jobId: string; pollToken: string; bundleUploadToken?: string }> {
+      const strings = window.__importExportStrings ?? {};
+      const body = new FormData();
+      body.append("file", file);
+
+      const headers: Record<string, string> = {};
+      if (bundleUploadToken) {
+        headers["X-Import-Bundle-Token"] = bundleUploadToken;
+      }
+
+      const res = await fetch("/api/import", {
+        method: "POST",
+        body,
+        credentials: "same-origin",
+        headers,
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        jobId?: string;
+        pollToken?: string;
+        bundleUploadToken?: string;
+        message?: string;
+        error?: string;
+      };
+
+      if (res.status === 202 && data.jobId && data.pollToken) {
+        return {
+          jobId: data.jobId,
+          pollToken: data.pollToken,
+          bundleUploadToken: data.bundleUploadToken,
+        };
+      }
+
+      if (!res.ok) {
+        throw new Error(data.message || data.error || strings.importError || "Import failed");
+      }
+
+      throw new Error(strings.importError || "Import failed");
     },
 
     async exportData() {
@@ -209,43 +286,56 @@ document.addEventListener("alpine:init", () => {
       const fileInput = form.querySelector('input[type="file"]');
       if (!(fileInput instanceof HTMLInputElement) || !fileInput.files?.length) return;
 
+      const files = sortImportFiles(filterEdgepressFiles(Array.from(fileInput.files)));
+      if (files.length === 0) {
+        this.importOk = false;
+        this.importMessage = strings.importError ?? "No valid .edgepress files selected";
+        return;
+      }
+      const totalParts = files.length;
+
       this.importing = true;
       this.importMessage = "";
+      this.importBundleUploadToken = "";
       this.showImportModal();
-      this.updateImportModal({
-        status: "queued",
-        phaseLabel: strings.importPolling ?? "Processing…",
-        percent: 0,
-      });
 
       try {
-        const body = new FormData(form);
-        const res = await fetch("/api/import", {
-          method: "POST",
-          body,
-          credentials: "same-origin",
-        });
-        const data = (await res.json().catch(() => ({}))) as {
-          jobId?: string;
-          pollToken?: string;
-          message?: string;
-          error?: string;
-        };
+        for (let index = 0; index < files.length; index++) {
+          const file = files[index]!;
+          const partLabel = formatPartProgress(
+            strings.importPartProgress ?? "Part {current} of {total}: {filename}",
+            index + 1,
+            totalParts,
+            file.name,
+          );
 
-        if (res.status === 202 && data.jobId && data.pollToken) {
-          this.startImportPolling(data.jobId, data.pollToken);
-          form.reset();
-          return;
-        }
+          this.updateImportModal(
+            {
+              status: "queued",
+              phaseLabel: strings.importPolling ?? "Processing…",
+              percent: Math.round((index / totalParts) * 100),
+            },
+            partLabel,
+          );
 
-        if (!res.ok) {
-          throw new Error(data.message || data.error || strings.importError || "Import failed");
+          const uploadToken =
+            index > 0 ? this.importBundleUploadToken || undefined : undefined;
+          const { jobId, pollToken, bundleUploadToken } = await this.uploadImportFile(
+            file,
+            uploadToken,
+          );
+          if (bundleUploadToken) {
+            this.importBundleUploadToken = bundleUploadToken;
+          }
+          await this.waitForImportJob(jobId, pollToken);
         }
 
         this.importOk = true;
         this.importMessage = strings.importSuccess ?? "Import completed";
         this.importing = false;
-        this.hideImportModal();
+        const { closeBtn } = getImportModalElements();
+        closeBtn?.classList.remove("hidden");
+        setTimeout(() => this.hideImportModal(), 1200);
         form.reset();
       } catch (error) {
         this.stopImportPolling();
