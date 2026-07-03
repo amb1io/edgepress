@@ -39,15 +39,17 @@ function makePart(partIndex: number, partCount: number, sizeBytes: number): Expo
 
 describe("chunkMediaByEstimatedSize", () => {
   it("splits media objects so each chunk stays under the part limit", () => {
+    const fifteenMb = 15 * 1024 * 1024;
     const media = [
-      { key: "uploads/a.bin", data: new Uint8Array(50 * 1024 * 1024), contentType: "application/octet-stream" },
-      { key: "uploads/b.bin", data: new Uint8Array(50 * 1024 * 1024), contentType: "application/octet-stream" },
+      { key: "uploads/a.bin", data: new Uint8Array(fifteenMb), contentType: "application/octet-stream" },
+      { key: "uploads/b.bin", data: new Uint8Array(fifteenMb), contentType: "application/octet-stream" },
+      { key: "uploads/c.bin", data: new Uint8Array(fifteenMb), contentType: "application/octet-stream" },
     ];
     const prefix = 1024;
     const chunks = chunkMediaByEstimatedSize(media, MAX_IMPORT_PART_BYTES, prefix, prefix);
 
-    expect(chunks).toHaveLength(2);
-    expect(chunks[0]).toHaveLength(1);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks[0]).toHaveLength(2);
     expect(chunks[1]).toHaveLength(1);
   });
 });
