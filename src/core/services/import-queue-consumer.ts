@@ -33,6 +33,7 @@ import {
   markImportJobFailed,
   readImportJob,
   writeImportJob,
+  completeImportBundlePart,
   type ImportJobState,
 } from "./import-job-state.ts";
 import {
@@ -268,6 +269,9 @@ async function executeImportStep(
     case "finalize": {
       await deleteImportStaging(bucket, jobId);
       updates.status = "completed";
+      if (manifest.bundle) {
+        await completeImportBundlePart(kv, manifest.bundle);
+      }
       break;
     }
     default: {
