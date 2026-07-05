@@ -76,6 +76,7 @@ function toPostView(post: ContentPostDetail): ThemePostView {
     slug: String(post.slug ?? ""),
     excerpt: String(post.excerpt ?? ""),
     body_html: String(post.body ?? ""),
+    body_blocks: post.body_blocks ?? null,
     author_name: String((post as { author_name?: string }).author_name ?? ""),
     published_at:
       typeof post.published_at === "number"
@@ -184,6 +185,7 @@ export async function buildThemeRenderContext(
   const localePrefix = publicLocaleUrlPrefix(locale);
   const homeUrl = publicLocaleHomeUrl(locale);
   const assetBase = `${baseUrl}/themes-assets/${pkg.manifest.slug}`;
+  const themeSupports = pkg.manifest.supports ?? [];
   const homeContentKey = pkg.manifest.home_content_key ?? "hello-world";
   const homeListPosts = pkg.manifest.home_list_posts === true;
 
@@ -270,6 +272,7 @@ export async function buildThemeRenderContext(
         slug: pkg.manifest.slug,
         version: pkg.manifest.version,
         asset_base_url: assetBase,
+        supports: themeSupports,
       },
       route: {
         kind: resolvedKind,
@@ -435,6 +438,7 @@ export async function buildThemeRenderContext(
         slug: pkg.manifest.slug,
         version: pkg.manifest.version,
         asset_base_url: assetBase,
+        supports: themeSupports,
       },
       route: {
         kind: "search",
@@ -632,6 +636,7 @@ export async function buildThemeRenderContext(
       slug: pkg.manifest.slug,
       version: pkg.manifest.version,
       asset_base_url: assetBase,
+      supports: themeSupports,
     },
     route: {
       kind: resolvedKind,
