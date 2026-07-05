@@ -383,6 +383,22 @@ Equivalente a `the_content()`. Renderiza `post.body_html` dentro de `<div class=
 
 Só produz saída quando `post` existe.
 
+### `{% blocknote_content %}`
+
+Variante **C3 híbrida** para conteúdo BlockNote:
+
+1. Renderiza o HTML sanitizado imediatamente (fallback SEO / sem JavaScript).
+2. Se `post.body_blocks` existir, inclui um nó de hidratação com o JSON dos blocos.
+3. Quando o tema declara `"blocknote"` em `theme.json` → `supports`, `{% scripts_footer %}` injeta o bundle público BlockNote (CSS + JS) para montar o editor readonly no cliente.
+
+Use em páginas com layout BlockNote (colunas, blocos custom). Templates que não precisam de hidratação podem continuar com `{% the_content %}`.
+
+Opt-in no manifest:
+
+```json
+"supports": ["home", "single", "page", "blocknote"]
+```
+
 ### `{% nav_menu 'primary' %}`
 
 Equivalente a `wp_nav_menu()`. Argumento: chave do menu (`primary` → `menus.primary`).
@@ -411,7 +427,7 @@ Equivalente a `wp_enqueue_style`. Inclui:
 
 ### `{% scripts_footer %}`
 
-Equivalente a `wp_footer()` (scripts). Inclui HTMX, Alpine.js e `theme.js` do tema:
+Equivalente a `wp_footer()` (scripts). Inclui HTMX, Alpine.js e `theme.js` do tema. Quando o tema suporta `"blocknote"` e a página atual tem `body_blocks`, também inclui CSS/JS do BlockNote readonly (`/_astro/blocknote-readonly-mount.*`).
 
 ```html
 <script src="https://unpkg.com/htmx.org@2.0.8" defer></script>
