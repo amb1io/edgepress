@@ -3,6 +3,7 @@ import sanitizeHtml from "sanitize-html";
 import type { ThemeRenderContext } from "./types.ts";
 import { renderSeoHead } from "./seo-head.ts";
 import { registerGetTaxonomiesTag, registerGetRelatedPostsTag, registerGetAuthorTag } from "./theme-functions.ts";
+import { getBlockNotePublicAssets } from "./blocknote-public-assets.ts";
 
 type TagImpl = {
   render: (ctx: ThemeRenderContext) => string;
@@ -69,13 +70,77 @@ function renderThemeStyles(ctx: ThemeRenderContext): string {
   return `<link rel="stylesheet" href="${escapeAttr(href)}" />`;
 }
 
+function themeSupportsBlockNote(ctx: ThemeRenderContext): boolean {
+  return (ctx.theme.supports ?? []).some((flag) => flag.toLowerCase() === "blocknote");
+}
+
+function hasHydratableBodyBlocks(post: ThemeRenderContext["post"]): boolean {
+  const raw = String(post?.body_blocks ?? "").trim();
+  return raw !== "" && raw !== "[]";
+}
+
+export function shouldLoadBlockNoteAssets(ctx: ThemeRenderContext): boolean {
+  return themeSupportsBlockNote(ctx) && hasHydratableBodyBlocks(ctx.post);
+}
+
+function escapeJsonForInlineScript(json: string): string {
+  return json.replace(/<\//g, "<\\/");
+}
+
+function renderTheContentInner(ctx: ThemeRenderContext): string {
+  const html = ctx.post?.body_html ?? "";
+  if (!html) return "";
+  return sanitizeContentHtml(html);
+}
+
+function renderBlockNoteContent(ctx: ThemeRenderContext): string {
+  const inner = renderTheContentInner(ctx);
+  if (!inner && !hasHydratableBodyBlocks(ctx.post)) return "";
+
+  const parts: string[] = [
+    '<div class="entry-content block-editor-content edgepress-blocknote">',
+  ];
+
+  if (inner) {
+    parts.push(`<div class="edgepress-blocknote-fallback">${inner}</div>`);
+  }
+
+  if (hasHydratableBodyBlocks(ctx.post)) {
+    const blocksJson = escapeJsonForInlineScript(String(ctx.post!.body_blocks ?? "").trim());
+    const locale = escapeAttr(ctx.route.locale || ctx.site.locale || "pt-br");
+    parts.push(
+      `<div class="edgepress-blocknote-root" data-locale="${locale}" hidden aria-hidden="true">`,
+      `<script type="application/json" class="edgepress-blocknote-data">${blocksJson}</script>`,
+      "</div>",
+    );
+  }
+
+  parts.push("</div>");
+  return parts.join("\n");
+}
+
 function renderFooterScripts(ctx: ThemeRenderContext): string {
   const themeJs = `${ctx.theme.asset_base_url}/theme.js`;
-  return [
+  const parts: string[] = [
     `<script src="https://unpkg.com/htmx.org@2.0.8" defer></script>`,
     `<script src="https://unpkg.com/alpinejs@3.15.8/dist/cdn.min.js" defer></script>`,
     `<script src="${escapeAttr(themeJs)}" defer></script>`,
-  ].join("\n  ");
+  ];
+
+  if (shouldLoadBlockNoteAssets(ctx)) {
+    const assets = getBlockNotePublicAssets();
+    if (assets) {
+      const base = ctx.site.base_url.replace(/\/+$/, "");
+      if (assets.css) {
+        parts.push(`<link rel="stylesheet" href="${escapeAttr(`${base}${assets.css}`)}" />`);
+      }
+      parts.push(
+        `<script type="module" src="${escapeAttr(`${base}${assets.js}`)}" defer></script>`,
+      );
+    }
+  }
+
+  return parts.join("\n  ");
 }
 
 function sanitizeContentHtml(html: string): string {
@@ -120,10 +185,16 @@ export function registerThemeApi(liquid: Liquid): void {
     "the_content",
     makeHtmlTag({
       render: (ctx) => {
-        const html = ctx.post?.body_html ?? "";
-        if (!html) return "";
-        return `<div class="entry-content block-editor-content">${sanitizeContentHtml(html)}</div>`;
+        const inner = renderTheContentInner(ctx);
+        if (!inner) return "";
+        return `<div class="entry-content block-editor-content">${inner}</div>`;
       },
+    }),
+  );
+  liquid.registerTag(
+    "blocknote_content",
+    makeHtmlTag({
+      render: (ctx) => renderBlockNoteContent(ctx),
     }),
   );
   liquid.registerTag("nav_menu", makeArgHtmlTag(renderNavMenu));
