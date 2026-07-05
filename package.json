@@ -35,6 +35,7 @@
     "dev:vite": "vite",
     "wrangler-type": "wrangler types -c wrangler.toml",
     "build": "wrangler types -c wrangler.toml && astro build",
+    "postbuild": "tsx scripts/generate-blocknote-public-manifest.ts",
     "build:seed": "wrangler types -c wrangler.toml && tsx scripts/build-with-seed.ts && astro build",
     "build:run": "wrangler types -c wrangler.toml && astro build && wrangler dev",
     "deploy": "wrangler deploy",

@@ -38,7 +38,7 @@ function loadSitemapCustomPages() {
 
 const sitemapCustomPages = loadSitemapCustomPages();
 
-const SITEMAP_EXCLUDED_PREFIXES = ["/admin", "/api", "/login", "/setup", "/themes"];
+const SITEMAP_EXCLUDED_PREFIXES = ["/admin", "/api", "/login", "/setup", "/themes", "/edgepress-internal"];
 
 function shouldIncludeInSitemap(page) {
   try {
@@ -82,7 +82,10 @@ export default defineConfig({
     // invalidar chunks em node_modules/.vite/deps_ssr durante reload ("file does not exist"
     // / "Module is undefined"). Mantém drizzle/auth/libsql fora do dep optimizer.
     optimizeDeps: {
-      entries: ["src/components/admin/BlockNoteEditor.tsx"],
+      entries: [
+        "src/components/admin/BlockNoteEditor.tsx",
+        "src/public/blocknote-readonly-mount.tsx",
+      ],
       include: [
         "react",
         "react-dom",

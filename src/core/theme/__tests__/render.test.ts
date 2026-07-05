@@ -40,6 +40,7 @@ function baseContext(overrides: Partial<ThemeRenderContext> = {}): ThemeRenderCo
       slug: "2026",
       version: "1.0.0",
       asset_base_url: "http://localhost:8787/themes-assets/2026",
+      supports: [],
     },
     route: { kind: "home", path: "/", locale: "pt-br" },
     body_class: "route-home",
@@ -239,5 +240,84 @@ describe("renderTheme", () => {
     );
 
     expect(html).toContain("Rhamses:Bio do autor");
+  });
+
+  it("renders blocknote_content with HTML fallback and hydration mount", async () => {
+    const pkg = minimalPackage({
+      "layouts/base":
+        "<html><head>{% scripts_footer %}</head><body>{% page_content %}</body></html>",
+      home: "{% layout 'layouts/base' %}{% blocknote_content %}",
+    });
+
+    const blocks = JSON.stringify([
+      {
+        id: "col-list",
+        type: "columnList",
+        props: {},
+        content: [],
+        children: [],
+      },
+    ]);
+
+    const html = await renderTheme(
+      {
+        ...pkg,
+        manifest: { ...pkg.manifest, supports: ["home", "blocknote"] },
+      },
+      baseContext({
+        theme: {
+          slug: "test",
+          version: "1.0.0",
+          asset_base_url: "http://localhost:8787/themes-assets/test",
+          supports: ["home", "blocknote"],
+        },
+        post: {
+          id: 1,
+          title: "Home",
+          slug: "home",
+          excerpt: "",
+          body_html: "<h3>Fallback headline</h3>",
+          body_blocks: blocks,
+          author_name: "",
+          published_at: null,
+          post_type_slug: "page",
+          meta: {},
+        },
+      }),
+    );
+
+    expect(html).toContain("edgepress-blocknote-fallback");
+    expect(html).toContain("Fallback headline");
+    expect(html).toContain("edgepress-blocknote-root");
+    expect(html).toContain("edgepress-blocknote-data");
+    expect(html).toContain("blocknote-readonly-mount.test.js");
+    expect(html).toContain("blocknote-readonly-mount.test.css");
+  });
+
+  it("does not inject BlockNote assets when theme lacks blocknote support", async () => {
+    const pkg = minimalPackage({
+      "layouts/base": "<html><head>{% scripts_footer %}</head><body></body></html>",
+      home: "{% layout 'layouts/base' %}",
+    });
+
+    const html = await renderTheme(
+      pkg,
+      baseContext({
+        post: {
+          id: 1,
+          title: "Home",
+          slug: "home",
+          excerpt: "",
+          body_html: "<p>Body</p>",
+          body_blocks: '[{"id":"a","type":"paragraph"}]',
+          author_name: "",
+          published_at: null,
+          post_type_slug: "page",
+          meta: {},
+        },
+      }),
+    );
+
+    expect(html).not.toContain("blocknote-readonly-mount.test.js");
   });
 });
