@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const astroDir = join(root, "dist/client/_astro");
-const outFile = join(root, "src/generated/blocknote-public-assets.json");
+const outFile = join(root, "src/core/theme/blocknote-public-assets.manifest.json");
 
 function pickAsset(files: string[], ext: string, needle: string): string {
   const matches = files.filter(

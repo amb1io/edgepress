@@ -1,4 +1,4 @@
-import manifest from "../../generated/blocknote-public-assets.json";
+import manifest from "./blocknote-public-assets.manifest.json";
 
 export type BlockNotePublicAssets = {
   js: string;
