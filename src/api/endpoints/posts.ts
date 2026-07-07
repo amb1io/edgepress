@@ -186,6 +186,7 @@ export async function POST({
     const slug = getString(formData, "slug");
     const excerpt = getString(formData, "excerpt", "");
     const body = getString(formData, "body", "");
+    const body_blocks = getString(formData, "body_blocks", "");
     const status = normalizePostStatus(getString(formData, "status"));
 
     // Extrair author_id e aplicar regra de privilégio (autor só pode ser ele mesmo)
@@ -377,6 +378,7 @@ export async function POST({
         slug,
         excerpt: excerpt || null,
         body: body || null,
+        body_blocks: body_blocks || null,
         status,
         author_id,
         id_locale_code: localeId,
@@ -479,6 +481,7 @@ export async function POST({
         slug,
         excerpt: excerpt || null,
         body: body || null,
+        body_blocks: body_blocks || null,
         status,
         author_id,
         id_locale_code: localeId,
