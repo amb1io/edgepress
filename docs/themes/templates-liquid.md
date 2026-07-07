@@ -59,52 +59,53 @@ Arquivos em `templates/` são referenciados **sem** o prefixo `templates/` e **s
 | `home_list_posts` | Se `true`, a home lista posts (`posts` preenchido, `post` opcional); se `false`/ausente, a home carrega `home_content_key` como página singular |
 | `templates` | Mapa opcional de aliases; o resolver usa **auto-discovery** nos arquivos do pacote |
 
-### Hierarquia de templates (estilo WordPress)
+### Roteamento por arquivos (estilo Astro)
 
-O core escolhe o template verificando quais arquivos existem em `templates/` do pacote, na ordem de especificidade abaixo. Não é obrigatório declarar cada arquivo em `theme.json` — basta criar o `.liquid` com o nome correto.
+O core casa a URL com arquivos em `templates/` usando pastas e segmentos dinâmicos `[nome]`. Não é obrigatório declarar cada arquivo em `theme.json` — basta criar o `.liquid` no path correto.
 
-| Rota (`route.kind`) | Candidatos (primeiro encontrado vence) |
-|---------------------|----------------------------------------|
-| `home` | `front-page` → `home` → `index` |
-| `single` | `single-{type}-{slug}` → `single-{type}` → `single` → `singular` → `index` |
-| `page` | `page-{slug}` → `page` → `singular` → `index` |
-| `archive` | `archive-{type}` → `archive` → `index` |
-| `taxonomy` | `taxonomy-{type}-{slug}` → `taxonomy-{type}` → `taxonomy` → `archive-{type}` → `archive` → `index` |
-| `search` | `search` → `archive` → `index` |
-| `404` | `404` → `index` |
+| Arquivo | URL |
+|---------|-----|
+| `index.liquid` | `/` |
+| `[slug].liquid` | `/{slug}` |
+| `search.liquid` | `/search` |
+| `posts/index.liquid` | `/posts` |
+| `{cpt}/index.liquid` | `/{cpt}` (quando o post type é arquivável → `route.kind: archive`) |
+| `trabalhos/index.liquid` | `/trabalhos` |
+| `trabalhos/[categorias].liquid` | `/trabalhos/{termo}` |
+| `{taxonomy-type}/[slug].liquid` | `/{taxonomy-type}/{termo}` (quando o segmento é um taxonomy type no banco → `route.kind: taxonomy`) |
+| `404.liquid` | fallback quando nada casa |
+| `archive.liquid` | fallback genérico de archive |
 
-Exemplos de nomes de arquivo:
+**Segmentos dinâmicos:** o nome entre colchetes vira chave em `route.params` (ex.: `[categorias]` → `route.params.categorias`). O template decide como usar o valor (ex.: `{% get_taxonomy_posts 'categorias', route.params.categorias as posts %}`).
 
-- `single-post.liquid` — todos os posts do tipo `post`
-- `single-post-hello-world.liquid` — post específico com slug `hello-world`
-- `page-about.liquid` — página com slug `about`
-- `front-page.liquid` — home com prioridade sobre `home.liquid`
+**Não roteáveis:** `layouts/**`, `parts/**`.
 
 ## Rotas públicas e URLs
 
 O roteamento público segue três camadas:
 
-1. **`resolvePublicRoute`** — interpreta locale, aliases e slug na URL
-2. **`buildThemeRenderContext`** — consulta post types arquiváveis no banco; se o segmento bater com um CPT, a rota vira `archive` (**prioridade sobre conteúdo singular** com o mesmo slug)
-3. **`resolveTemplateKey`** — escolhe o template Liquid (`archive-produtos.liquid`, etc.)
+1. **`resolvePreRoute` + `file-router`** — casa o path da URL com um template do tema
+2. **`resolveRouteKind`** — consulta post types arquiváveis, taxonomy types e posts no banco para definir `route.kind`
+3. **`buildThemeRenderContext`** — monta dados (posts, `post`, taxonomias) e renderiza `route.template_key`
 
 | URL | `route.kind` | Template típico |
 |-----|--------------|-----------------|
-| `/` | `home` | `home.liquid` ou `front-page.liquid` |
-| `/posts` | `archive` (tipo `post`) | `archive.liquid` ou `archive-post.liquid` |
-| `/category/{term-slug}` | `taxonomy` (type `category`) | `taxonomy-category-{slug}.liquid` → `taxonomy.liquid` → `archive.liquid` |
-| `/tag/{term-slug}` | `taxonomy` (type `tag`) | `taxonomy-tag-{slug}.liquid` → `taxonomy.liquid` → `archive.liquid` |
-| `/search?q={termo}` | `search` | `search.liquid` → `archive.liquid` → `index.liquid` |
-| `/{post-type-slug}` | `archive` (CPT arquivável) | `archive-{type}.liquid` → `archive.liquid` |
-| `/{post-type-slug}?page=2` | `archive` paginado | `archive.liquid` |
-| `/meu-slug` | `single` ou `page` | `single.liquid` / `page.liquid` |
-| slug inexistente / tipo não arquivável | `404` | `404.liquid` |
+| `/` | `home` | `index.liquid` |
+| `/posts` | `archive` (tipo `post`) | `posts/index.liquid` |
+| `/category/{term-slug}` | `taxonomy` | `category/[slug].liquid` |
+| `/categorias/{term-slug}` | `taxonomy` | `categorias/[slug].liquid` |
+| `/trabalhos` | `page` | `trabalhos/index.liquid` |
+| `/trabalhos/{term}` | `page` | `trabalhos/[categorias].liquid` |
+| `/search?q={termo}` | `search` | `search.liquid` |
+| `/{cpt-slug}` | `archive` (CPT arquivável) | `{cpt}/index.liquid` ou `archive.liquid` |
+| `/meu-slug` | `single` ou `page` | `[slug].liquid` |
+| sem match / conteúdo inexistente | `404` | `404.liquid` |
 
 **Post types arquiváveis:** todos os tipos cadastrados em `edp_post_types`, exceto tipos internos (`page`, `attachment`, `themes`, `user`, `settings`, etc.). Tipos customizados criados no admin ganham archive em `/{slug}` automaticamente.
 
 **Colisão de slug:** se existir um post publicado com o mesmo slug de um CPT arquivável (ex.: conteúdo e tipo `produtos`), **o archive do post type vence** e a URL lista o tipo, não o post singular.
 
-Exemplo de template específico: `templates/archive-produtos.liquid` para o CPT `produtos`.
+Exemplo de template específico: `templates/produtos/index.liquid` para o CPT arquivável `produtos`.
 
 **Locales na URL:**
 
@@ -200,6 +201,8 @@ Preenchido pelo core a partir do post da rota ou fallbacks do site.
 | `route.kind` | string | `home`, `single`, `page`, `archive`, `taxonomy`, `search`, `404` |
 | `route.path` | string | Path da requisição (ex.: `/posts`, `/en/sobre`) |
 | `route.locale` | string | Locale normalizado da URL |
+| `route.template_key` | string | Template Liquid selecionado (ex.: `trabalhos/[categorias]`) |
+| `route.params` | objeto | Segmentos dinâmicos da URL (ex.: `{ "categorias": "publicidade" }`) |
 
 ### `post` (post ou página atual)
 
@@ -337,11 +340,35 @@ Array de links PT/EN (e extensível no core). As URLs são derivadas da **rota p
 
 ### `menus`
 
-Mapa de menus por localização. O core popula `menus.primary` a partir de posts publicados do tipo `menus` no CMS: cada post pode ter um bloco de custom field **"menu navigation"** com linhas `name` (rótulo) e `value` (URL). A API `/api/content/posts?filter_post_type=menus` retorna os mesmos dados para integrações externas.
+Mapa de menus por localização. O core popula `menus.primary` a partir de posts publicados do tipo `menus` no CMS (location = slug do post pai, ex.: `primary`). Itens são posts filhos com `meta_values` de link (`link_type`, `target_*`, etc.) e hierarquia de submenu (`parent_menu_item_id`).
 
-Cada item: `label`, `url`, `active` (boolean — `true` quando `url` coincide com `route.path`).
+Cada item (`MenuItem`):
 
-Alternativa: `{% nav_menu 'primary' %}` gera o `<nav>` completo.
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | number | ID do post do item |
+| `label` | string | Rótulo exibido |
+| `url` | string | URL pública resolvida |
+| `slug` | string | Slug do post do item |
+| `target_post_id` | number \| null | Post vinculado (quando `link_type` = post) |
+| `active` | boolean | `true` quando `url` coincide com `route.path` |
+| `children` | MenuItem[] | Subitens aninhados |
+| `submenu_sort` | `"alphabetical"` \| `"creation"` | Ordenação dos filhos (no item pai) |
+| `submenu_display` | `("title" \| "thumbnail" \| "excerpt")[]` | Campos de visualização do submenu |
+
+Alternativa: `{% nav_menu 'primary' %}` gera o `<nav>` completo com `<ul class="submenu">` para itens que possuem filhos.
+
+Filtros para consultas parciais:
+
+```liquid
+{% assign parents = menus.primary | menu_parents %}
+{% assign children = menus.primary | menu_children %}
+{% assign flat = menus.primary | menu_items %}
+```
+
+- `menu_parents` — apenas itens de topo que possuem submenus
+- `menu_children` — lista plana de todos os subitens
+- `menu_items` — lista plana de todos os itens (pais + filhos)
 
 ### `content`
 
@@ -403,12 +430,18 @@ Opt-in no manifest:
 
 Equivalente a `wp_nav_menu()`. Argumento: chave do menu (`primary` → `menus.primary`).
 
-Gera:
+Gera HTML aninhado quando há submenus:
 
 ```html
 <nav class="site-nav" aria-label="primary">
   <ul>
-    <li class="is-active"><a href="...">...</a></li>
+    <li class="is-active"><a href="...">Home</a></li>
+    <li class="has-submenu">
+      <a href="...">Services</a>
+      <ul class="submenu">
+        <li><a href="...">Design</a></li>
+      </ul>
+    </li>
   </ul>
 </nav>
 ```
@@ -483,6 +516,8 @@ Lista termos de taxonomia associados a um post type. O segundo argumento deve se
 { "name": "Tecnologia", "slug": "tecnologia" }
 ```
 
+`name` e `slug` vêm **localizados** para o locale da rota atual (traduções em `taxonomy.type` e `taxonomy.slug`). Use `cat.slug` nos links de arquivo — ele já reflete o slug traduzido quando configurado no admin.
+
 Termos que são pais de outros (raízes de hierarquia) são excluídos automaticamente.
 
 **Exemplos:**
@@ -504,6 +539,85 @@ Termos que são pais de outros (raízes de hierarquia) são excluídos automatic
 ```
 
 Se o post type não tiver o taxonomy type no `meta_schema`, a variável recebe `[]`.
+
+### `{% get_taxonomies_locale %}`
+
+Lista termos de taxonomia de um post type **num locale específico**, independente do locale da rota atual.
+
+**Sintaxe:**
+
+```liquid
+{% get_taxonomies_locale 'jobs', 'categorias', 'pt-br' as jobs_cats %}
+```
+
+| Parâmetro | Descrição |
+|-----------|-----------|
+| 1º argumento | Slug do post type (`post`, `jobs`, …) |
+| 2º argumento | Type da taxonomia (`categorias`, `category`, …) |
+| 3º argumento | Locale alvo — `pt-br`, `en`, `es`, ou código de DB (`pt_BR`, `en_US`) |
+| `as` | Nome da variável que receberá o objeto com `taxonomy` e `values` |
+
+**Formato do retorno:**
+
+```json
+{
+  "taxonomy": {
+    "name": "Categorias",
+    "slug": "categorias",
+    "original_name": "Categorias",
+    "original_slug": "categorias"
+  },
+  "values": [
+    { "id": 12, "name": "Trabalhos", "slug": "trabalhos", "locale": "pt-br" }
+  ]
+}
+```
+
+- `taxonomy.name` e `taxonomy.slug` — nome e slug do **tipo** de taxonomia no locale informado (tradução ou valor padrão).
+- `taxonomy.original_name` e `taxonomy.original_slug` — nome e slug **cadastrados** no banco, sem tradução.
+- `values` — array de termos, cada um com `id`, `name`, `slug` e `locale` localizados.
+
+Diferente de `{% get_taxonomies %}`, que usa o locale da rota, `{% get_taxonomies_locale %}` resolve nome e slug para o locale informado explicitamente.
+
+**Exemplo:**
+
+```liquid
+{% get_taxonomies_locale 'jobs', 'categorias', 'pt-br' as job_cats %}
+
+<h2>{{ job_cats.taxonomy.name }}</h2>
+{% for term in job_cats.values %}
+  <a href="/{{ job_cats.taxonomy.slug }}/{{ term.slug }}">
+    {{ term.name }}
+  </a>
+{% endfor %}
+```
+
+### `{% get_taxonomy_posts %}`
+
+Lista posts publicados associados a um termo de taxonomia.
+
+**Sintaxe:**
+
+```liquid
+{% get_taxonomy_posts 'category', 'cliente' as clients %}
+{% get_taxonomy_posts 'category', 'cliente', 500 as clients %}
+{% get_taxonomy_posts 'categorias', route.params.categorias as jobs %}
+{% get_taxonomy_posts taxonomy_slug, taxonomy_value as jobs %}
+{% get_taxonomy_posts taxonomy_slug, taxonomy_value, my_limit as jobs %}
+```
+
+| Parâmetro | Descrição |
+|-----------|-----------|
+| 1º argumento | Type da taxonomia — literal (`'category'`) ou expressão Liquid (`taxonomy_slug`) |
+| 2º argumento | Slug canônico **ou** traduzido — literal ou expressão (`route.params.categorias`) |
+| 3º argumento (opcional) | Limite — literal (`500`) ou expressão; padrão **500**, máximo **1000** |
+| `as` | Nome da variável que recebe o array |
+
+Os argumentos são avaliados em **runtime** (mesmo padrão de `{% get_author %}`), permitindo usar variáveis da rota como `route.params.categorias`.
+
+### Arquivos de taxonomia (URLs)
+
+Rotas como `/category/{slug}` e `/en/category/{slug}` resolvem o termo pelo slug canônico ou pelo slug traduzido do locale da URL. O contexto expõe `route.taxonomy_slug` e `archive.title` já localizados.
 
 ### `{% get_related_posts %}`
 
@@ -612,6 +726,36 @@ Escape HTML (`&`, `<`, `>`). O motor já usa `outputEscape: "escape"` por padrã
 
 ```liquid
 <meta name="x" content="{{ valor | escape }}" />
+```
+
+### `| menu_parents`
+
+Retorna apenas itens de menu de topo que possuem `children` (submenus).
+
+```liquid
+{% for item in menus.primary | menu_parents %}
+  <span>{{ item.label }}</span>
+{% endfor %}
+```
+
+### `| menu_children`
+
+Retorna lista plana de todos os subitens de um menu (sem aninhamento).
+
+```liquid
+{% for child in menus.primary | menu_children %}
+  <a href="{{ child.url }}">{{ child.label }}</a>
+{% endfor %}
+```
+
+### `| menu_items`
+
+Retorna lista plana de todos os itens (pais e filhos).
+
+```liquid
+{% for item in menus.primary | menu_items %}
+  <a href="{{ item.url }}">{{ item.label }}</a>
+{% endfor %}
 ```
 
 ---
@@ -757,7 +901,8 @@ Hot reload: salvar `.liquid`, `theme.json` ou arquivos em `assets/` recarrega o 
 | Tags e filtros | `src/core/theme/theme-api.ts` |
 | Variáveis do contexto | `src/core/theme/context.ts` |
 | Render e layout | `src/core/theme/render.ts` |
-| Hierarquia de templates | `src/core/theme/resolve-template.ts` |
+| Hierarquia de templates | `src/core/theme/file-router.ts` |
+| Resolução de `route.kind` | `src/core/theme/resolve-route-kind.ts` |
 | Rotas e locales | `src/core/theme/resolve-route.ts` |
 | Post types arquiváveis | `src/core/theme/post-type-routes.ts` |
 | Tipos TypeScript | `src/core/theme/types.ts` |
