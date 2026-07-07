@@ -1,0 +1,24 @@
+/* Neutralizes BlockNote's default typography/editor-chrome so only
+   component-specific styles (tables, columns, checklists, code, etc.)
+   remain. Scoped to the public readonly view only. */
+.edgepress-blocknote-view .bn-container {
+  --bn-font-family: inherit;
+  --bn-colors-editor-background: transparent;
+  --bn-colors-editor-text: inherit;
+  font-family: inherit;
+}
+
+.edgepress-blocknote-view .bn-editor {
+  padding-inline: 0;
+  background-color: transparent;
+  color: inherit;
+  border-radius: 0;
+}
+
+.edgepress-blocknote-view .bn-default-styles {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+}

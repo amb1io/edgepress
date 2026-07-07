@@ -50,3 +50,8 @@ if (typeof document !== "undefined") {
     mountBlockNoteRoots();
   }
 }
+
+/** Used by edgepress-internal/blocknote-bundle.astro to emit the public hydration chunk at build time. */
+export default function BlockNoteHydration(): null {
+  return null;
+}
