@@ -2,7 +2,7 @@ import { Liquid, type Tag, type TagToken } from "liquidjs";
 import sanitizeHtml from "sanitize-html";
 import type { ThemeRenderContext } from "./types.ts";
 import { renderSeoHead } from "./seo-head.ts";
-import { registerGetTaxonomiesTag, registerGetRelatedPostsTag, registerGetAuthorTag } from "./theme-functions.ts";
+import { registerGetTaxonomiesTag, registerGetRelatedPostsTag, registerGetTaxonomyPostsTag, registerGetPostsTag, registerGetPostsDetailsTag, registerGetAuthorTag, registerMenuFilters, registerCustomFieldTag, registerGetTaxonomiesLocaleTag } from "./theme-functions.ts";
 import { getBlockNotePublicAssets } from "./blocknote-public-assets.ts";
 
 type TagImpl = {
@@ -36,17 +36,28 @@ function makeArgHtmlTag(
   } as unknown as Tag;
 }
 
+function renderMenuItemLi(item: import("./types.ts").MenuItem): string {
+  const hasChildren = item.children && item.children.length > 0;
+  const classes: string[] = [];
+  if (hasChildren) classes.push("has-submenu");
+  if (item.active) classes.push("is-active");
+  const liClass = classes.length ? ` class="${classes.join(" ")}"` : "";
+  const href = escapeAttr(item.url);
+  const label = escapeHtml(item.label);
+
+  let html = `<li${liClass}><a href="${href}">${label}</a>`;
+  if (hasChildren) {
+    const childLis = item.children.map((child) => renderMenuItemLi(child)).join("\n        ");
+    html += `\n      <ul class="submenu">\n        ${childLis}\n      </ul>`;
+  }
+  html += "</li>";
+  return html;
+}
+
 function renderNavMenu(ctx: ThemeRenderContext, location: string): string {
   const items = ctx.menus?.[location] ?? [];
   if (items.length === 0) return "";
-  const lis = items
-    .map((item) => {
-      const active = item.active ? ' class="is-active"' : "";
-      const href = escapeAttr(item.url);
-      const label = escapeHtml(item.label);
-      return `<li${active}><a href="${href}">${label}</a></li>`;
-    })
-    .join("\n      ");
+  const lis = items.map((item) => renderMenuItemLi(item)).join("\n      ");
   return `<nav class="site-nav" aria-label="${escapeAttr(location)}">\n    <ul>\n      ${lis}\n    </ul>\n  </nav>`;
 }
 
@@ -238,7 +249,31 @@ export function registerThemeApi(liquid: Liquid): void {
 
   liquid.registerFilter("escape", (value: unknown) => escapeHtml(String(value ?? "")));
 
+  liquid.registerFilter("html", {
+    raw: true,
+    handler: (value: unknown) => sanitizeContentHtml(String(value ?? "")),
+  });
+
+  liquid.registerFilter(
+    "sort_by_meta_order",
+    (items: Array<{ id?: number; meta?: Record<string, string> }> | null | undefined) => {
+      if (!Array.isArray(items)) return [];
+      return [...items].sort((a, b) => {
+        const orderA = Number(a.meta?.order ?? 0);
+        const orderB = Number(b.meta?.order ?? 0);
+        if (orderB !== orderA) return orderB - orderA;
+        return Number(b.id ?? 0) - Number(a.id ?? 0);
+      });
+    },
+  );
+
   registerGetTaxonomiesTag(liquid);
+  registerGetTaxonomiesLocaleTag(liquid);
   registerGetRelatedPostsTag(liquid);
+  registerGetTaxonomyPostsTag(liquid);
+  registerGetPostsTag(liquid);
+  registerGetPostsDetailsTag(liquid);
   registerGetAuthorTag(liquid);
+  registerMenuFilters(liquid);
+  registerCustomFieldTag(liquid);
 }

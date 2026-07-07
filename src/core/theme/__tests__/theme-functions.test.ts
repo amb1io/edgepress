@@ -7,6 +7,8 @@ import {
   parseGetRelatedPostsArgs,
   parseGetAuthorArgs,
   parseGetTaxonomiesArgs,
+  parseGetTaxonomiesLocaleArgs,
+  parseGetTaxonomyPostsArgs,
   createGetRelatedPostsHandler,
   createGetAuthorHandler,
 } from "../theme-functions.ts";
@@ -135,6 +137,51 @@ describe("createGetAuthorHandler", () => {
       description: "Bio",
     }));
     expect(await handler(1)).toEqual({ name: "Rhamses", image: "", description: "Bio" });
+  });
+});
+
+describe("parseGetTaxonomiesLocaleArgs", () => {
+  it("parses valid 3-arg + as syntax", () => {
+    expect(parseGetTaxonomiesLocaleArgs("'jobs', 'categorias', 'pt-br' as cats")).toEqual({
+      postType: "jobs",
+      taxonomyType: "categorias",
+      locale: "pt-br",
+      varName: "cats",
+    });
+    expect(parseGetTaxonomiesLocaleArgs('"post", "category", "en" as terms')).toEqual({
+      postType: "post",
+      taxonomyType: "category",
+      locale: "en",
+      varName: "terms",
+    });
+  });
+
+  it("returns null for invalid syntax", () => {
+    expect(parseGetTaxonomiesLocaleArgs("'jobs', 'categorias' as cats")).toBeNull();
+    expect(parseGetTaxonomiesLocaleArgs("jobs, categorias, pt-br as cats")).toBeNull();
+    expect(parseGetTaxonomiesLocaleArgs("")).toBeNull();
+    expect(parseGetTaxonomiesLocaleArgs("'jobs', 'categorias', 'pt-br'")).toBeNull();
+  });
+});
+
+describe("parseGetTaxonomyPostsArgs", () => {
+  it("parses literal and dynamic expressions", () => {
+    expect(parseGetTaxonomyPostsArgs("'category', 'cliente' as clients")).toEqual({
+      taxonomyTypeExpr: "'category'",
+      taxonomySlugExpr: "'cliente'",
+      varName: "clients",
+    });
+    expect(parseGetTaxonomyPostsArgs("'categorias', route.params.categorias as posts")).toEqual({
+      taxonomyTypeExpr: "'categorias'",
+      taxonomySlugExpr: "route.params.categorias",
+      varName: "posts",
+    });
+    expect(parseGetTaxonomyPostsArgs("taxonomy_slug, taxonomy_value, 500 as jobs")).toEqual({
+      taxonomyTypeExpr: "taxonomy_slug",
+      taxonomySlugExpr: "taxonomy_value",
+      limitExpr: "500",
+      varName: "jobs",
+    });
   });
 });
 

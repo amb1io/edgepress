@@ -34,7 +34,16 @@ function baseContext(overrides: Partial<ThemeRenderContext> = {}): ThemeRenderCo
       og_type: "website",
     },
     menus: {
-      primary: [{ label: "Home", url: "/", active: true }],
+      primary: [
+        {
+          id: 1,
+          label: "Home",
+          url: "/",
+          slug: "home",
+          active: true,
+          children: [],
+        },
+      ],
     },
     theme: {
       slug: "2026",
@@ -42,7 +51,7 @@ function baseContext(overrides: Partial<ThemeRenderContext> = {}): ThemeRenderCo
       asset_base_url: "http://localhost:8787/themes-assets/2026",
       supports: [],
     },
-    route: { kind: "home", path: "/", locale: "pt-br" },
+    route: { kind: "home", path: "/", locale: "pt-br", template_key: "index", params: {} },
     body_class: "route-home",
     locale_switcher: [
       { code: "pt-br", flag: "🇧🇷", label: "PT", url: "/", active: true },
@@ -100,7 +109,7 @@ describe("renderTheme", () => {
     const html = await renderTheme(
       referenceThemePackage,
       baseContext({
-        route: { kind: "404", path: "/missing", locale: "pt-br" },
+        route: { kind: "404", path: "/missing", locale: "pt-br", template_key: "404", params: {} },
         post: undefined,
         is_front_page: false,
         is_404: true,
@@ -110,17 +119,22 @@ describe("renderTheme", () => {
     expect(html).toContain("/missing");
   });
 
-  it("prefers single-post over single in template hierarchy", async () => {
+  it("renders the template key from route context", async () => {
     const pkg = minimalPackage({
-      "single-post": "{% layout 'layouts/base' %}<p>single-post template</p>",
-      single: "{% layout 'layouts/base' %}<p>generic single</p>",
+      "[slug]": "{% layout 'layouts/base' %}<p>dynamic slug template</p>",
       "layouts/base": "<html><body>{{ content }}</body></html>",
     });
 
     const html = await renderTheme(
       pkg,
       baseContext({
-        route: { kind: "single", path: "/hello", locale: "pt-br" },
+        route: {
+          kind: "single",
+          path: "/hello",
+          locale: "pt-br",
+          template_key: "[slug]",
+          params: { slug: "hello" },
+        },
         post: {
           id: 2,
           title: "Post",
@@ -138,11 +152,10 @@ describe("renderTheme", () => {
       }),
     );
 
-    expect(html).toContain("single-post template");
-    expect(html).not.toContain("generic single");
+    expect(html).toContain("dynamic slug template");
   });
 
-  it("falls back to index when no route-specific template exists", async () => {
+  it("falls back to index when route template is index", async () => {
     const pkg = minimalPackage({
       index: "<p>index fallback</p>",
     });
@@ -150,7 +163,7 @@ describe("renderTheme", () => {
     const html = await renderTheme(
       pkg,
       baseContext({
-        route: { kind: "home", path: "/", locale: "pt-br" },
+        route: { kind: "home", path: "/", locale: "pt-br", template_key: "index", params: {} },
       }),
     );
 
@@ -159,7 +172,7 @@ describe("renderTheme", () => {
 
   it("assigns taxonomy terms via get_taxonomies tag", async () => {
     const pkg = minimalPackage({
-      home: `{% get_taxonomies 'post', 'category' as cats %}
+      index: `{% get_taxonomies 'post', 'category' as cats %}
 <ul>{% for cat in cats %}<li>{{ cat.name }}:{{ cat.slug }}</li>{% endfor %}</ul>`,
     });
 
@@ -173,9 +186,35 @@ describe("renderTheme", () => {
     expect(html).toContain("Categoria:categoria");
   });
 
+  it("assigns taxonomy terms with locale via get_taxonomies_locale tag", async () => {
+    const pkg = minimalPackage({
+      index: `{% get_taxonomies_locale 'jobs', 'categorias', 'pt-br' as job_cats %}
+{{ job_cats.taxonomy.name }}:{{ job_cats.taxonomy.slug }}:{{ job_cats.taxonomy.original_name }}:{{ job_cats.taxonomy.original_slug }}
+<ul>{% for cat in job_cats.values %}<li>{{ cat.id }}:{{ cat.name }}:{{ cat.slug }}:{{ cat.locale }}</li>{% endfor %}</ul>`,
+    });
+
+    const html = await renderTheme(
+      pkg,
+      baseContext({
+        get_taxonomies_locale: async (_postType, _taxonomyType, locale) => ({
+          taxonomy: {
+            name: "Categorias",
+            slug: "categorias",
+            original_name: "Categorias",
+            original_slug: "categorias",
+          },
+          values: [{ id: 12, name: "Trabalhos", slug: "trabalhos", locale }],
+        }),
+      }),
+    );
+
+    expect(html).toContain("Categorias:categorias:Categorias:categorias");
+    expect(html).toContain("12:Trabalhos:trabalhos:pt-br");
+  });
+
   it("assigns related posts via get_related_posts tag", async () => {
     const pkg = minimalPackage({
-      home: `{% get_related_posts post.id, 2 as related %}
+      index: `{% get_related_posts post.id, 2 as related %}
 <ul>{% for item in related %}<li>{{ item.title }}</li>{% endfor %}</ul>`,
     });
 
@@ -214,7 +253,7 @@ describe("renderTheme", () => {
 
   it("assigns author via get_author tag", async () => {
     const pkg = minimalPackage({
-      home: `{% get_author post.id as author %}{% if author %}{{ author.name }}:{{ author.description }}{% else %}none{% endif %}`,
+      index: `{% get_author post.id as author %}{% if author %}{{ author.name }}:{{ author.description }}{% else %}none{% endif %}`,
     });
 
     const html = await renderTheme(
@@ -246,7 +285,7 @@ describe("renderTheme", () => {
     const pkg = minimalPackage({
       "layouts/base":
         "<html><head>{% scripts_footer %}</head><body>{% page_content %}</body></html>",
-      home: "{% layout 'layouts/base' %}{% blocknote_content %}",
+      index: "{% layout 'layouts/base' %}{% blocknote_content %}",
     });
 
     const blocks = JSON.stringify([
@@ -290,14 +329,14 @@ describe("renderTheme", () => {
     expect(html).toContain("Fallback headline");
     expect(html).toContain("edgepress-blocknote-root");
     expect(html).toContain("edgepress-blocknote-data");
-    expect(html).toContain("blocknote-readonly-mount.test.js");
-    expect(html).toContain("blocknote-readonly-mount.test.css");
+    expect(html).toContain("blocknote-readonly-mount");
+    expect(html).toContain("blocknote-bundle");
   });
 
   it("does not inject BlockNote assets when theme lacks blocknote support", async () => {
     const pkg = minimalPackage({
       "layouts/base": "<html><head>{% scripts_footer %}</head><body></body></html>",
-      home: "{% layout 'layouts/base' %}",
+      index: "{% layout 'layouts/base' %}",
     });
 
     const html = await renderTheme(
