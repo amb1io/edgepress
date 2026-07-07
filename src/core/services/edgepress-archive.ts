@@ -202,6 +202,62 @@ type TarEntryInput = {
 
 type RowInserter = (db: Database, rows: RowRecord[]) => Promise<void>;
 
+function pickRowValue<T>(row: RowRecord, camelKey: string, snakeKey: string): T | undefined {
+  if (row[camelKey] !== undefined) return row[camelKey] as T;
+  if (row[snakeKey] !== undefined) return row[snakeKey] as T;
+  return undefined;
+}
+
+/** Accept camelCase (Drizzle export) or snake_case (legacy SQL/CSV archives). */
+export function normalizeUserImportRow(row: RowRecord): typeof user.$inferInsert {
+  const createdAt = pickRowValue<number>(row, "createdAt", "created_at");
+  const updatedAt = pickRowValue<number>(row, "updatedAt", "updated_at");
+  if (createdAt == null || updatedAt == null) {
+    throw new Error(`Linha de usuário inválida (id=${String(row["id"] ?? "?")}): created_at/updated_at ausentes`);
+  }
+
+  return {
+    id: row["id"] as string,
+    name: row["name"] as string,
+    email: row["email"] as string,
+    emailVerified: Boolean(pickRowValue(row, "emailVerified", "email_verified") ?? false),
+    image: (pickRowValue<string | null>(row, "image", "image") ?? null) as string | null,
+    description: (pickRowValue<string | null>(row, "description", "description") ?? null) as string | null,
+    role: Number(pickRowValue(row, "role", "role") ?? 3),
+    createdAt,
+    updatedAt,
+  };
+}
+
+/** Accept camelCase (Drizzle export) or snake_case (legacy SQL/CSV archives). */
+export function normalizeAccountImportRow(row: RowRecord): typeof account.$inferInsert {
+  const createdAt = pickRowValue<number>(row, "createdAt", "created_at");
+  const updatedAt = pickRowValue<number>(row, "updatedAt", "updated_at");
+  const userId = pickRowValue<string>(row, "userId", "user_id");
+  const accountId = pickRowValue<string>(row, "accountId", "account_id");
+  const providerId = pickRowValue<string>(row, "providerId", "provider_id");
+  if (!userId || !accountId || !providerId || createdAt == null || updatedAt == null) {
+    throw new Error(`Linha de account inválida (id=${String(row["id"] ?? "?")}): campos obrigatórios ausentes`);
+  }
+
+  return {
+    id: row["id"] as string,
+    userId,
+    accountId,
+    providerId,
+    accessToken: pickRowValue<string | null>(row, "accessToken", "access_token") ?? null,
+    refreshToken: pickRowValue<string | null>(row, "refreshToken", "refresh_token") ?? null,
+    accessTokenExpiresAt: pickRowValue<number | null>(row, "accessTokenExpiresAt", "access_token_expires_at") ?? null,
+    refreshTokenExpiresAt:
+      pickRowValue<number | null>(row, "refreshTokenExpiresAt", "refresh_token_expires_at") ?? null,
+    scope: pickRowValue<string | null>(row, "scope", "scope") ?? null,
+    idToken: pickRowValue<string | null>(row, "idToken", "id_token") ?? null,
+    password: pickRowValue<string | null>(row, "password", "password") ?? null,
+    createdAt,
+    updatedAt,
+  };
+}
+
 const TABLE_READERS: Record<EdgepressLogicalTable, (db: Database) => Promise<RowRecord[]>> = {
   post_types: (db) => db.select().from(postTypes) as Promise<RowRecord[]>,
   user: (db) => db.select().from(user) as Promise<RowRecord[]>,
@@ -219,10 +275,10 @@ const TABLE_INSERTERS: Record<EdgepressLogicalTable, RowInserter> = {
     if (rows.length) await db.insert(postTypes).values(rows as typeof postTypes.$inferInsert[]);
   },
   user: async (db, rows) => {
-    if (rows.length) await db.insert(user).values(rows as typeof user.$inferInsert[]);
+    if (rows.length) await db.insert(user).values(rows.map(normalizeUserImportRow));
   },
   account: async (db, rows) => {
-    if (rows.length) await db.insert(account).values(rows as typeof account.$inferInsert[]);
+    if (rows.length) await db.insert(account).values(rows.map(normalizeAccountImportRow));
   },
   taxonomies: async (db, rows) => {
     if (!rows.length) return;
@@ -269,25 +325,20 @@ export const INSERT_BATCH_SIZE: Partial<Record<EdgepressLogicalTable, number>> =
 export function resolveImportTableOrder(manifestOrder?: string[]): EdgepressLogicalTable[] {
   const preserved = new Set<string>(PRESERVED_TABLES);
   const source = manifestOrder?.length ? manifestOrder : TABLE_ORDER;
-  const seen = new Set<EdgepressLogicalTable>();
-  const ordered: EdgepressLogicalTable[] = [];
+  const wanted = new Set<EdgepressLogicalTable>();
 
   for (const table of source) {
     if (preserved.has(table)) continue;
     if (!(table in TABLE_INSERTERS)) continue;
-    const logical = table as EdgepressLogicalTable;
-    if (seen.has(logical)) continue;
-    seen.add(logical);
-    ordered.push(logical);
+    wanted.add(table as EdgepressLogicalTable);
   }
 
   for (const table of TABLE_ORDER) {
-    if (seen.has(table)) continue;
-    seen.add(table);
-    ordered.push(table);
+    wanted.add(table);
   }
 
-  return ordered;
+  // Always follow TABLE_ORDER so parent rows (e.g. user) precede children (account).
+  return TABLE_ORDER.filter((table) => wanted.has(table));
 }
 
 const IMAGE_MIME_MAP: Record<string, string> = {
