@@ -65,11 +65,27 @@ const menuLabels = {
   typeCustom: t(currentLocale, "admin.menus.typeCustom"),
   typeTaxonomy: t(currentLocale, "admin.menus.typeTaxonomy"),
   selectPost: t(currentLocale, "admin.menus.selectPost"),
+  parentMenu: t(currentLocale, "admin.menus.parentMenu"),
+  noParent: t(currentLocale, "admin.menus.noParent"),
+  sortAlphabetical: t(currentLocale, "admin.menus.sortAlphabetical"),
+  sortCreation: t(currentLocale, "admin.menus.sortCreation"),
+  displayTitle: t(currentLocale, "admin.menus.displayTitle"),
+  displayThumbnail: t(currentLocale, "admin.menus.displayThumbnail"),
+  displayExcerpt: t(currentLocale, "admin.menus.displayExcerpt"),
+  submenuOptions: t(currentLocale, "admin.menus.submenuOptions"),
+  submenuSort: t(currentLocale, "admin.menus.submenuSort"),
+  submenuDisplay: t(currentLocale, "admin.menus.submenuDisplay"),
 };
 
 const initialMenuItemsJson = JSON.stringify(
   result.initialMenuItems.map((item, index) => ({
     clientId: `menu-${item.id ?? index}`,
+    parentClientId: item.parent_menu_item_id
+      ? `menu-${item.parent_menu_item_id}`
+      : null,
+    parentMenuItemId: item.parent_menu_item_id ?? null,
+    submenu_sort: item.submenu_sort ?? "creation",
+    submenu_display: item.submenu_display ?? ["title"],
     ...item,
   })),
 );
@@ -148,51 +164,200 @@ const initialMenuItemsJson = JSON.stringify(
           <div class="border border-base-300 rounded-box p-4 flex flex-col gap-4">
             <h2 class="text-lg font-semibold">{t(currentLocale, "admin.menus.itemsTitle")}</h2>
 
-            <div class="flex flex-col gap-3" id="menu-items-tree">
-              <template x-for="(item, index) in sortedItems()" :key="item.clientId">
+            <div class="flex flex-col gap-3" id="menu-items-tree" x-ref="rootList">
+              <template x-for="root in rootItems()" :key="root.clientId">
                 <div
-                  class="border border-base-300 rounded-lg p-3 bg-base-100 flex flex-col gap-2"
-                  draggable="true"
-                  @dragstart="onDragStart(index)"
-                  @dragover="onDragOver($event)"
-                  @drop="onDrop(index)"
+                  class="menu-root-block border border-base-300 rounded-lg p-3 bg-base-100 flex flex-col gap-2"
+                  :data-id="root.clientId"
                 >
-                  <div class="flex items-start justify-between gap-2">
-                    <div class="flex-1 min-w-0">
-                      <p class="font-medium truncate" x-text="item.label"></p>
-                      <p class="text-xs text-base-content/60 font-mono truncate">
-                        <span x-text="itemTypeLabel(item)"></span>
-                        <span x-show="item.link_type === 'post'">
-                          · <span x-text="item.target_post_type"></span> · <span x-text="item.target_slug"></span>
-                        </span>
-                        <span x-show="item.link_type === 'taxonomy'">
-                          · <span x-text="item.target_taxonomy_type"></span> · <span x-text="item.target_slug"></span>
-                        </span>
-                        <span x-show="item.link_type === 'custom'">
-                          · <span x-text="item.custom_url"></span>
-                        </span>
-                      </p>
-                    </div>
+                  <div class="flex items-start gap-2">
                     <button
                       type="button"
-                      class="btn btn-ghost btn-xs btn-circle shrink-0"
-                      :aria-label="labels.remove"
-                      @click="removeItem(item.clientId)"
+                      class="drag-handle btn btn-ghost btn-xs btn-square shrink-0 cursor-grab active:cursor-grabbing mt-0.5"
+                      aria-label="Reorder"
+                      tabindex="-1"
                     >
-                      ✕
+                      ⠿
                     </button>
-                  </div>
-                  <div class="form-control max-w-[8rem]">
-                    <label class="label py-0">
-                      <span class="label-text text-xs" x-text="labels.order"></span>
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      class="input input-bordered input-sm w-full"
-                      :value="item.order"
-                      @change="updateOrder(item.clientId, $event.target.value)"
-                    />
+                    <div class="flex-1 min-w-0 flex flex-col gap-2">
+                      <div class="flex items-start justify-between gap-2">
+                        <div class="flex-1 min-w-0">
+                          <p class="font-medium truncate" x-text="root.label"></p>
+                          <p class="text-xs text-base-content/60 font-mono truncate">
+                            <span x-text="itemTypeLabel(root)"></span>
+                            <span x-show="root.link_type === 'post'">
+                              · <span x-text="root.target_post_type"></span> · <span x-text="root.target_slug"></span>
+                            </span>
+                            <span x-show="root.link_type === 'taxonomy'">
+                              · <span x-text="root.target_taxonomy_type"></span> · <span x-text="root.target_slug"></span>
+                            </span>
+                            <span x-show="root.link_type === 'custom'">
+                              · <span x-text="root.custom_url"></span>
+                            </span>
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          class="btn btn-ghost btn-xs btn-circle shrink-0"
+                          :aria-label="labels.remove"
+                          @click="removeItem(root.clientId)"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <div class="form-control max-w-[8rem]">
+                        <label class="label py-0">
+                          <span class="label-text text-xs" x-text="labels.order"></span>
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          class="input input-bordered input-sm w-full"
+                          :value="root.order"
+                          @change="updateOrder(root.clientId, $event.target.value)"
+                        />
+                      </div>
+                      <div
+                        x-show="hasChildren(root.clientId)"
+                        class="border border-base-300 rounded-md p-3 bg-base-200/40 flex flex-col gap-3"
+                      >
+                        <p class="text-sm font-medium" x-text="labels.submenuOptions"></p>
+                        <fieldset class="flex flex-col gap-1">
+                          <legend class="text-xs font-medium mb-1" x-text="labels.submenuSort"></legend>
+                          <label class="label cursor-pointer justify-start gap-2 py-0">
+                            <input
+                              type="radio"
+                              class="radio radio-sm"
+                              :name="'submenu_sort_' + root.clientId"
+                              value="alphabetical"
+                              :checked="root.submenu_sort === 'alphabetical'"
+                              @change="setSubmenuSort(root.clientId, 'alphabetical')"
+                            />
+                            <span class="label-text text-xs" x-text="labels.sortAlphabetical"></span>
+                          </label>
+                          <label class="label cursor-pointer justify-start gap-2 py-0">
+                            <input
+                              type="radio"
+                              class="radio radio-sm"
+                              :name="'submenu_sort_' + root.clientId"
+                              value="creation"
+                              :checked="root.submenu_sort === 'creation'"
+                              @change="setSubmenuSort(root.clientId, 'creation')"
+                            />
+                            <span class="label-text text-xs" x-text="labels.sortCreation"></span>
+                          </label>
+                        </fieldset>
+                        <fieldset class="flex flex-col gap-1">
+                          <legend class="text-xs font-medium mb-1" x-text="labels.submenuDisplay"></legend>
+                          <label class="label cursor-pointer justify-start gap-2 py-0">
+                            <input
+                              type="checkbox"
+                              class="checkbox checkbox-sm"
+                              :checked="(root.submenu_display || []).includes('title')"
+                              @change="toggleSubmenuDisplay(root.clientId, 'title', $event.target.checked)"
+                            />
+                            <span class="label-text text-xs" x-text="labels.displayTitle"></span>
+                          </label>
+                          <label class="label cursor-pointer justify-start gap-2 py-0">
+                            <input
+                              type="checkbox"
+                              class="checkbox checkbox-sm"
+                              :checked="(root.submenu_display || []).includes('thumbnail')"
+                              @change="toggleSubmenuDisplay(root.clientId, 'thumbnail', $event.target.checked)"
+                            />
+                            <span class="label-text text-xs" x-text="labels.displayThumbnail"></span>
+                          </label>
+                          <label class="label cursor-pointer justify-start gap-2 py-0">
+                            <input
+                              type="checkbox"
+                              class="checkbox checkbox-sm"
+                              :checked="(root.submenu_display || []).includes('excerpt')"
+                              @change="toggleSubmenuDisplay(root.clientId, 'excerpt', $event.target.checked)"
+                            />
+                            <span class="label-text text-xs" x-text="labels.displayExcerpt"></span>
+                          </label>
+                        </fieldset>
+                      </div>
+                      <div
+                        class="menu-children-list flex flex-col gap-2 mt-1 pl-2 border-l-4 border-l-primary/40 min-h-[2rem]"
+                        :data-parent-client-id="root.clientId"
+                        x-init="initChildrenSortable($el)"
+                      >
+                        <template x-for="child in childrenOf(root.clientId)" :key="child.clientId">
+                          <div
+                            class="menu-child-block border border-base-300 rounded-lg p-3 bg-base-200/30 flex flex-col gap-2"
+                            :data-id="child.clientId"
+                          >
+                            <div class="flex items-start gap-2">
+                              <button
+                                type="button"
+                                class="drag-handle btn btn-ghost btn-xs btn-square shrink-0 cursor-grab active:cursor-grabbing mt-0.5"
+                                aria-label="Reorder"
+                                tabindex="-1"
+                              >
+                                ⠿
+                              </button>
+                              <div class="flex-1 min-w-0 flex flex-col gap-2">
+                                <div class="flex items-start justify-between gap-2">
+                                  <div class="flex-1 min-w-0">
+                                    <p class="font-medium truncate" x-text="child.label"></p>
+                                    <p class="text-xs text-base-content/60 font-mono truncate">
+                                      <span x-text="itemTypeLabel(child)"></span>
+                                      <span x-show="child.link_type === 'post'">
+                                        · <span x-text="child.target_post_type"></span> · <span x-text="child.target_slug"></span>
+                                      </span>
+                                      <span x-show="child.link_type === 'taxonomy'">
+                                        · <span x-text="child.target_taxonomy_type"></span> · <span x-text="child.target_slug"></span>
+                                      </span>
+                                      <span x-show="child.link_type === 'custom'">
+                                        · <span x-text="child.custom_url"></span>
+                                      </span>
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    class="btn btn-ghost btn-xs btn-circle shrink-0"
+                                    :aria-label="labels.remove"
+                                    @click="removeItem(child.clientId)"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                                <div class="grid gap-3 sm:grid-cols-2">
+                                  <div class="form-control">
+                                    <label class="label py-0">
+                                      <span class="label-text text-xs" x-text="labels.parentMenu"></span>
+                                    </label>
+                                    <select
+                                      class="select select-bordered select-sm w-full"
+                                      :value="child.parentClientId || ''"
+                                      @change="setParent(child.clientId, $event.target.value || null)"
+                                    >
+                                      <option value="" x-text="labels.noParent"></option>
+                                      <template x-for="parent in availableParents(child.clientId)" :key="parent.clientId">
+                                        <option :value="parent.clientId" x-text="parent.label"></option>
+                                      </template>
+                                    </select>
+                                  </div>
+                                  <div class="form-control max-w-[8rem]">
+                                    <label class="label py-0">
+                                      <span class="label-text text-xs" x-text="labels.order"></span>
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      class="input input-bordered input-sm w-full"
+                                      :value="child.order"
+                                      @change="updateOrder(child.clientId, $event.target.value)"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </template>

@@ -13,6 +13,8 @@ import { getTaxonomyTypeRootId } from "./taxonomy-service.ts";
 export const TAXONOMY_TYPE_NAMESPACE = "taxonomyType";
 /** Namespace i18n usado por t('taxonomy.type.{slug}') no admin e menu. */
 export const TAXONOMY_TYPE_I18N_NAMESPACE = "taxonomy.type";
+/** Slug traduzido por locale; key = slug canônico do termo. */
+export const TAXONOMY_SLUG_I18N_NAMESPACE = "taxonomy.slug";
 export const MENU_OPTION_NAMESPACE = "menu.option";
 
 /** Chave em menu.option para label do item de menu (ex.: taxonomies_type_genero). */

@@ -146,3 +146,30 @@ export async function resolveCategoryTranslationLocaleIds(db: Db): Promise<numbe
   const rows = await resolveCategoryTranslationLocales(db);
   return rows.map((r) => r.id);
 }
+
+/**
+ * Locales para traduções de termos de taxonomia: somente IDs em `settings.site_locales`.
+ * Ordenados por nome do idioma.
+ */
+export async function resolveSiteTranslationLocales(db: Db): Promise<CategoryTranslationLocale[]> {
+  const siteIds = await getSiteLocaleIdsFromSettings(db);
+  if (siteIds.length === 0) return [];
+
+  const siteRows = (await db
+    .select({
+      id: locales.id,
+      locale_code: locales.locale_code,
+      language: locales.language,
+      hello_world: locales.hello_world,
+      country: locales.country,
+    })
+    .from(locales)
+    .where(inArray(locales.id, siteIds))) as CategoryTranslationLocale[];
+
+  return siteRows
+    .map((row) => ({
+      ...row,
+      isAdminLocale: ADMIN_DB_LOCALE_CODES.includes(row.locale_code as AdminDbLocaleCode),
+    }))
+    .sort((a, b) => a.language.localeCompare(b.language));
+}

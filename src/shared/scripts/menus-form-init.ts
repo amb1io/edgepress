@@ -1,28 +1,31 @@
 /**
- * Alpine form for menus CPT: item builder with autocomplete, custom links, drag-drop.
+ * Alpine form for menus CPT: item builder with autocomplete, custom links, SortableJS submenus.
  */
+import Sortable from "sortablejs";
 import {
   initContentForm,
   deleteContentThumbnail,
   type ContentFormInitProps,
 } from "./content-form.ts";
+import type { MenuItemClientRow, SubMenuDisplay, SubMenuSort } from "./menu-item-types.ts";
+import {
+  childrenOfFrom,
+  nextChildOrder,
+  nextRootOrder,
+  normalizeSiblingOrders,
+  reorderChildrenIn,
+  reorderRootsIn,
+  rootItemsFrom,
+} from "./menus-form-order.ts";
 
-export type MenuItemClientRow = {
-  clientId: string;
-  id?: number;
-  label: string;
-  slug: string;
-  order: number;
-  link_type: "post" | "custom" | "taxonomy";
-  target_post_id?: number | null;
-  target_post_type?: string;
-  target_slug?: string;
-  target_locale_code?: string;
-  target_taxonomy_id?: number | null;
-  target_taxonomy_type?: string;
-  custom_url?: string;
-  id_locale_code?: number | null;
-};
+export type { MenuItemClientRow, SubMenuDisplay, SubMenuSort } from "./menu-item-types.ts";
+export {
+  childrenOfFrom,
+  normalizeSiblingOrders,
+  reorderChildrenIn,
+  reorderRootsIn,
+  rootItemsFrom,
+} from "./menus-form-order.ts";
 
 export type MenuPickerResult =
   | {
@@ -59,6 +62,16 @@ export type MenusFormInitProps = ContentFormInitProps & {
     typeCustom: string;
     typeTaxonomy: string;
     selectPost: string;
+    parentMenu: string;
+    noParent: string;
+    sortAlphabetical: string;
+    sortCreation: string;
+    displayTitle: string;
+    displayThumbnail: string;
+    displayExcerpt: string;
+    submenuOptions: string;
+    submenuSort: string;
+    submenuDisplay: string;
   };
 };
 
@@ -74,20 +87,27 @@ function nextClientId(): string {
 }
 
 function normalizeMenuItems(items: MenuItemClientRow[]): MenuItemClientRow[] {
-  return items.map((item, index) => ({
+  const normalized = items.map((item, index) => ({
     ...item,
     clientId: item.clientId || nextClientId(),
     order: item.order || index + 1,
+    submenu_sort: item.submenu_sort ?? "creation",
+    submenu_display: item.submenu_display ?? ["title"],
+    parentClientId: item.parentClientId ?? null,
+    parentMenuItemId: item.parentMenuItemId ?? null,
   }));
-}
-
-function syncOrders(items: MenuItemClientRow[]): MenuItemClientRow[] {
-  return items.map((item, index) => ({ ...item, order: index + 1 }));
+  return normalizeSiblingOrders(normalized);
 }
 
 function safeStr(v: unknown): string {
   if (typeof v === "string" && !v.includes("[object ")) return v.trim();
   return "";
+}
+
+function readSortableOrder(listEl: HTMLElement | null): string[] {
+  if (!listEl) return [];
+  const sortable = Sortable.get(listEl);
+  return sortable ? sortable.toArray() : [];
 }
 
 export function initMenusForm(props: MenusFormInitProps): void {
@@ -143,11 +163,12 @@ export function initMenusForm(props: MenusFormInitProps): void {
       showCustomForm: false,
       customName: "",
       customUrl: "",
-      dragIndex: null as number | null,
+      _rootSortable: null as Sortable | null,
 
       init() {
         this.$watch("items", () => this.syncHiddenField());
         this.syncHiddenField();
+        this.$nextTick(() => this.initRootSortable());
       },
 
       syncHiddenField() {
@@ -157,6 +178,7 @@ export function initMenusForm(props: MenusFormInitProps): void {
         if (!input) return;
         const payload = this.items.map((item: MenuItemClientRow) => ({
           ...(item.id ? { id: item.id } : {}),
+          client_id: item.clientId,
           label: item.label,
           slug: item.slug,
           order: item.order,
@@ -169,8 +191,79 @@ export function initMenusForm(props: MenusFormInitProps): void {
           target_taxonomy_type: item.target_taxonomy_type ?? "",
           custom_url: item.custom_url ?? "",
           id_locale_code: item.id_locale_code ?? null,
+          parent_menu_item_id: item.parentMenuItemId ?? null,
+          parent_client_id: item.parentClientId ?? null,
+          submenu_sort: item.submenu_sort ?? "creation",
+          submenu_display: item.submenu_display ?? ["title"],
         }));
         input.value = JSON.stringify(payload);
+      },
+
+      initRootSortable() {
+        const rootList = this.$refs.rootList as HTMLElement | undefined;
+        if (!rootList) return;
+        if (this._rootSortable) {
+          this._rootSortable.destroy();
+        }
+        this._rootSortable = Sortable.create(rootList, {
+          group: "menu-roots",
+          handle: ".drag-handle",
+          animation: 150,
+          dataIdAttr: "data-id",
+          draggable: ".menu-root-block",
+          onEnd: () => {
+            if (!this._rootSortable) return;
+            this.reorderRoots(this._rootSortable.toArray());
+          },
+        });
+      },
+
+      initChildrenSortable(el: HTMLElement) {
+        const existing = Sortable.get(el);
+        if (existing) existing.destroy();
+
+        Sortable.create(el, {
+          group: "menu-children",
+          handle: ".drag-handle",
+          animation: 150,
+          dataIdAttr: "data-id",
+          draggable: ".menu-child-block",
+          onEnd: (evt) => this.handleChildDrop(evt),
+        });
+      },
+
+      handleChildDrop(evt: Sortable.SortableEvent) {
+        const toEl = evt.to as HTMLElement;
+        const fromEl = evt.from as HTMLElement;
+        const toParent = toEl.dataset.parentClientId;
+        if (!toParent) return;
+
+        this.reorderChildren(toParent, readSortableOrder(toEl));
+
+        const fromParent = fromEl.dataset.parentClientId;
+        if (fromParent && fromParent !== toParent) {
+          this.reorderChildren(fromParent, readSortableOrder(fromEl));
+        }
+      },
+
+      rootItems(): MenuItemClientRow[] {
+        return rootItemsFrom(this.items);
+      },
+
+      childrenOf(parentClientId: string): MenuItemClientRow[] {
+        return childrenOfFrom(this.items, parentClientId);
+      },
+
+      reorderRoots(orderedClientIds: string[]) {
+        this.items = reorderRootsIn(this.items, orderedClientIds);
+      },
+
+      reorderChildren(parentClientId: string, orderedClientIds: string[]) {
+        this.items = reorderChildrenIn(
+          this.items,
+          parentClientId,
+          orderedClientIds,
+        );
       },
 
       togglePicker() {
@@ -218,15 +311,17 @@ export function initMenusForm(props: MenusFormInitProps): void {
         const slug =
           (window.slugify && window.slugify(label)) ||
           label.toLowerCase().replace(/\s+/g, "-");
-        this.items = syncOrders([
+        this.items = normalizeSiblingOrders([
           ...this.items,
           {
             clientId: nextClientId(),
             label,
             slug,
-            order: this.items.length + 1,
+            order: nextRootOrder(this.items),
             link_type: "custom",
             custom_url: url,
+            submenu_sort: "creation",
+            submenu_display: ["title"],
           },
         ]);
         this.showCustomForm = false;
@@ -235,14 +330,19 @@ export function initMenusForm(props: MenusFormInitProps): void {
       },
 
       selectPickerResult(result: MenuPickerResult) {
+        const base = {
+          clientId: nextClientId(),
+          label: result.title,
+          slug: result.slug,
+          order: nextRootOrder(this.items),
+          submenu_sort: "creation" as SubMenuSort,
+          submenu_display: ["title"] as SubMenuDisplay[],
+        };
         if (result.kind === "taxonomy") {
-          this.items = syncOrders([
+          this.items = normalizeSiblingOrders([
             ...this.items,
             {
-              clientId: nextClientId(),
-              label: result.title,
-              slug: result.slug,
-              order: this.items.length + 1,
+              ...base,
               link_type: "taxonomy",
               target_taxonomy_id: result.id,
               target_taxonomy_type: result.taxonomy_type,
@@ -252,13 +352,10 @@ export function initMenusForm(props: MenusFormInitProps): void {
             },
           ]);
         } else {
-          this.items = syncOrders([
+          this.items = normalizeSiblingOrders([
             ...this.items,
             {
-              clientId: nextClientId(),
-              label: result.title,
-              slug: result.slug,
-              order: this.items.length + 1,
+              ...base,
               link_type: "post",
               target_post_id: result.id,
               target_post_type: result.post_type_slug,
@@ -281,55 +378,127 @@ export function initMenusForm(props: MenusFormInitProps): void {
       },
 
       removeItem(clientId: string) {
-        this.items = syncOrders(
-          this.items.filter((item: MenuItemClientRow) => item.clientId !== clientId),
+        const childIds = this.items
+          .filter((item: MenuItemClientRow) => item.parentClientId === clientId)
+          .map((item: MenuItemClientRow) => item.clientId);
+        this.items = normalizeSiblingOrders(
+          this.items.filter(
+            (item: MenuItemClientRow) =>
+              item.clientId !== clientId && !childIds.includes(item.clientId),
+          ),
         );
       },
 
       updateOrder(clientId: string, value: string) {
-        const order = Math.max(1, parseInt(value, 10) || 1);
-        const sorted = [...this.items].sort(
-          (a: MenuItemClientRow, b: MenuItemClientRow) => a.order - b.order,
+        const item = this.items.find(
+          (row: MenuItemClientRow) => row.clientId === clientId,
         );
-        const index = sorted.findIndex(
-          (item: MenuItemClientRow) => item.clientId === clientId,
-        );
-        if (index < 0) return;
-        const [moved] = sorted.splice(index, 1);
-        if (!moved) return;
-        sorted.splice(Math.min(order - 1, sorted.length), 0, moved);
-        this.items = syncOrders(sorted);
-      },
+        if (!item) return;
 
-      onDragStart(index: number) {
-        this.dragIndex = index;
-      },
+        const targetOrder = Math.max(1, parseInt(value, 10) || 1);
 
-      onDragOver(event: DragEvent) {
-        event.preventDefault();
-      },
-
-      onDrop(index: number) {
-        if (this.dragIndex == null || this.dragIndex === index) {
-          this.dragIndex = null;
+        if (!item.parentClientId) {
+          const ids = this.rootItems().map((row) => row.clientId);
+          const currentIdx = ids.indexOf(clientId);
+          if (currentIdx < 0) return;
+          ids.splice(currentIdx, 1);
+          ids.splice(Math.min(targetOrder - 1, ids.length), 0, clientId);
+          this.reorderRoots(ids);
           return;
         }
-        const sorted = [...this.items].sort(
-          (a: MenuItemClientRow, b: MenuItemClientRow) => a.order - b.order,
-        );
-        const [moved] = sorted.splice(this.dragIndex, 1);
-        if (!moved) {
-          this.dragIndex = null;
-          return;
-        }
-        sorted.splice(index, 0, moved);
-        this.items = syncOrders(sorted);
-        this.dragIndex = null;
+
+        const ids = this.childrenOf(item.parentClientId).map((row) => row.clientId);
+        const currentIdx = ids.indexOf(clientId);
+        if (currentIdx < 0) return;
+        ids.splice(currentIdx, 1);
+        ids.splice(Math.min(targetOrder - 1, ids.length), 0, clientId);
+        this.reorderChildren(item.parentClientId, ids);
       },
 
-      sortedItems(): MenuItemClientRow[] {
-        return [...this.items].sort(
-          (a: MenuItemClientRow, b: MenuItemClientRow) => a.order - b.order,
+      availableParents(childClientId: string): MenuItemClientRow[] {
+        return this.items.filter(
+          (item: MenuItemClientRow) =>
+            item.clientId !== childClientId &&
+            !item.parentClientId &&
+            !this.isDescendantOf(childClientId, item.clientId),
+        );
+      },
+
+      isDescendantOf(ancestorClientId: string, candidateClientId: string): boolean {
+        let current = this.items.find(
+          (item: MenuItemClientRow) => item.clientId === candidateClientId,
+        );
+        while (current?.parentClientId) {
+          if (current.parentClientId === ancestorClientId) return true;
+          current = this.items.find(
+            (item: MenuItemClientRow) => item.clientId === current!.parentClientId,
+          );
+        }
+        return false;
+      },
+
+      setParent(childClientId: string, parentClientId: string | null) {
+        const item = this.items.find(
+          (row: MenuItemClientRow) => row.clientId === childClientId,
+        );
+        if (!item) return;
+
+        if (!parentClientId) {
+          this.items = normalizeSiblingOrders(
+            this.items.map((row: MenuItemClientRow) => {
+              if (row.clientId !== childClientId) return row;
+              return {
+                ...row,
+                parentClientId: null,
+                parentMenuItemId: null,
+                order: nextRootOrder(
+                  this.items.filter((r) => r.clientId !== childClientId),
+                ),
+              };
+            }),
+          );
+          return;
+        }
+
+        const parent = this.items.find(
+          (row: MenuItemClientRow) => row.clientId === parentClientId,
+        );
+        this.items = normalizeSiblingOrders(
+          this.items.map((row: MenuItemClientRow) => {
+            if (row.clientId !== childClientId) return row;
+            return {
+              ...row,
+              parentClientId,
+              parentMenuItemId: parent?.id ?? null,
+              order: nextChildOrder(
+                this.items.filter((r) => r.clientId !== childClientId),
+                parentClientId,
+              ),
+            };
+          }),
+        );
+      },
+
+      hasChildren(clientId: string): boolean {
+        return this.items.some(
+          (item: MenuItemClientRow) => item.parentClientId === clientId,
+        );
+      },
+
+      toggleSubmenuDisplay(clientId: string, value: SubMenuDisplay, checked: boolean) {
+        this.items = this.items.map((item: MenuItemClientRow) => {
+          if (item.clientId !== clientId) return item;
+          const current = new Set(item.submenu_display ?? ["title"]);
+          if (checked) current.add(value);
+          else current.delete(value);
+          if (current.size === 0) current.add("title");
+          return { ...item, submenu_display: [...current] as SubMenuDisplay[] };
+        });
+      },
+
+      setSubmenuSort(clientId: string, value: SubMenuSort) {
+        this.items = this.items.map((item: MenuItemClientRow) =>
+          item.clientId === clientId ? { ...item, submenu_sort: value } : item,
         );
       },
 
@@ -337,6 +506,10 @@ export function initMenusForm(props: MenusFormInitProps): void {
         if (item.link_type === "custom") return this.labels.typeCustom;
         if (item.link_type === "taxonomy") return this.labels.typeTaxonomy;
         return this.labels.typePost;
+      },
+
+      isSubItem(item: MenuItemClientRow): boolean {
+        return Boolean(item.parentClientId);
       },
     }));
   });

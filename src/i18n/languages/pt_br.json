@@ -214,7 +214,10 @@
   "admin.taxonomy.editOnlyNotice": "Selecione uma taxonomia na lista para editar.",
   "admin.taxonomy.deleteConfirmCascade": "Esta ação vai deletar esta taxonomia e todos os filhos. Deseja continuar?",
   "admin.taxonomy.panel.languages": "Idiomas",
-  "admin.taxonomy.panel.languagesInfo": "Defina traduções para idiomas do admin e do site.",
+  "admin.taxonomy.panel.languagesInfo": "Defina traduções de nome e slug por idioma configurado em site_locales.",
+  "admin.taxonomy.translationName": "Tradução Nome",
+  "admin.taxonomy.translationSlug": "Tradução Slug",
+  "admin.taxonomy.translationSlugHint": "Slug usado na URL pública neste idioma. Se vazio, usa o slug canônico do termo.",
   "admin.list.language": "Idioma",
   "admin.list.order": "Ordem",
   "admin.menus.addItem": "Adicionar mais um menu",
@@ -230,5 +233,15 @@
   "admin.menus.selectPost": "Selecionar conteúdo",
   "admin.menus.itemsTitle": "Itens do menu",
   "admin.menus.slugHint": "O slug define a location do menu no tema (ex.: primary).",
-  "admin.menus.loading": "Buscando..."
+  "admin.menus.loading": "Buscando...",
+  "admin.menus.parentMenu": "Escolha o menu pai",
+  "admin.menus.noParent": "Nenhum (menu principal)",
+  "admin.menus.sortAlphabetical": "Alfabética",
+  "admin.menus.sortCreation": "Criação",
+  "admin.menus.displayTitle": "Título",
+  "admin.menus.displayThumbnail": "Thumbnail",
+  "admin.menus.displayExcerpt": "Excerpt",
+  "admin.menus.submenuOptions": "Opções do submenu",
+  "admin.menus.submenuSort": "Ordenação",
+  "admin.menus.submenuDisplay": "Visualização"
 }

@@ -16,44 +16,81 @@ import type {
   ThemeRenderContext,
 } from "./types.ts";
 import { buildSeoFromPost, resolveThemeSeoContext } from "./seo-head.ts";
+import { buildBodyClass } from "./body-class.ts";
 import {
   localeToHtmlLang,
   normalizePublicLocale,
   publicLocaleHomeUrl,
   publicLocaleUrlPrefix,
 } from "./resolve-route.ts";
-import { getArchivablePostTypes, resolveArchivePostTypeFromRoute } from "./post-type-routes.ts";
 import { buildLocaleSwitcher } from "./locale-switcher.ts";
 import { filterPublicThemeListPosts, isPublicThemeListPost } from "./post-filters.ts";
 import {
   resolveCoverImage,
   type CoverImageAttachmentCache,
 } from "./cover-image.ts";
-import { createGetTaxonomiesHandler, createGetRelatedPostsHandler, createGetAuthorHandler } from "./theme-functions.ts";
+import { createGetTaxonomiesHandler, createGetRelatedPostsHandler, createGetTaxonomyPostsHandler, createGetPostsHandler, createGetAuthorHandler, createGetTaxonomiesLocaleHandler } from "./theme-functions.ts";
 import { getPublicTaxonomyTerm } from "./taxonomy-routes.ts";
+import {
+  getLocalizedTaxonomyTerm,
+  getLocalizedTaxonomyType,
+  resolveTaxonomySlugForFilter,
+} from "../services/taxonomy-translation-service.ts";
 import type { ThemeRouteKind } from "./types.ts";
 import type { EdgepressContent } from "../services/edgepress-content.ts";
-import { loadPublishedMenusByLocation } from "../services/menu-items-service.ts";
+import { loadPublishedMenusByLocation, type MenuItemPublicRaw } from "../services/menu-items-service.ts";
 import { searchPosts } from "../services/search-service.ts";
 import { resolveLocaleId } from "../services/post-translation-service.ts";
 import { buildContentPostPayload } from "../../utils/content-post-payload.ts";
 import { inArray } from "drizzle-orm";
 import { injectCategoryMeta } from "./post-category-meta.ts";
+import { injectCustomFieldsMeta } from "./custom-fields-meta.ts";
+
+function routeContextFields(
+  route: ResolvedPublicRoute,
+  kind?: ThemeRouteKind,
+  taxonomy?: { type: string; slug: string },
+) {
+  return {
+    kind: kind ?? route.kind,
+    path: route.path,
+    locale: route.locale,
+    template_key: route.templateKey,
+    params: route.params,
+    ...(taxonomy
+      ? { taxonomy_type: taxonomy.type, taxonomy_slug: taxonomy.slug }
+      : route.taxonomyType
+        ? { taxonomy_type: route.taxonomyType, taxonomy_slug: route.taxonomySlug }
+        : {}),
+  };
+}
+
+function mapMenuItemWithActive(
+  item: MenuItemPublicRaw,
+  normPath: string,
+): MenuItem {
+  const urlNorm = item.url.replace(/\/+$/, "") || "/";
+  return {
+    id: item.id,
+    label: item.label,
+    url: item.url,
+    slug: item.slug,
+    target_post_id: item.target_post_id,
+    active: item.url !== "" && normPath === urlNorm,
+    submenu_sort: item.submenu_sort,
+    submenu_display: item.submenu_display,
+    children: (item.children ?? []).map((child) => mapMenuItemWithActive(child, normPath)),
+  };
+}
 
 function buildThemeMenusRecord(
-  menusByLocation: Record<string, { label: string; url: string }[]>,
+  menusByLocation: Record<string, MenuItemPublicRaw[]>,
   currentPath: string,
 ): Record<string, MenuItem[]> {
   const normPath = currentPath.replace(/\/+$/, "") || "/";
   const menus: Record<string, MenuItem[]> = {};
   for (const [location, items] of Object.entries(menusByLocation)) {
-    menus[location] = items.map((item) => ({
-      label: item.label,
-      url: item.url,
-      active:
-        item.url !== "" &&
-        normPath === item.url.replace(/\/+$/, ""),
-    }));
+    menus[location] = items.map((item) => mapMenuItemWithActive(item, normPath));
   }
   return menus;
 }
@@ -70,12 +107,16 @@ function toPostView(post: ContentPostDetail): ThemePostView {
     | undefined;
   injectCategoryMeta(meta, taxonomies);
 
+  const customFields = Array.isArray(post.custom_fields) ? post.custom_fields : [];
+  injectCustomFieldsMeta(meta, customFields);
+
   return {
     id: Number(post.id),
     title: String(post.title ?? ""),
     slug: String(post.slug ?? ""),
     excerpt: String(post.excerpt ?? ""),
     body_html: String(post.body ?? ""),
+    body_blocks: post.body_blocks ?? null,
     author_name: String((post as { author_name?: string }).author_name ?? ""),
     published_at:
       typeof post.published_at === "number"
@@ -85,6 +126,7 @@ function toPostView(post: ContentPostDetail): ThemePostView {
           : null,
     post_type_slug: String(post["post_type_slug"] ?? "post"),
     meta,
+    custom_fields: customFields,
   };
 }
 
@@ -120,25 +162,127 @@ function buildGetRelatedPostsHandler(
   });
 }
 
+function buildGetTaxonomyPostsHandler(
+  content: EdgepressContent,
+  dbLocale: string,
+  baseUrl: string,
+  database: typeof db,
+) {
+  return createGetTaxonomyPostsHandler(async (taxonomyType, taxonomySlug, limit) => {
+    const canonicalSlug = await resolveTaxonomySlugForFilter(
+      database,
+      taxonomyType,
+      taxonomySlug,
+      dbLocale,
+    );
+    if (!canonicalSlug) return [];
+
+    const listResult = await content.getList("posts", {
+      limit,
+      locale: dbLocale,
+      filter: { status: "published" },
+      filter_taxonomy_slug: canonicalSlug,
+      filter_taxonomy_type: taxonomyType,
+      order: "order",
+      orderDir: "desc",
+      include: "custom_fields",
+    });
+    const filtered = filterPublicThemeListPosts(listResult.items) as ContentPostDetail[];
+    const attachmentCache: CoverImageAttachmentCache = new Map();
+    return Promise.all(
+      filtered.map(async (item) =>
+        enrichPostViewWithCover(toPostView(item), item, baseUrl, attachmentCache),
+      ),
+    );
+  });
+}
+
+function buildLocalizedGetTaxonomiesHandler(content: EdgepressContent, database: typeof db, dbLocale: string) {
+  return createGetTaxonomiesHandler(async (postType, taxonomyType) => {
+    const res = await content.getTaxonomies(postType, taxonomyType);
+    return Promise.all(
+      res.items.map(async (item) => {
+        const term = {
+          id: Number(item.id ?? 0),
+          name: String(item.name ?? ""),
+          slug: String(item.slug ?? ""),
+          type: taxonomyType,
+        };
+        const localized = await getLocalizedTaxonomyTerm(database, term, dbLocale);
+        return { ...item, name: localized.name, slug: localized.slug };
+      }),
+    );
+  });
+}
+
+function buildGetTaxonomiesLocaleHandler(content: EdgepressContent, database: typeof db) {
+  return createGetTaxonomiesLocaleHandler(async (postType, taxonomyType, locale) => {
+    const dbLocale = adminUrlLocaleToDbCode(locale);
+    const [res, taxonomy] = await Promise.all([
+      content.getTaxonomies(postType, taxonomyType),
+      getLocalizedTaxonomyType(database, taxonomyType, dbLocale),
+    ]);
+    const values = await Promise.all(
+      res.items.map(async (item) => {
+        const term = {
+          id: Number(item.id ?? 0),
+          name: String(item.name ?? ""),
+          slug: String(item.slug ?? ""),
+          type: taxonomyType,
+        };
+        const localized = await getLocalizedTaxonomyTerm(database, term, dbLocale);
+        return { id: term.id, name: localized.name, slug: localized.slug, locale };
+      }),
+    );
+    return { taxonomy, values };
+  });
+}
+
+function buildGetPostsListHandler(
+  content: EdgepressContent,
+  dbLocale: string,
+  baseUrl: string,
+  includeCustomFields: boolean,
+) {
+  return createGetPostsHandler(async (postTypeSlug, limit) => {
+    const listResult = await content.getList("posts", {
+      limit,
+      locale: dbLocale,
+      filter: { status: "published", post_type: postTypeSlug },
+      order: "order",
+      orderDir: "desc",
+      ...(includeCustomFields ? { include: "custom_fields" } : {}),
+    });
+    const filtered = filterPublicThemeListPosts(listResult.items) as ContentPostDetail[];
+    const attachmentCache: CoverImageAttachmentCache = new Map();
+    return Promise.all(
+      filtered.map(async (item) =>
+        enrichPostViewWithCover(toPostView(item), item, baseUrl, attachmentCache),
+      ),
+    );
+  });
+}
+
+function buildGetPostsHandler(
+  content: EdgepressContent,
+  dbLocale: string,
+  baseUrl: string,
+) {
+  return buildGetPostsListHandler(content, dbLocale, baseUrl, false);
+}
+
+function buildGetPostsDetailsHandler(
+  content: EdgepressContent,
+  dbLocale: string,
+  baseUrl: string,
+) {
+  return buildGetPostsListHandler(content, dbLocale, baseUrl, true);
+}
+
 function buildGetAuthorHandler(content: EdgepressContent, dbLocale: string) {
   return createGetAuthorHandler(async (idOrSlug) =>
     content.getAuthorForPost(idOrSlug, { locale: dbLocale, status: "published" }),
   );
-}
-
-function buildBodyClass(
-  route: ResolvedPublicRoute,
-  post?: ThemePostView,
-  resolvedKind?: ThemeRouteKind,
-  taxonomy?: { type: string; slug: string },
-): string {
-  const kind = resolvedKind ?? route.kind;
-  const parts = [`route-${kind}`, `locale-${route.locale.replace(/-/g, "_")}`];
-  if (taxonomy?.type) parts.push(`taxonomy-${taxonomy.type}`);
-  if (taxonomy?.slug) parts.push(`term-${taxonomy.slug.replace(/\//g, "-")}`);
-  if (post?.post_type_slug) parts.push(`type-${post.post_type_slug}`);
-  if (post?.slug) parts.push(`slug-${post.slug.replace(/\//g, "-")}`);
-  return parts.join(" ");
 }
 
 function buildArchivePageUrl(pathname: string, page: number): string {
@@ -184,6 +328,7 @@ export async function buildThemeRenderContext(
   const localePrefix = publicLocaleUrlPrefix(locale);
   const homeUrl = publicLocaleHomeUrl(locale);
   const assetBase = `${baseUrl}/themes-assets/${pkg.manifest.slug}`;
+  const themeSupports = pkg.manifest.supports ?? [];
   const homeContentKey = pkg.manifest.home_content_key ?? "hello-world";
   const homeListPosts = pkg.manifest.home_list_posts === true;
 
@@ -191,25 +336,36 @@ export async function buildThemeRenderContext(
 
   if (route.kind === "taxonomy" && route.taxonomyType && route.taxonomySlug) {
     const listPage = route.page ?? 1;
-    const [term, menusByLocation, listResult] = await Promise.all([
-      getPublicTaxonomyTerm(db, route.taxonomyType, route.taxonomySlug),
+    const term = await getPublicTaxonomyTerm(db, route.taxonomyType, route.taxonomySlug, dbLocale);
+    const localized = term ? await getLocalizedTaxonomyTerm(db, term, dbLocale) : null;
+    const canonicalSlug = term?.slug;
+
+    const [menusByLocation, listResult] = await Promise.all([
       menusPromise,
-      content.getListWithDetails("posts", {
-        page: listPage,
-        limit: 10,
-        locale: dbLocale,
-        filter: { status: "published" },
-        filter_taxonomy_slug: route.taxonomySlug,
-        filter_taxonomy_type: route.taxonomyType,
-        order: "published_at",
-        orderDir: "desc",
-      }),
+      term && canonicalSlug
+        ? content.getListWithDetails("posts", {
+            page: listPage,
+            limit: 10,
+            locale: dbLocale,
+            filter: { status: "published" },
+            filter_taxonomy_slug: canonicalSlug,
+            filter_taxonomy_type: route.taxonomyType,
+            order: "published_at",
+            orderDir: "desc",
+          })
+        : Promise.resolve({
+            items: [] as ContentPostDetail[],
+            page: 1,
+            limit: 10,
+            total: 0,
+            totalPages: 1,
+          }),
     ]);
 
     const attachmentCache: CoverImageAttachmentCache = new Map();
     const resolvedKind: ThemeRouteKind = term ? "taxonomy" : "404";
-    const taxonomyMeta = term
-      ? { type: route.taxonomyType, slug: route.taxonomySlug }
+    const taxonomyMeta = term && localized
+      ? { type: route.taxonomyType, slug: localized.slug }
       : undefined;
 
     const filteredListPosts = term
@@ -222,7 +378,7 @@ export async function buildThemeRenderContext(
     );
 
     const archive = {
-      title: term?.name ?? route.taxonomySlug,
+      title: localized?.name ?? route.taxonomySlug,
       type: route.taxonomyType,
     };
     const totalPages = term ? Math.max(1, listResult.totalPages) : 1;
@@ -265,20 +421,17 @@ export async function buildThemeRenderContext(
       },
       seo,
       menus,
-      locale_switcher: buildLocaleSwitcher(locale, route, resolvedKind),
+      locale_switcher: await buildLocaleSwitcher(locale, route, resolvedKind, {
+        taxonomyCanonicalSlug: term?.slug,
+        db,
+      }),
       theme: {
         slug: pkg.manifest.slug,
         version: pkg.manifest.version,
         asset_base_url: assetBase,
+        supports: themeSupports,
       },
-      route: {
-        kind: resolvedKind,
-        path: route.path,
-        locale,
-        ...(taxonomyMeta
-          ? { taxonomy_type: taxonomyMeta.type, taxonomy_slug: taxonomyMeta.slug }
-          : {}),
-      },
+      route: routeContextFields(route, resolvedKind, taxonomyMeta),
       body_class: buildBodyClass(route, undefined, resolvedKind, taxonomyMeta),
       posts,
       archive,
@@ -291,11 +444,12 @@ export async function buildThemeRenderContext(
       is_search: false,
       is_404: resolvedKind === "404",
       have_posts: posts.length > 0,
-      get_taxonomies: createGetTaxonomiesHandler(async (postType, taxonomyType) => {
-        const res = await content.getTaxonomies(postType, taxonomyType);
-        return res.items;
-      }),
+      get_taxonomies: buildLocalizedGetTaxonomiesHandler(content, db, dbLocale),
+      get_taxonomies_locale: buildGetTaxonomiesLocaleHandler(content, db),
       get_related_posts: buildGetRelatedPostsHandler(content, dbLocale, baseUrl),
+      get_taxonomy_posts: buildGetTaxonomyPostsHandler(content, dbLocale, baseUrl, db),
+      get_posts: buildGetPostsHandler(content, dbLocale, baseUrl),
+      get_posts_details: buildGetPostsDetailsHandler(content, dbLocale, baseUrl),
       get_author: buildGetAuthorHandler(content, dbLocale),
     };
   }
@@ -417,6 +571,8 @@ export async function buildThemeRenderContext(
       ...(posts[0]?.cover_image ? { ogImage: posts[0].cover_image } : {}),
     });
 
+    const searchLocaleSwitcher = await buildLocaleSwitcher(locale, route, "search");
+
     return {
       site: {
         title: siteName,
@@ -430,17 +586,14 @@ export async function buildThemeRenderContext(
       },
       seo,
       menus,
-      locale_switcher: buildLocaleSwitcher(locale, route, "search"),
+      locale_switcher: searchLocaleSwitcher,
       theme: {
         slug: pkg.manifest.slug,
         version: pkg.manifest.version,
         asset_base_url: assetBase,
+        supports: themeSupports,
       },
-      route: {
-        kind: "search",
-        path: route.path,
-        locale,
-      },
+      route: routeContextFields(route, "search"),
       body_class: buildBodyClass(route, undefined, "search"),
       posts,
       archive: { title: archiveTitle, type: "search" },
@@ -454,22 +607,21 @@ export async function buildThemeRenderContext(
       is_search: true,
       is_404: false,
       have_posts: posts.length > 0,
-      get_taxonomies: createGetTaxonomiesHandler(async (postType, taxonomyType) => {
-        const res = await content.getTaxonomies(postType, taxonomyType);
-        return res.items;
-      }),
+      get_taxonomies: buildLocalizedGetTaxonomiesHandler(content, db, dbLocale),
+      get_taxonomies_locale: buildGetTaxonomiesLocaleHandler(content, db),
       get_related_posts: buildGetRelatedPostsHandler(content, dbLocale, baseUrl),
+      get_taxonomy_posts: buildGetTaxonomyPostsHandler(content, dbLocale, baseUrl, db),
+      get_posts: buildGetPostsHandler(content, dbLocale, baseUrl),
+      get_posts_details: buildGetPostsDetailsHandler(content, dbLocale, baseUrl),
       get_author: buildGetAuthorHandler(content, dbLocale),
     };
   }
 
-  const archivablePostTypes = await getArchivablePostTypes(db, kv);
-  const archiveRoute = resolveArchivePostTypeFromRoute(route, archivablePostTypes);
-  const isArchiveRoute = archiveRoute != null;
-
+  const resolvedKind = route.kind;
+  const isArchiveRoute = resolvedKind === "archive";
+  const listPostType = route.postType ?? "post";
   const listPage = isArchiveRoute ? (route.page ?? 1) : 1;
   const listLimit = isArchiveRoute ? 10 : 20;
-  const listPostType = isArchiveRoute ? archiveRoute.postType : "post";
 
   const fetchSlugPost =
     route.slug && !isArchiveRoute
@@ -524,10 +676,10 @@ export async function buildThemeRenderContext(
 
   let post: ThemePostView | undefined;
   let seoPost: ContentPostDetail | undefined;
-  let resolvedKind = route.kind;
+  let finalKind = resolvedKind;
 
   if (isArchiveRoute) {
-    resolvedKind = "archive";
+    finalKind = "archive";
   } else if (slugPostData) {
     seoPost = slugPostData;
     post = await enrichPostViewWithCover(
@@ -536,9 +688,9 @@ export async function buildThemeRenderContext(
       baseUrl,
       attachmentCache,
     );
-    resolvedKind = post.post_type_slug === "post" ? "single" : "page";
-  } else if (route.slug) {
-    resolvedKind = "404";
+    finalKind = post.post_type_slug === "post" ? "single" : "page";
+  } else if (route.slug && resolvedKind !== "404") {
+    finalKind = "404";
   } else if (route.kind === "home" && !homeListPosts && homePostData) {
     seoPost = homePostData as ContentPostDetail;
     post = await enrichPostViewWithCover(
@@ -547,23 +699,30 @@ export async function buildThemeRenderContext(
       baseUrl,
       attachmentCache,
     );
-    resolvedKind = "home";
+    finalKind = "home";
   } else if (route.kind === "home") {
-    resolvedKind = "home";
+    finalKind = "home";
+  } else if (resolvedKind === "404") {
+    finalKind = "404";
   }
 
+  const archiveTitle =
+    isArchiveRoute && listPostType === "post"
+      ? "Blog"
+      : isArchiveRoute
+        ? listPostType
+        : listPostType === "post"
+          ? "Blog"
+          : String(listPostType);
+
   const archive = {
-    title: isArchiveRoute
-      ? archiveRoute.title
-      : listPostType === "post"
-        ? "Blog"
-        : String(listPostType),
+    title: archiveTitle,
     type: listPostType,
   };
 
   const totalPages = Math.max(1, listResult.totalPages);
   const paginationPath =
-    resolvedKind === "archive" || resolvedKind === "taxonomy"
+    finalKind === "archive" || finalKind === "taxonomy"
       ? route.path
       : `${localePrefix}/posts`;
   const pagination = {
@@ -577,12 +736,12 @@ export async function buildThemeRenderContext(
       : {}),
   };
 
-  const is_front_page = resolvedKind === "home";
-  const is_single = resolvedKind === "single";
-  const is_page = resolvedKind === "page";
+  const is_front_page = finalKind === "home";
+  const is_single = finalKind === "single";
+  const is_page = finalKind === "page";
   const is_singular = is_single || is_page;
-  const is_archive = resolvedKind === "archive" || resolvedKind === "taxonomy";
-  const is_404 = resolvedKind === "404";
+  const is_archive = finalKind === "archive" || finalKind === "taxonomy";
+  const is_404 = finalKind === "404";
   const have_posts = posts.length > 0;
 
   const menus = buildThemeMenusRecord(menusByLocation, route.path);
@@ -590,11 +749,11 @@ export async function buildThemeRenderContext(
   const canonicalUrl = new URL(route.path || "/", baseUrl).href;
   const seoOgImage = seoPost
     ? await resolveCoverImage(seoPost, baseUrl, db, attachmentCache)
-    : resolvedKind === "home" && homeListPosts && posts[0]
+    : finalKind === "home" && homeListPosts && posts[0]
       ? posts[0].cover_image
       : undefined;
   const seo = resolveThemeSeoContext({
-    resolvedKind,
+    resolvedKind: finalKind,
     isArchiveRoute,
     archiveTitle: archive.title,
     homeListPosts,
@@ -607,12 +766,9 @@ export async function buildThemeRenderContext(
     ...(seoOgImage ? { ogImage: seoOgImage } : {}),
   });
 
-  const localeSwitcher = buildLocaleSwitcher(
-    locale,
-    route,
-    resolvedKind,
-    isArchiveRoute ? archive.type : undefined,
-  );
+  const localeSwitcher = await buildLocaleSwitcher(locale, route, finalKind, {
+    archivePostType: isArchiveRoute ? archive.type : undefined,
+  });
 
   return {
     site: {
@@ -632,13 +788,10 @@ export async function buildThemeRenderContext(
       slug: pkg.manifest.slug,
       version: pkg.manifest.version,
       asset_base_url: assetBase,
+      supports: themeSupports,
     },
-    route: {
-      kind: resolvedKind,
-      path: route.path,
-      locale,
-    },
-    body_class: buildBodyClass({ ...route, kind: resolvedKind }, post, resolvedKind),
+    route: routeContextFields(route, finalKind),
+    body_class: buildBodyClass({ ...route, kind: finalKind }, post, finalKind),
     ...(post ? { post } : {}),
     posts,
     archive,
@@ -651,11 +804,12 @@ export async function buildThemeRenderContext(
     is_search: false,
     is_404,
     have_posts,
-    get_taxonomies: createGetTaxonomiesHandler(async (postType, taxonomyType) => {
-      const res = await content.getTaxonomies(postType, taxonomyType);
-      return res.items;
-    }),
+    get_taxonomies: buildLocalizedGetTaxonomiesHandler(content, db, dbLocale),
+    get_taxonomies_locale: buildGetTaxonomiesLocaleHandler(content, db),
     get_related_posts: buildGetRelatedPostsHandler(content, dbLocale, baseUrl),
+    get_taxonomy_posts: buildGetTaxonomyPostsHandler(content, dbLocale, baseUrl, db),
+    get_posts: buildGetPostsHandler(content, dbLocale, baseUrl),
+    get_posts_details: buildGetPostsDetailsHandler(content, dbLocale, baseUrl),
     get_author: buildGetAuthorHandler(content, dbLocale),
   };
 }

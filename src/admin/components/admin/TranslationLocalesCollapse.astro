@@ -13,6 +13,11 @@ interface Props {
   valueHint?: string;
   inputPrefix?: string;
   valuesByCode?: Record<string, string>;
+  slugValueLabel?: string;
+  slugInputPrefix?: string;
+  slugValuesByCode?: Record<string, string>;
+  slugPlaceholder?: string;
+  slugHint?: string;
 }
 
 const {
@@ -26,7 +31,17 @@ const {
   valueHint = "",
   inputPrefix = "translation_",
   valuesByCode = {},
+  slugValueLabel = "",
+  slugInputPrefix = "translation_slug_",
+  slugValuesByCode = {},
+  slugPlaceholder = "",
+  slugHint = "",
 } = Astro.props;
+
+const showSlugColumn = Boolean(slugValueLabel);
+const gridCols = showSlugColumn
+  ? "grid-cols-[minmax(0,9rem)_1fr_1fr]"
+  : "grid-cols-[minmax(0,11rem)_1fr]";
 ---
 
 <Collapse title={title} infoText={infoText} arrow={true} defaultOpen={true} overflowVisible={true}>
@@ -35,7 +50,7 @@ const {
   ) : (
     <div class="flex flex-col gap-2 pt-1">
       {locales.map((loc) => (
-        <div class="grid grid-cols-[minmax(0,11rem)_1fr] gap-2 items-end">
+        <div class={`grid ${gridCols} gap-2 items-end`}>
           <div class="form-control min-w-0">
             <span class="label-text text-xs mb-1 block">{localeLabel}</span>
             <input type="hidden" name="translation_locale_id[]" value={loc.id} />
@@ -62,9 +77,24 @@ const {
               placeholder={valuePlaceholder}
             />
           </div>
+          {showSlugColumn ? (
+            <div class="form-control min-w-0">
+              <label class="label py-0">
+                <span class="label-text text-xs">{slugValueLabel}</span>
+              </label>
+              <input
+                type="text"
+                name={`${slugInputPrefix}${loc.locale_code}`}
+                class="input input-bordered input-sm w-full font-mono"
+                value={slugValuesByCode[loc.locale_code] ?? ""}
+                placeholder={slugPlaceholder}
+              />
+            </div>
+          ) : null}
         </div>
       ))}
     </div>
   )}
   {valueHint ? <p class="text-xs text-base-content/50 mt-2">{valueHint}</p> : null}
+  {slugHint ? <p class="text-xs text-base-content/50 mt-1">{slugHint}</p> : null}
 </Collapse>

@@ -19,7 +19,12 @@ import {
   escapeIdentifier,
   VALID_TABLE_IDENTIFIER,
 } from "../../utils/db-utils.ts";
-import { buildContentPostPayload, getPostTaxonomiesForPayload } from "../../utils/content-post-payload.ts";
+import {
+  buildContentPostPayload,
+  getPostTaxonomiesForPayload,
+  getPostsCustomFieldsBatch,
+  type CustomFieldItem,
+} from "../../utils/content-post-payload.ts";
 import {
   buildTranslationPostCacheKey,
   findPostByTranslationKey,
@@ -78,6 +83,8 @@ export interface ContentListParams {
   filter_taxonomy_id?: number;
   filter_taxonomy_slug?: string;
   filter_taxonomy_type?: string;
+  /** Comma-separated expansions for list items (e.g. `custom_fields`). */
+  include?: string;
 }
 
 export interface ContentListResponse<T = Record<string, unknown>> {
@@ -115,7 +122,7 @@ export interface ContentPostDetail {
   updated_at?: string;
   meta_schema?: Record<string, unknown>;
   meta_values?: Record<string, unknown>;
-  custom_fields?: Record<string, unknown>;
+  custom_fields?: CustomFieldItem[];
   body_smart?: unknown;
   media?: unknown[];
   [key: string]: unknown;
@@ -164,6 +171,7 @@ function flattenContentListParams(params: ContentListParams): Record<string, str
   add("filter_taxonomy_id", params.filter_taxonomy_id);
   add("filter_taxonomy_slug", params.filter_taxonomy_slug);
   add("filter_taxonomy_type", params.filter_taxonomy_type);
+  add("include", params.include);
   if (params.filter) {
     for (const [col, value] of Object.entries(params.filter)) {
       add(`filter_${col}`, value);
@@ -228,6 +236,17 @@ async function resolvePostLocaleFilter(
   return Object.keys(next).length ? next : undefined;
 }
 
+function parseIncludeParam(merged: Record<string, string>): Set<string> {
+  const raw = merged["include"];
+  if (!raw?.trim()) return new Set();
+  return new Set(
+    raw
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean),
+  );
+}
+
 export async function getTableContentListResult(
   kv: ReturnType<typeof getContentApiRuntime>["kv"],
   safeTable: string,
@@ -262,6 +281,25 @@ export async function getTableContentListResult(
           ? parseMetaValues(String(item["meta_values"]))
           : ({} as Record<string, string>),
     }));
+  }
+
+  const include = parseIncludeParam(merged);
+  if (
+    stripTablePrefix(safeTable) === "posts" &&
+    include.has("custom_fields") &&
+    result.items.length > 0
+  ) {
+    const postIds = result.items
+      .map((item) => Number(item["id"]))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    const customFieldsByPost = await getPostsCustomFieldsBatch(db, postIds);
+    result.items = result.items.map((item) => {
+      const id = Number(item["id"]);
+      return {
+        ...item,
+        custom_fields: customFieldsByPost.get(id) ?? [],
+      };
+    });
   }
 
   return {
