@@ -214,7 +214,10 @@
   "admin.taxonomy.editOnlyNotice": "Select a taxonomy from the list to edit.",
   "admin.taxonomy.deleteConfirmCascade": "This will delete this taxonomy and all child taxonomies. Do you want to continue?",
   "admin.taxonomy.panel.languages": "Languages",
-  "admin.taxonomy.panel.languagesInfo": "Set translations for admin and site locales.",
+  "admin.taxonomy.panel.languagesInfo": "Set name and slug translations per language configured in site_locales.",
+  "admin.taxonomy.translationName": "Translation Name",
+  "admin.taxonomy.translationSlug": "Translation Slug",
+  "admin.taxonomy.translationSlugHint": "Slug used in the public URL for this language. If empty, the term canonical slug is used.",
   "admin.list.language": "Language",
   "admin.list.order": "Order",
   "admin.menus.addItem": "Add another menu item",
@@ -230,5 +233,15 @@
   "admin.menus.selectPost": "Select content",
   "admin.menus.itemsTitle": "Menu items",
   "admin.menus.slugHint": "The slug defines the menu location in the theme (e.g. primary).",
-  "admin.menus.loading": "Searching..."
+  "admin.menus.loading": "Searching...",
+  "admin.menus.parentMenu": "Choose parent menu",
+  "admin.menus.noParent": "None (top-level)",
+  "admin.menus.sortAlphabetical": "Alphabetical",
+  "admin.menus.sortCreation": "Creation",
+  "admin.menus.displayTitle": "Title",
+  "admin.menus.displayThumbnail": "Thumbnail",
+  "admin.menus.displayExcerpt": "Excerpt",
+  "admin.menus.submenuOptions": "Submenu options",
+  "admin.menus.submenuSort": "Sort order",
+  "admin.menus.submenuDisplay": "Display"
 }
