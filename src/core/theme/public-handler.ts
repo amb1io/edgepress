@@ -5,14 +5,13 @@ import { parseMetaValues } from "../../utils/meta-parser.ts";
 import { loadThemePackage } from "./theme-package.ts";
 import { buildThemeRenderContext } from "./context.ts";
 import { renderTheme } from "./render.ts";
-import { resolvePublicRoute } from "./resolve-route.ts";
+import { resolveThemeRouteForRequest } from "./resolve-theme-route-db.ts";
 
 export async function handlePublicThemeRequest(
   request: Request,
   locals: App.Locals,
 ): Promise<Response> {
   const url = new URL(request.url);
-  const route = resolvePublicRoute(url.pathname, url.searchParams);
 
   const kv = getKvFromLocals(locals);
   const activeTheme = await getActiveThemeFromDb(db);
@@ -35,6 +34,13 @@ export async function handlePublicThemeRequest(
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   }
+
+  const route = await resolveThemeRouteForRequest(
+    locals,
+    url.pathname,
+    url.searchParams,
+    Object.keys(pkg.templates),
+  );
 
   const ctx = await buildThemeRenderContext(locals, url, route, pkg);
   const html = await renderTheme(pkg, ctx);

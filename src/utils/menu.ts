@@ -1,6 +1,7 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { postTypes, posts } from "../db/schema.ts";
 import type { Database } from "./types/database.ts";
+import { menuParentShowInMenuSql } from "../db/menu-parent-posts.ts";
 
 export type MenuOptionResult = {
   text: string;
@@ -144,10 +145,14 @@ export async function getMenuItems(db: Database): Promise<MenuItem[]> {
     })
     .from(posts)
     .innerJoin(postTypes, eq(posts.post_type_id, postTypes.id))
-    .where(sql`json_extract(${posts.meta_values}, '$.show_in_menu') = 1`);
+    .where(menuParentShowInMenuSql);
 
   const items: MenuItem[] = [];
+  const seenTypeSlugs = new Set<string>();
   for (const row of rows) {
+    const postTypeSlug = row.postTypeSlug ?? "";
+    if (!postTypeSlug || seenTypeSlugs.has(postTypeSlug)) continue;
+    seenTypeSlugs.add(postTypeSlug);
     let menuOptions: string[] = [];
     let menuOrder = 0;
     let icon = "line-md:document";

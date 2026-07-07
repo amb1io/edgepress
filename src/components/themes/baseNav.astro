@@ -1,7 +1,10 @@
 ---
 import { db } from "../../db/index.ts";
 import { adminUrlLocaleToDbCode } from "../../utils/admin-locale-constants.ts";
-import { loadPublishedMenusByLocation } from "../../core/services/menu-items-service.ts";
+import {
+  loadPublishedMenusByLocation,
+  type MenuItemPublicRaw,
+} from "../../core/services/menu-items-service.ts";
 
 type Props = {
   /** Slug do menu pai (location key). Ex: "primary" */
@@ -21,14 +24,11 @@ const {
 } = Astro.props as Props;
 
 const dbLocale = adminUrlLocaleToDbCode(locale);
-let items: { label: string; href: string }[] = [];
+let items: MenuItemPublicRaw[] = [];
 
 try {
   const menusByLocation = await loadPublishedMenusByLocation(db, dbLocale);
-  items = (menusByLocation[menuSlug] ?? []).map((item) => ({
-    label: item.label,
-    href: item.url,
-  }));
+  items = menusByLocation[menuSlug] ?? [];
 } catch (err) {
   console.error("[edgepress][baseNav] Falha ao carregar menu", {
     menuSlug,
@@ -41,8 +41,17 @@ try {
 <nav class={className}>
   <ul>
     {items.map((item) => (
-      <li>
-        <a href={item.href}>{item.label}</a>
+      <li class:list={{ "has-submenu": item.children?.length }}>
+        <a href={item.url}>{item.label}</a>
+        {item.children?.length ? (
+          <ul class="submenu">
+            {item.children.map((child) => (
+              <li>
+                <a href={child.url}>{child.label}</a>
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </li>
     ))}
   </ul>

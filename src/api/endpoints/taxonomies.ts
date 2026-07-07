@@ -1,42 +1,17 @@
 import { db } from "../../db/index.ts";
-import { taxonomies, locales } from "../../db/schema.ts";
-import { eq, inArray } from "drizzle-orm";
+import { taxonomies } from "../../db/schema.ts";
+import { eq } from "drizzle-orm";
 import { slugify } from "../../utils/slugify.ts";
 import { requireMinRole } from "../../utils/api-auth.ts";
 import { getString, getNumber } from "../../utils/form-data.ts";
 import { errorHtmlResponse, jsonResponse } from "../../utils/http-responses.ts";
 import { invalidateContentListByTable, invalidateI18nCache } from "../../utils/kv-cache-sync.ts";
 import { invalidateTranslationsCache } from "../../i18n/translations.ts";
-import { upsertNamespaceTranslationRows } from "../../utils/translation-upsert.ts";
-import { TAXONOMY_TYPE_I18N_NAMESPACE } from "../../core/services/taxonomy-type-registry.ts";
+import { persistTaxonomyTermTranslations } from "../../utils/taxonomy-translation-persist.ts";
+import { parseTaxonomySlugTranslationRows } from "../../utils/taxonomy-translation-form.ts";
+import { validateTaxonomySlugTranslations } from "../../core/services/taxonomy-translation-service.ts";
 
 export const prerender = false;
-
-async function parseTaxonomyTranslationRows(formData: FormData) {
-  const byLocaleCode = new Map<string, string>();
-  for (const [key, raw] of formData.entries()) {
-    if (!key.startsWith("translation_")) continue;
-    const localeCode = key.slice("translation_".length).trim();
-    if (!localeCode) continue;
-    const value = String(raw ?? "").trim();
-    if (!value) continue;
-    byLocaleCode.set(localeCode, value);
-  }
-  if (byLocaleCode.size === 0) return [];
-
-  const localeCodes = [...byLocaleCode.keys()];
-  const localeRows = await db
-    .select({ id: locales.id, locale_code: locales.locale_code })
-    .from(locales)
-    .where(inArray(locales.locale_code, localeCodes));
-
-  return localeRows
-    .map((row) => ({
-      locale_id: row.id,
-      value: byLocaleCode.get(row.locale_code) ?? "",
-    }))
-    .filter((row) => row.locale_id && row.value);
-}
 
 export async function POST({
   request,
@@ -79,6 +54,12 @@ export async function POST({
       return errorHtmlResponse(locale);
     }
 
+    const slugRows = await parseTaxonomySlugTranslationRows(db, formData);
+    const slugConflict = await validateTaxonomySlugTranslations(db, type, slugRows, null);
+    if (slugConflict) {
+      return errorHtmlResponse(locale);
+    }
+
     const [inserted] = await db
       .insert(taxonomies)
       .values({
@@ -102,17 +83,9 @@ export async function POST({
     }
 
     await invalidateContentListByTable(locals, "taxonomies");
-    const translationRows = await parseTaxonomyTranslationRows(formData);
-    if (translationRows.length > 0) {
-      await upsertNamespaceTranslationRows(
-        db,
-        TAXONOMY_TYPE_I18N_NAMESPACE,
-        slug,
-        translationRows,
-      );
-      await invalidateI18nCache(locals);
-      invalidateTranslationsCache();
-    }
+    await persistTaxonomyTermTranslations(db, formData, type, slug);
+    await invalidateI18nCache(locals);
+    invalidateTranslationsCache();
 
     const language = "—";
 

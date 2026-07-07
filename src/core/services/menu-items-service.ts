@@ -10,14 +10,15 @@ import {
   normalizePublicLocale,
   publicLocaleUrlPrefix,
 } from "../theme/resolve-route.ts";
-import {
-  buildTaxonomyPublicPath,
-  taxonomyTypeToUrlBase,
-} from "../theme/taxonomy-routes.ts";
+import { buildTaxonomyPublicPath } from "../theme/taxonomy-routes.ts";
 import { getMetaSchemaTaxonomyTypes } from "../../utils/meta-parser.ts";
 import { filterTaxonomyTypesForUi } from "./taxonomy-type-registry.ts";
 
 export type MenuLinkType = "post" | "custom" | "taxonomy";
+
+export type SubMenuSort = "alphabetical" | "creation";
+
+export type SubMenuDisplay = "title" | "thumbnail" | "excerpt";
 
 export const MENU_SEARCH_EXCLUDED_POST_TYPE_SLUGS = [
   "menus",
@@ -33,6 +34,8 @@ export const MENU_SEARCH_EXCLUDED_POST_TYPE_SLUGS = [
 
 export type MenuItemFormRow = {
   id?: number;
+  /** Form-only stable id for resolving parent_client_id on save. */
+  client_id?: string | null;
   label: string;
   slug: string;
   order: number;
@@ -45,6 +48,11 @@ export type MenuItemFormRow = {
   target_taxonomy_type?: string;
   custom_url?: string;
   id_locale_code?: number | null;
+  parent_menu_item_id?: number | null;
+  /** Form-only reference to parent item client_id (new items). */
+  parent_client_id?: string | null;
+  submenu_sort?: SubMenuSort;
+  submenu_display?: SubMenuDisplay[];
 };
 
 export type MenuItemPersistRow = {
@@ -61,12 +69,153 @@ export type MenuItemPersistRow = {
   target_locale_code?: string;
   target_taxonomy_id?: number | null;
   target_taxonomy_type?: string;
+  submenu_sort?: SubMenuSort;
+  submenu_display?: SubMenuDisplay[];
+};
+
+/** Flat menu row before tree assembly (theme / API). */
+export type MenuItemFlatPublic = {
+  id: number;
+  label: string;
+  url: string;
+  slug: string;
+  target_post_id?: number | null;
+  order: number;
+  parent_menu_item_id: number | null;
+  submenu_sort?: SubMenuSort;
+  submenu_display?: SubMenuDisplay[];
+};
+
+/** Nested menu item for theme context. */
+export type MenuItemPublicRaw = Omit<MenuItemFlatPublic, "parent_menu_item_id" | "order"> & {
+  children: MenuItemPublicRaw[];
 };
 
 function parseLinkType(raw: unknown): MenuLinkType {
   if (raw === "custom") return "custom";
   if (raw === "taxonomy") return "taxonomy";
   return "post";
+}
+
+function parseSubMenuSort(raw: unknown): SubMenuSort | undefined {
+  if (raw === "alphabetical" || raw === "creation") return raw;
+  return undefined;
+}
+
+function parseSubMenuDisplay(raw: unknown): SubMenuDisplay[] {
+  if (!Array.isArray(raw)) return [];
+  const allowed = new Set<SubMenuDisplay>(["title", "thumbnail", "excerpt"]);
+  return raw.filter(
+    (v): v is SubMenuDisplay => typeof v === "string" && allowed.has(v as SubMenuDisplay),
+  );
+}
+
+function parseParentMenuItemId(raw: unknown): number | null {
+  if (typeof raw === "number" && raw > 0) return raw;
+  return null;
+}
+
+function sortMenuChildren<T extends { label: string; id: number; order: number }>(
+  items: T[],
+  sort: SubMenuSort | undefined,
+): T[] {
+  const mode = sort ?? "creation";
+  const sorted = [...items];
+  if (mode === "alphabetical") {
+    sorted.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  } else {
+    sorted.sort((a, b) => a.order - b.order || a.id - b.id);
+  }
+  return sorted;
+}
+
+/**
+ * Groups flat menu items into a nested tree by parent_menu_item_id.
+ */
+export function buildMenuItemTree(
+  flatItems: MenuItemFlatPublic[],
+): MenuItemPublicRaw[] {
+  const byParent = new Map<number | null, MenuItemFlatPublic[]>();
+  for (const item of flatItems) {
+    const parentId = item.parent_menu_item_id;
+    const group = byParent.get(parentId) ?? [];
+    group.push(item);
+    byParent.set(parentId, group);
+  }
+
+  const sortByParent = new Map<number, SubMenuSort | undefined>();
+  for (const item of flatItems) {
+    if (item.submenu_sort) {
+      sortByParent.set(item.id, item.submenu_sort);
+    }
+  }
+
+  function buildLevel(parentId: number | null): MenuItemPublicRaw[] {
+    const siblings = byParent.get(parentId) ?? [];
+    const sorted =
+      parentId == null
+        ? [...siblings].sort((a, b) => a.order - b.order || a.id - b.id)
+        : sortMenuChildren(siblings, sortByParent.get(parentId));
+
+    return sorted.map((item) => {
+      const { parent_menu_item_id: _parent, order: _order, ...rest } = item;
+      return {
+        ...rest,
+        children: buildLevel(item.id),
+      };
+    });
+  }
+
+  return buildLevel(null);
+}
+
+function buildMenuItemMetaValues(
+  persisted: MenuItemPersistRow,
+  parentMenuItemId: number | null,
+): string {
+  return JSON.stringify({
+    menu_order: persisted.order,
+    link_type: persisted.link_type,
+    parent_menu_item_id: parentMenuItemId,
+    ...(persisted.submenu_sort ? { submenu_sort: persisted.submenu_sort } : {}),
+    ...(persisted.submenu_display?.length
+      ? { submenu_display: persisted.submenu_display }
+      : {}),
+    ...(persisted.link_type === "post"
+      ? {
+          target_post_id: persisted.target_post_id ?? null,
+          target_post_type: persisted.target_post_type ?? "",
+          target_slug: persisted.target_slug ?? "",
+          target_locale_code: persisted.target_locale_code ?? "",
+        }
+      : {}),
+    ...(persisted.link_type === "taxonomy"
+      ? {
+          target_taxonomy_id: persisted.target_taxonomy_id ?? null,
+          target_taxonomy_type: persisted.target_taxonomy_type ?? "",
+          target_slug: persisted.target_slug ?? "",
+          target_locale_code: persisted.target_locale_code ?? "",
+        }
+      : {}),
+  });
+}
+
+function resolveClientId(row: MenuItemFormRow, index: number): string {
+  if (row.client_id?.trim()) return row.client_id.trim();
+  if (row.id != null && row.id > 0) return `menu-${row.id}`;
+  return `menu-new-${index}`;
+}
+
+function resolveParentMenuItemId(
+  row: MenuItemFormRow,
+  clientIdToDbId: Map<string, number>,
+): number | null {
+  if (row.parent_menu_item_id != null && row.parent_menu_item_id > 0) {
+    return row.parent_menu_item_id;
+  }
+  const parentClientId = row.parent_client_id?.trim();
+  if (!parentClientId) return null;
+  return clientIdToDbId.get(parentClientId) ?? null;
 }
 
 export function buildMenuItemUrl(input: {
@@ -92,8 +241,7 @@ export function buildMenuItemUrl(input: {
   if (input.link_type === "taxonomy") {
     const taxonomyType = String(input.target_taxonomy_type ?? "").trim();
     if (!taxonomyType) return "";
-    const urlBase = taxonomyTypeToUrlBase(taxonomyType);
-    return buildTaxonomyPublicPath(urlBase, slug, prefix);
+    return buildTaxonomyPublicPath(taxonomyType, slug, prefix);
   }
 
   return `${prefix}/${slug}`.replace(/\/+/g, "/") || `/${slug}`;
@@ -149,6 +297,8 @@ export function menuItemRowToPersist(
     target_locale_code: isCustom ? undefined : row.target_locale_code,
     target_taxonomy_id: isTaxonomy ? row.target_taxonomy_id ?? null : undefined,
     target_taxonomy_type: isTaxonomy ? row.target_taxonomy_type : undefined,
+    submenu_sort: row.submenu_sort,
+    submenu_display: row.submenu_display?.length ? row.submenu_display : undefined,
   };
 }
 
@@ -225,6 +375,9 @@ export async function getMenuItemsForPost(
           : undefined,
       custom_url: linkType === "custom" ? String(row.body ?? "") : undefined,
       id_locale_code: row.id_locale_code,
+      parent_menu_item_id: parseParentMenuItemId(meta["parent_menu_item_id"]),
+      submenu_sort: parseSubMenuSort(meta["submenu_sort"]),
+      submenu_display: parseSubMenuDisplay(meta["submenu_display"]),
     };
   });
 }
@@ -232,7 +385,7 @@ export async function getMenuItemsForPost(
 export async function loadPublishedMenusByLocation(
   db: Database,
   dbLocale: string,
-): Promise<Record<string, { label: string; url: string }[]>> {
+): Promise<Record<string, MenuItemPublicRaw[]>> {
   const [menusType] = await db
     .select({ id: postTypes.id })
     .from(postTypes)
@@ -281,7 +434,7 @@ export async function loadPublishedMenusByLocation(
     );
 
   const slugByParentId = new Map(parentMenus.map((p) => [p.id, p.slug]));
-  const result: Record<string, { label: string; url: string }[]> = {};
+  const flatByLocation = new Map<string, MenuItemFlatPublic[]>();
 
   for (const row of childRows) {
     const parentId = row.parent_id;
@@ -315,8 +468,31 @@ export async function loadPublishedMenusByLocation(
     });
 
     if (!label || !url) continue;
-    if (!result[location]) result[location] = [];
-    result[location].push({ label, url });
+
+    const menuOrder =
+      typeof meta["menu_order"] === "number" ? meta["menu_order"] : row.id;
+
+    const flatItem: MenuItemFlatPublic = {
+      id: row.id,
+      label,
+      url,
+      slug: String(row.slug ?? ""),
+      target_post_id:
+        typeof meta["target_post_id"] === "number" ? meta["target_post_id"] : null,
+      order: menuOrder,
+      parent_menu_item_id: parseParentMenuItemId(meta["parent_menu_item_id"]),
+      submenu_sort: parseSubMenuSort(meta["submenu_sort"]),
+      submenu_display: parseSubMenuDisplay(meta["submenu_display"]),
+    };
+
+    const group = flatByLocation.get(location) ?? [];
+    group.push(flatItem);
+    flatByLocation.set(location, group);
+  }
+
+  const result: Record<string, MenuItemPublicRaw[]> = {};
+  for (const [location, flatItems] of flatByLocation) {
+    result[location] = buildMenuItemTree(flatItems);
   }
 
   return result;
@@ -362,35 +538,32 @@ export async function persistMenuItems(
   }
 
   const savedIds: number[] = [];
+  const clientIdToDbId = new Map<string, number>();
 
-  for (let i = 0; i < items.length; i++) {
-    const row = items[i]!;
+  const indexedItems = items.map((row, index) => ({
+    row,
+    clientId: resolveClientId(row, index),
+    index,
+  }));
+
+  const isRoot = (row: MenuItemFormRow) =>
+    !row.parent_client_id?.trim() &&
+    (row.parent_menu_item_id == null || row.parent_menu_item_id <= 0);
+
+  const roots = indexedItems.filter(({ row }) => isRoot(row));
+  const children = indexedItems.filter(({ row }) => !isRoot(row));
+
+  async function saveOne(
+    entry: (typeof indexedItems)[number],
+    parentMenuItemId: number | null,
+  ): Promise<number> {
+    const { row, index } = entry;
     const persisted = menuItemRowToPersist(
-      { ...row, order: row.order || i + 1 },
+      { ...row, order: row.order || index + 1 },
       parentLocaleId,
     );
-    const metaValues = JSON.stringify({
-      menu_order: persisted.order,
-      link_type: persisted.link_type,
-      ...(persisted.link_type === "post"
-        ? {
-            target_post_id: persisted.target_post_id ?? null,
-            target_post_type: persisted.target_post_type ?? "",
-            target_slug: persisted.target_slug ?? "",
-            target_locale_code: persisted.target_locale_code ?? "",
-          }
-        : {}),
-      ...(persisted.link_type === "taxonomy"
-        ? {
-            target_taxonomy_id: persisted.target_taxonomy_id ?? null,
-            target_taxonomy_type: persisted.target_taxonomy_type ?? "",
-            target_slug: persisted.target_slug ?? "",
-            target_locale_code: persisted.target_locale_code ?? "",
-          }
-        : {}),
-    });
-
-    const uniqueSlug = `${persisted.slug}-${menuPostId}-${i + 1}`;
+    const metaValues = buildMenuItemMetaValues(persisted, parentMenuItemId);
+    const uniqueSlug = `${persisted.slug}-${menuPostId}-${index + 1}`;
 
     if (persisted.id != null && persisted.id > 0) {
       await updatePost(db, persisted.id, menusTypeId, {
@@ -404,23 +577,35 @@ export async function persistMenuItems(
         meta_values: metaValues,
         updated_at: now,
       });
-      savedIds.push(persisted.id);
-    } else {
-      const newId = await createPost(db, {
-        post_type_id: menusTypeId,
-        parent_id: menuPostId,
-        title: persisted.title,
-        slug: uniqueSlug,
-        body: persisted.body,
-        status,
-        author_id,
-        id_locale_code: persisted.id_locale_code,
-        meta_values: metaValues,
-        created_at: now,
-        updated_at: now,
-      });
-      savedIds.push(newId);
+      return persisted.id;
     }
+
+    return createPost(db, {
+      post_type_id: menusTypeId,
+      parent_id: menuPostId,
+      title: persisted.title,
+      slug: uniqueSlug,
+      body: persisted.body,
+      status,
+      author_id,
+      id_locale_code: persisted.id_locale_code,
+      meta_values: metaValues,
+      created_at: now,
+      updated_at: now,
+    });
+  }
+
+  for (const entry of roots.sort((a, b) => (a.row.order || 0) - (b.row.order || 0))) {
+    const dbId = await saveOne(entry, null);
+    clientIdToDbId.set(entry.clientId, dbId);
+    savedIds.push(dbId);
+  }
+
+  for (const entry of children) {
+    const parentMenuItemId = resolveParentMenuItemId(entry.row, clientIdToDbId);
+    const dbId = await saveOne(entry, parentMenuItemId);
+    clientIdToDbId.set(entry.clientId, dbId);
+    savedIds.push(dbId);
   }
 
   return savedIds;

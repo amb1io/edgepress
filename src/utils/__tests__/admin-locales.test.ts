@@ -1,23 +1,63 @@
-import { describe, it, expect } from "vitest";
-import {
-  ADMIN_DB_LOCALE_CODES,
-  ADMIN_URL_TO_DB_LOCALE,
-  adminUrlLocaleToDbCode,
-} from "../admin-locale-constants.ts";
+import { describe, it, expect, vi } from "vitest";
+import { resolveSiteTranslationLocales, getSiteLocaleIdsFromSettings } from "../admin-locales.ts";
 
-describe("admin locale constants", () => {
-  it("maps admin URL locales to DB locale codes", () => {
-    expect(adminUrlLocaleToDbCode("pt-br")).toBe("pt_BR");
-    expect(adminUrlLocaleToDbCode("es")).toBe("es_ES");
-    expect(adminUrlLocaleToDbCode("en")).toBe("en_US");
+describe("resolveSiteTranslationLocales", () => {
+  it("returns empty array when site_locales is empty", async () => {
+    const db = {
+      select: vi.fn(() => ({
+        from: () => ({
+          where: () => ({
+            limit: () => Promise.resolve([{ value: "" }]),
+          }),
+        }),
+      })),
+    };
+
+    expect(await getSiteLocaleIdsFromSettings(db)).toEqual([]);
+    expect(await resolveSiteTranslationLocales(db)).toEqual([]);
   });
 
-  it("keeps three canonical DB codes for admin i18n", () => {
-    expect(ADMIN_DB_LOCALE_CODES).toEqual(["pt_BR", "es_ES", "en_US"]);
-    expect(Object.values(ADMIN_URL_TO_DB_LOCALE).sort()).toEqual([
-      "en_US",
-      "es_ES",
-      "pt_BR",
-    ]);
+  it("returns locales from site_locales ids sorted by language", async () => {
+    const localeRows = [
+      {
+        id: 1,
+        locale_code: "pt_BR",
+        language: "Português",
+        hello_world: "Olá",
+        country: "BR",
+      },
+      {
+        id: 2,
+        locale_code: "en_US",
+        language: "English",
+        hello_world: "Hello",
+        country: "US",
+      },
+    ];
+
+    let selectCount = 0;
+    const db = {
+      select: vi.fn(() => {
+        selectCount += 1;
+        if (selectCount === 1) {
+          return {
+            from: () => ({
+              where: () => ({
+                limit: () => Promise.resolve([{ value: "2,1" }]),
+              }),
+            }),
+          };
+        }
+        return {
+          from: () => ({
+            where: () => Promise.resolve(localeRows),
+          }),
+        };
+      }),
+    };
+
+    const rows = await resolveSiteTranslationLocales(db);
+    expect(rows.map((r) => r.locale_code)).toEqual(["en_US", "pt_BR"]);
+    expect(rows.every((r) => typeof r.isAdminLocale === "boolean")).toBe(true);
   });
 });

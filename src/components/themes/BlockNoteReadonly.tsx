@@ -4,6 +4,9 @@ import { useCreateBlockNote } from "@blocknote/react";
 import { locales as multiColumnLocales } from "@blocknote/xl-multi-column";
 import { useMemo } from "react";
 import { edgepressBlockNoteSchema } from "../../shared/blocknote/schema.tsx";
+import "@blocknote/core/fonts/inter.css";
+import "@blocknote/mantine/blocknoteStyles.css";
+import "./blocknote-readonly-reset.css";
 
 type Props = {
   bodyBlocks?: string | null;

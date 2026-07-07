@@ -1,159 +1,141 @@
 import { describe, it, expect } from "vitest";
-import { resolvePublicRoute } from "../resolve-route.ts";
+import { resolvePreRoute } from "../resolve-route.ts";
+import { resolveRouteKind } from "../resolve-route-kind.ts";
+import { resolveThemeRoute } from "../resolve-theme-route.ts";
+import type { RouteKindResolverDeps } from "../resolve-route-kind.ts";
 
-describe("resolvePublicRoute", () => {
-  it("resolves home", () => {
-    expect(resolvePublicRoute("/", new URLSearchParams())).toEqual({
+const themeTemplates = [
+  "index",
+  "search",
+  "404",
+  "posts/index",
+  "category/[slug]",
+  "trabalhos/index",
+  "trabalhos/[categorias]",
+  "[slug]",
+];
+
+function mockDeps(overrides: Partial<RouteKindResolverDeps> = {}): RouteKindResolverDeps {
+  return {
+    archivablePostTypes: [{ slug: "post", name: "Post" }],
+    taxonomyTypes: ["category", "tag", "categorias"],
+    resolvePostBySlug: async (slug) =>
+      slug === "trabalhos" || slug === "jobs" ? { post_type_slug: "page" } : null,
+    resolveTaxonomyTerm: async (type, slug) =>
+      type === "category" && slug === "visum" ? { slug: "visum" } : null,
+    ...overrides,
+  };
+}
+
+describe("resolvePreRoute", () => {
+  it("matches home index", () => {
+    const pre = resolvePreRoute("/", new URLSearchParams(), themeTemplates);
+    expect(pre.matched?.templateKey).toBe("index");
+    expect(pre.locale).toBe("pt-br");
+  });
+
+  it("matches posts archive template", () => {
+    const pre = resolvePreRoute("/posts", new URLSearchParams(), themeTemplates);
+    expect(pre.matched?.templateKey).toBe("posts/index");
+  });
+
+  it("matches trabalhos routes", () => {
+    expect(
+      resolvePreRoute("/trabalhos", new URLSearchParams(), themeTemplates).matched?.templateKey,
+    ).toBe("trabalhos/index");
+    expect(
+      resolvePreRoute("/trabalhos/publicidade", new URLSearchParams(), themeTemplates).matched,
+    ).toEqual({
+      templateKey: "trabalhos/[categorias]",
+      params: { categorias: "publicidade" },
+      staticSegments: ["trabalhos"],
+    });
+  });
+
+  it("matches search route", () => {
+    const pre = resolvePreRoute("/search", new URLSearchParams("q=foo&page=2"), themeTemplates);
+    expect(pre.matched?.templateKey).toBe("search");
+    expect(pre.searchQuery).toBe("foo");
+    expect(pre.page).toBe(2);
+  });
+});
+
+describe("resolveThemeRoute", () => {
+  it("resolves home", async () => {
+    const route = await resolveThemeRoute("/", new URLSearchParams(), themeTemplates, mockDeps());
+    expect(route).toMatchObject({
       kind: "home",
+      templateKey: "index",
       locale: "pt-br",
       path: "/",
     });
   });
 
-  it("resolves post archive alias at /posts", () => {
-    expect(resolvePublicRoute("/posts", new URLSearchParams())).toEqual({
+  it("resolves post archive at /posts", async () => {
+    const route = await resolveThemeRoute("/posts", new URLSearchParams(), themeTemplates, mockDeps());
+    expect(route).toMatchObject({
       kind: "archive",
-      locale: "pt-br",
-      path: "/posts",
+      templateKey: "posts/index",
       postType: "post",
-      page: 1,
-    });
-    expect(resolvePublicRoute("/posts", new URLSearchParams("page=3"))).toEqual({
-      kind: "archive",
-      locale: "pt-br",
-      path: "/posts",
-      postType: "post",
-      page: 3,
     });
   });
 
-  it("resolves /blog as CPT slug route, not post archive alias", () => {
-    expect(resolvePublicRoute("/blog", new URLSearchParams("page=3"))).toEqual({
-      kind: "page",
-      locale: "pt-br",
-      path: "/blog",
-      slug: "blog",
-      page: 3,
-    });
-  });
-
-  it("resolves localized archive routes", () => {
-    expect(resolvePublicRoute("/en/posts", new URLSearchParams())).toEqual({
-      kind: "archive",
-      locale: "en",
-      path: "/en/posts",
-      postType: "post",
-      page: 1,
-    });
-  });
-
-  it("resolves slug routes with page query param", () => {
-    expect(resolvePublicRoute("/produtos", new URLSearchParams("page=2"))).toEqual({
-      kind: "page",
-      locale: "pt-br",
-      path: "/produtos",
-      slug: "produtos",
-      page: 2,
-    });
-  });
-
-  it("returns 404 for invalid slugs", () => {
-    expect(resolvePublicRoute("/bad slug", new URLSearchParams())).toEqual({
-      kind: "404",
-      locale: "pt-br",
-      path: "/bad slug",
-    });
-  });
-
-  it("resolves taxonomy archive at /category/{slug}", () => {
-    expect(resolvePublicRoute("/category/visum", new URLSearchParams())).toEqual({
+  it("resolves taxonomy archive at /category/{slug}", async () => {
+    const route = await resolveThemeRoute(
+      "/category/visum",
+      new URLSearchParams(),
+      themeTemplates,
+      mockDeps(),
+    );
+    expect(route).toMatchObject({
       kind: "taxonomy",
-      locale: "pt-br",
-      path: "/category/visum",
-      page: 1,
-      taxonomyBase: "category",
+      templateKey: "category/[slug]",
       taxonomyType: "category",
       taxonomySlug: "visum",
-    });
-    expect(resolvePublicRoute("/category/visum", new URLSearchParams("page=2"))).toEqual({
-      kind: "taxonomy",
-      locale: "pt-br",
-      path: "/category/visum",
-      page: 2,
-      taxonomyBase: "category",
-      taxonomyType: "category",
-      taxonomySlug: "visum",
+      params: { slug: "visum" },
     });
   });
 
-  it("resolves localized taxonomy archives", () => {
-    expect(resolvePublicRoute("/en/tag/foo", new URLSearchParams())).toEqual({
-      kind: "taxonomy",
-      locale: "en",
-      path: "/en/tag/foo",
-      page: 1,
-      taxonomyBase: "tag",
-      taxonomyType: "tag",
-      taxonomySlug: "foo",
-    });
-  });
-
-  it("treats /category alone as a page slug, not taxonomy", () => {
-    expect(resolvePublicRoute("/category", new URLSearchParams())).toEqual({
+  it("resolves trabalhos page with category param", async () => {
+    const route = await resolveThemeRoute(
+      "/trabalhos/publicidade",
+      new URLSearchParams(),
+      themeTemplates,
+      mockDeps({
+        resolveTaxonomyTerm: async () => null,
+      }),
+    );
+    expect(route).toMatchObject({
       kind: "page",
-      locale: "pt-br",
-      path: "/category",
-      slug: "category",
-      page: 1,
+      templateKey: "trabalhos/[categorias]",
+      slug: "trabalhos",
+      params: { categorias: "publicidade" },
     });
   });
 
-  it("returns 404 for invalid taxonomy term slug", () => {
-    expect(resolvePublicRoute("/category/bad slug", new URLSearchParams())).toEqual({
-      kind: "404",
-      locale: "pt-br",
-      path: "/category/bad slug",
-    });
+  it("returns 404 when no template matches", async () => {
+    const route = await resolveThemeRoute(
+      "/missing/path",
+      new URLSearchParams(),
+      themeTemplates,
+      mockDeps(),
+    );
+    expect(route.kind).toBe("404");
+    expect(route.templateKey).toBe("404");
   });
+});
 
-  it("resolves search route at /search", () => {
-    expect(resolvePublicRoute("/search", new URLSearchParams())).toEqual({
-      kind: "search",
-      locale: "pt-br",
-      path: "/search",
-      searchQuery: "",
-      page: 1,
-    });
-  });
-
-  it("resolves localized search route at /en/search", () => {
-    expect(resolvePublicRoute("/en/search", new URLSearchParams())).toEqual({
-      kind: "search",
-      locale: "en",
-      path: "/en/search",
-      searchQuery: "",
-      page: 1,
-    });
-  });
-
-  it("reads q and page from search query params", () => {
-    expect(resolvePublicRoute("/search", new URLSearchParams("q=foo"))).toEqual({
-      kind: "search",
-      locale: "pt-br",
-      path: "/search",
-      searchQuery: "foo",
-      page: 1,
-    });
-    expect(resolvePublicRoute("/search", new URLSearchParams("q=foo&page=2"))).toEqual({
-      kind: "search",
-      locale: "pt-br",
-      path: "/search",
-      searchQuery: "foo",
-      page: 2,
-    });
-  });
-
-  it("treats /search as search route, not page slug", () => {
-    expect(resolvePublicRoute("/search", new URLSearchParams()).kind).toBe("search");
+describe("resolveRouteKind", () => {
+  it("classifies taxonomy when base segment is a taxonomy type", async () => {
+    const resolved = await resolveRouteKind(
+      {
+        templateKey: "category/[slug]",
+        params: { slug: "visum" },
+        staticSegments: ["category"],
+      },
+      mockDeps(),
+    );
+    expect(resolved.kind).toBe("taxonomy");
+    expect(resolved.taxonomyType).toBe("category");
   });
 });

@@ -3,7 +3,7 @@
  * - Objeto pai: post (post_type em questão)
  * - Dentro: meta_schema (JSON), meta_values (JSON), custom_fields (JSON), body_smart, media, taxonomies
  */
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import type { Database } from "./types/database.ts";
 import { posts, postTypes, postsTaxonomies, taxonomies } from "../db/schema.ts";
 import { getPostMedia } from "./services/media-service.ts";
@@ -90,6 +90,30 @@ export async function getPostMetaSchema(
   return Array.isArray(row.meta_schema) ? (row.meta_schema as MetaSchemaItem[]) : [];
 }
 
+type CustomFieldRow = {
+  id: number;
+  title: string;
+  slug: string;
+  meta_values: string | null;
+};
+
+function mapCustomFieldRow(r: CustomFieldRow): CustomFieldItem {
+  const meta = parseMetaValues(r.meta_values);
+  const fields = Array.isArray(meta.fields) ? meta.fields : [];
+  return {
+    id: r.id,
+    title: r.title,
+    slug: r.slug,
+    fields: fields.map((f: { name?: string; value?: string; type?: string }) => ({
+      name: String(f?.name ?? ""),
+      value: String(f?.value ?? ""),
+      type: f?.type,
+    })),
+    template: Boolean(meta.template),
+    field_type: Array.isArray(meta.field_type) ? meta.field_type : undefined,
+  };
+}
+
 /** Busca custom fields (posts filhos tipo custom_fields) e devolve como JSON estruturado. */
 export async function getPostCustomFields(
   db: Database,
@@ -108,22 +132,53 @@ export async function getPostCustomFields(
     .from(posts)
     .where(and(eq(posts.parent_id, postId), eq(posts.post_type_id, customFieldsTypeId)));
 
-  return rows.map((r) => {
-    const meta = parseMetaValues(r.meta_values);
-    const fields = Array.isArray(meta.fields) ? meta.fields : [];
-    return {
-      id: r.id,
-      title: r.title,
-      slug: r.slug,
-      fields: fields.map((f: { name?: string; value?: string; type?: string }) => ({
-        name: String(f?.name ?? ""),
-        value: String(f?.value ?? ""),
-        type: f?.type,
-      })),
-      template: Boolean(meta.template),
-      field_type: Array.isArray(meta.field_type) ? meta.field_type : undefined,
-    };
-  });
+  return rows.map(mapCustomFieldRow);
+}
+
+/** D1 allows at most 100 bound parameters per query; reserve 1 for post_type_id. */
+export const CUSTOM_FIELDS_BATCH_CHUNK_SIZE = 99;
+
+/** Busca custom fields de vários posts em queries em lote (agrupado por parent_id). */
+export async function getPostsCustomFieldsBatch(
+  db: Database,
+  postIds: number[],
+): Promise<Map<number, CustomFieldItem[]>> {
+  const result = new Map<number, CustomFieldItem[]>();
+  const uniqueIds = [...new Set(postIds.filter((id) => Number.isFinite(id) && id > 0))];
+  if (uniqueIds.length === 0) return result;
+
+  const customFieldsTypeId = await getPostTypeId(db, "custom_fields");
+  if (!customFieldsTypeId) return result;
+
+  for (let i = 0; i < uniqueIds.length; i += CUSTOM_FIELDS_BATCH_CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(i, i + CUSTOM_FIELDS_BATCH_CHUNK_SIZE);
+    const rows = await db
+      .select({
+        id: posts.id,
+        parent_id: posts.parent_id,
+        title: posts.title,
+        slug: posts.slug,
+        meta_values: posts.meta_values,
+      })
+      .from(posts)
+      .where(
+        and(
+          inArray(posts.parent_id, chunk),
+          eq(posts.post_type_id, customFieldsTypeId),
+        ),
+      );
+
+    for (const row of rows) {
+      const parentId = row.parent_id;
+      if (parentId == null) continue;
+      const item = mapCustomFieldRow(row);
+      const list = result.get(parentId) ?? [];
+      list.push(item);
+      result.set(parentId, list);
+    }
+  }
+
+  return result;
 }
 
 /** Monta o payload completo do post com hierarquia: post (pai) + meta_schema, meta_values, custom_fields, body_smart, media, taxonomies. */
