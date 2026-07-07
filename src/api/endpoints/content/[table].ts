@@ -9,7 +9,7 @@
  *   - Busca as mídias relacionadas (attachments) e devolve em uma chave `media`;
  *   - Usa KV como cache da resposta completa do post.
  *
- * Query params da listagem de tabela: page, limit, order, orderDir, filter_<col>=value
+ * Query params da listagem de tabela: page, limit, order, orderDir, filter_<col>=value, include=custom_fields
  */
 import type { APIRoute } from "astro";
 import { db } from "../../../db/index.ts";
@@ -19,7 +19,7 @@ import {
   getPostBySlugFromUrl,
   getTableContentListFromUrl,
 } from "../../../core/services/edgepress-content.ts";
-import { getTableNames, getSafeTableName, VALID_TABLE_IDENTIFIER } from "../../../utils/db-utils.ts";
+import { getTableNames, getSafeTableName } from "../../../utils/db-utils.ts";
 import { isValidSlug } from "../../../utils/validation.ts";
 import {
   badRequestResponse,
@@ -40,10 +40,6 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
 
   const allowedTables = await getTableNames(db);
   const safeTable = getSafeTableName(segment, allowedTables);
-
-  if (safeTable === null && VALID_TABLE_IDENTIFIER.test(segment)) {
-    return notFoundResponse("Table not found or not allowed");
-  }
 
   if (safeTable !== null) {
     try {
