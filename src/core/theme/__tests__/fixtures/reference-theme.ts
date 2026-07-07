@@ -75,7 +75,7 @@ export const referenceThemePackage: ThemePackageRecord = {
     "layouts/base": baseLayout,
     "parts/header": headerPartial,
     "parts/footer": footerPartial,
-    home: homeTemplate,
+    index: homeTemplate,
     "404": notFoundTemplate,
   },
   updated_at: Date.now(),

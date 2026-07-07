@@ -1,9 +1,10 @@
 import { Liquid } from "liquidjs";
 import type { ThemePackageRecord, ThemeRenderContext } from "./types.ts";
 import { registerThemeApi } from "./theme-api.ts";
-import { normalizeTemplateKey, resolveTemplateKey } from "./resolve-template.ts";
+import { normalizeTemplateKey } from "./resolve-template.ts";
 
-const LAYOUT_DIRECTIVE = /^\{%\s*layout\s+['"]([^'"]+)['"]\s*%\}\s*/;
+const LAYOUT_DIRECTIVE =
+  /^\{%\s*layout\s+['"]([^'"]+)['"]\s*(?:,\s*class:\s*['"]([^'"]*)['"]\s*)?%\}\s*/;
 
 const liquidBySlug = new Map<string, Liquid>();
 
@@ -37,12 +38,17 @@ function getLiquidForPackage(pkg: ThemePackageRecord): Liquid {
   return liquid;
 }
 
-function parseLayoutDirective(source: string): { layoutKey: string | null; body: string } {
+function parseLayoutDirective(source: string): {
+  layoutKey: string | null;
+  body: string;
+  extraBodyClass: string;
+} {
   const match = source.match(LAYOUT_DIRECTIVE);
-  if (!match) return { layoutKey: null, body: source };
+  if (!match) return { layoutKey: null, body: source, extraBodyClass: "" };
   const layoutKey = normalizeTemplateKey(match[1] ?? "");
   const body = source.slice(match[0].length);
-  return { layoutKey, body };
+  const extraBodyClass = String(match[2] ?? "").trim();
+  return { layoutKey, body, extraBodyClass };
 }
 
 export async function renderTheme(
@@ -51,15 +57,9 @@ export async function renderTheme(
 ): Promise<string> {
   const liquid = getLiquidForPackage(pkg);
 
-  const templateKey = resolveTemplateKey(ctx.route.kind, pkg.templates, {
-    postTypeSlug: ctx.post?.post_type_slug,
-    postSlug: ctx.post?.slug,
-    archiveType: ctx.archive.type,
-    taxonomyType: ctx.route.taxonomy_type,
-    taxonomySlug: ctx.route.taxonomy_slug,
-  });
+  const templateKey = ctx.route.template_key;
   if (!templateKey) {
-    throw new Error(`No template for route kind: ${ctx.route.kind}`);
+    throw new Error("No template key on route context");
   }
 
   const templateSource = pkg.templates[templateKey];
@@ -67,7 +67,7 @@ export async function renderTheme(
     throw new Error(`Template not found in package: ${templateKey}`);
   }
 
-  const { layoutKey: inlineLayout, body: pageSource } = parseLayoutDirective(templateSource);
+  const { layoutKey: inlineLayout, body: pageSource, extraBodyClass } = parseLayoutDirective(templateSource);
   const pageHtml = await liquid.parseAndRender(pageSource, ctx as unknown as object);
 
   const layoutKey =
@@ -87,6 +87,7 @@ export async function renderTheme(
     ...ctx,
     content: pageHtml,
     post: ctx.post,
+    body_class: extraBodyClass ? `${ctx.body_class} ${extraBodyClass}`.trim() : ctx.body_class,
   };
 
   return liquid.parseAndRender(layoutSource, layoutCtx as unknown as object);

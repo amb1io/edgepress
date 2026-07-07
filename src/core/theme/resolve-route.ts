@@ -1,5 +1,8 @@
-import { isValidSlug } from "../../utils/validation.ts";
-import { resolveTaxonomyFromSegments } from "./taxonomy-routes.ts";
+import type { MatchedRoute } from "./file-router.ts";
+import {
+  buildRouteTable,
+  matchRoute,
+} from "./file-router.ts";
 import type { ResolvedPublicRoute } from "./types.ts";
 
 const LOCALE_PREFIXES = new Set(["pt_br", "pt-br", "pt", "en_us", "en-us", "en", "es_es", "es-es", "es"]);
@@ -23,20 +26,34 @@ export function localeToHtmlLang(locale: string): string {
 
 export const PUBLIC_THEME_LOCALES = ["pt-br", "en"] as const;
 
-/** URL path prefix for a public locale (`""` for pt-br, `/en` for English). */
 export function publicLocaleUrlPrefix(locale: string): string {
   const normalized = normalizePublicLocale(locale);
   return normalized === "pt-br" ? "" : `/${normalized}`;
 }
 
-/** Home URL for a public locale. */
 export function publicLocaleHomeUrl(locale: string): string {
   const prefix = publicLocaleUrlPrefix(locale);
   return prefix || "/";
 }
 
-/** Parses a public URL path into route kind + locale + slug segments. */
-export function resolvePublicRoute(pathname: string, searchParams: URLSearchParams): ResolvedPublicRoute {
+/** Maps public theme locale to Edgepress DB locale code for API query params. */
+export function publicLocaleToDbCode(locale: string): string {
+  const n = normalizePublicLocale(locale);
+  if (n === "pt-br") return "pt_BR";
+  if (n === "en") return "en_US";
+  if (n === "es") return "es_ES";
+  return "en_US";
+}
+
+export type PreRoute = {
+  locale: string;
+  path: string;
+  page: number;
+  searchQuery?: string;
+  matched: MatchedRoute | null;
+};
+
+function parsePathSegments(pathname: string): { locale: string; segments: string[]; path: string } {
   let path = pathname.trim();
   if (!path.startsWith("/")) path = `/${path}`;
   if (path.length > 1 && path.endsWith("/")) {
@@ -56,53 +73,59 @@ export function resolvePublicRoute(pathname: string, searchParams: URLSearchPara
     }
   }
 
-  if (rest.length === 0) {
-    return { kind: "home", locale, path };
-  }
+  return { locale, segments: rest, path };
+}
 
-  if (rest[0] === "posts") {
-    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
-    return {
-      kind: "archive",
-      locale,
-      path,
-      postType: "post",
-      page,
-    };
-  }
-
-  if (rest.length === 2) {
-    const resolved = resolveTaxonomyFromSegments(rest);
-    if (resolved && isValidSlug(resolved.termSlug)) {
-      const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
-      return {
-        kind: "taxonomy",
-        locale,
-        path,
-        page,
-        taxonomyBase: resolved.taxonomyBase,
-        taxonomyType: resolved.taxonomyType,
-        taxonomySlug: resolved.termSlug,
-      };
-    }
-  }
-
-  if (rest[0] === "search") {
-    const q = searchParams.get("q")?.trim() ?? "";
-    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
-    return { kind: "search", locale, path, searchQuery: q, page };
-  }
-
-  const slug = rest.join("/");
-  if (!isValidSlug(slug)) {
-    return { kind: "404", locale, path };
-  }
+export function resolvePreRoute(
+  pathname: string,
+  searchParams: URLSearchParams,
+  templateKeys: string[],
+): PreRoute {
+  const { locale, segments, path } = parsePathSegments(pathname);
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
+  const searchQuery = searchParams.get("q")?.trim() ?? "";
+  const table = buildRouteTable(templateKeys);
+  const matched = matchRoute(table, segments);
+
   return {
-    kind: "page",
     locale,
     path,
-    slug,
     page,
+    ...(matched?.templateKey === "search" ? { searchQuery } : {}),
+    matched,
+  };
+}
+
+/** @deprecated Use resolvePreRoute + resolveRouteKind. Kept for transitional imports. */
+export function resolvePublicRoute(
+  pathname: string,
+  searchParams: URLSearchParams,
+  templateKeys: string[] = [],
+): ResolvedPublicRoute {
+  const pre = resolvePreRoute(pathname, searchParams, templateKeys);
+  if (!pre.matched) {
+    return { kind: "404", locale: pre.locale, path: pre.path, page: pre.page, params: {} };
+  }
+  if (pre.matched.templateKey === "index") {
+    return { kind: "home", locale: pre.locale, path: pre.path, page: pre.page, params: pre.matched.params };
+  }
+  if (pre.matched.templateKey === "search") {
+    return {
+      kind: "search",
+      locale: pre.locale,
+      path: pre.path,
+      page: pre.page,
+      searchQuery: pre.searchQuery ?? "",
+      params: pre.matched.params,
+    };
+  }
+  const base = pre.matched.staticSegments[0] ?? Object.values(pre.matched.params)[0];
+  return {
+    kind: "page",
+    locale: pre.locale,
+    path: pre.path,
+    slug: base,
+    page: pre.page,
+    params: pre.matched.params,
   };
 }
