@@ -8,13 +8,17 @@ import AdminTwoColumns from "../components/admin/AdminTwoColumns.astro";
 import TranslationLocalesCollapse from "../components/admin/TranslationLocalesCollapse.astro";
 import DataList from "../components/DataList.astro";
 import { db } from "../../db/index.ts";
-import { settings, taxonomies, locales as localesTable, translations, translationsLanguages } from "../../db/schema.ts";
+import { settings, taxonomies, locales as localesTable } from "../../db/schema.ts";
 import { and, eq, isNull } from "drizzle-orm";
 import { getTaxonomyTypeRootId } from "../../core/services/taxonomy-service.ts";
 import { t, type Locale } from "../../i18n/index.ts";
 import type { MenuItem } from "../../utils/menu.ts";
-import { resolveCategoryTranslationLocales } from "../../utils/admin-locales.ts";
-import { TAXONOMY_TYPE_I18N_NAMESPACE } from "../../core/services/taxonomy-type-registry.ts";
+import { resolveSiteTranslationLocales } from "../../utils/admin-locales.ts";
+import {
+  TAXONOMY_SLUG_I18N_NAMESPACE,
+  TAXONOMY_TYPE_I18N_NAMESPACE,
+} from "../../core/services/taxonomy-type-registry.ts";
+import { loadTaxonomyTranslationValuesByCode } from "../../utils/taxonomy-translation-persist.ts";
 
 function taxonomyTypeDisplayLabel(locale: Locale, typeSlug: string): string {
   const key = `taxonomy.type.${typeSlug}`;
@@ -66,7 +70,7 @@ const isEdit = action === "edit" && idParam && /^\d+$/.test(idParam);
 const showAllScopeEditForm = !isAllScope || isEdit;
 
 const parentId = !isAllScope && type ? await getTaxonomyTypeRootId(db, type) : null;
-const translationLocales = await resolveCategoryTranslationLocales(db);
+const translationLocales = await resolveSiteTranslationLocales(db);
 
 let editTaxonomy: {
   id: number;
@@ -155,32 +159,18 @@ const deleteConfirmText = isAllScope
   ? t(currentLocale, "admin.taxonomy.deleteConfirmCascade")
   : t(locale, "admin.list.deleteConfirm");
 let translationValuesByCode: Record<string, string> = {};
+let translationSlugValuesByCode: Record<string, string> = {};
 if (editTaxonomy?.slug) {
-  const [translationRow] = await db
-    .select({ id: translations.id })
-    .from(translations)
-    .where(
-      and(
-        eq(translations.namespace, TAXONOMY_TYPE_I18N_NAMESPACE),
-        eq(translations.key, editTaxonomy.slug),
-      ),
-    )
-    .limit(1);
-
-  if (translationRow) {
-    const rows = await db
-      .select({
-        locale_code: localesTable.locale_code,
-        value: translationsLanguages.value,
-      })
-      .from(translationsLanguages)
-      .innerJoin(localesTable, eq(translationsLanguages.id_locale_code, localesTable.id))
-      .where(eq(translationsLanguages.id_translations, translationRow.id));
-
-    translationValuesByCode = Object.fromEntries(
-      rows.map((row) => [row.locale_code, row.value ?? ""]),
-    );
-  }
+  translationValuesByCode = await loadTaxonomyTranslationValuesByCode(
+    db,
+    TAXONOMY_TYPE_I18N_NAMESPACE,
+    editTaxonomy.slug,
+  );
+  translationSlugValuesByCode = await loadTaxonomyTranslationValuesByCode(
+    db,
+    TAXONOMY_SLUG_I18N_NAMESPACE,
+    editTaxonomy.slug,
+  );
 }
 
 const taxonomyItems = taxonomyRows.map((r) => ({
@@ -374,10 +364,14 @@ const emptyColspan = columns.length + 1;
           locales={translationLocales}
           noLocalesMessage={t(currentLocale, "admin.postTypes.noTranslationLocales")}
           localeLabel={t(currentLocale, "admin.postTypes.translationLocale")}
-          valueLabel={t(currentLocale, "admin.postTypes.translationValue")}
+          valueLabel={t(currentLocale, "admin.taxonomy.translationName")}
           valuePlaceholder={initialName}
           valueHint={t(currentLocale, "admin.postTypes.translationValueHint")}
           valuesByCode={translationValuesByCode}
+          slugValueLabel={t(currentLocale, "admin.taxonomy.translationSlug")}
+          slugPlaceholder={initialSlug}
+          slugValuesByCode={translationSlugValuesByCode}
+          slugHint={t(currentLocale, "admin.taxonomy.translationSlugHint")}
         />
         <div data-taxonomy-form-error class="min-h-6"></div>
         <button type="submit" class="btn btn-primary btn-sm">
