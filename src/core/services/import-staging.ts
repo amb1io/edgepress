@@ -150,11 +150,8 @@ export async function stageImportArchive(
     db && parsed.includes.database
       ? await remapDatabasePayloadLocales(db, parsed.manifest, parsed.databasePayload)
       : parsed.databasePayload;
-  const root = importStagingRoot(jobId);
 
-  await bucket.put(importStagingKey(jobId, "manifest.json"), encodeJson(parsed.manifest), {
-    httpMetadata: { contentType: "application/json" },
-  });
+  let manifest = parsed.manifest;
 
   await bucket.put(importStagingKey(jobId, "media-files.json"), encodeJson(parsed.mediaFiles), {
     httpMetadata: { contentType: "application/json" },
@@ -170,12 +167,19 @@ export async function stageImportArchive(
 
   if (parsed.includes.database) {
     const tableOrder = resolveImportTableOrder(parsed.manifest.tableOrder);
+    const counts: Partial<Record<EdgepressLogicalTable, number>> = {
+      ...parsed.manifest.counts,
+    };
+
     for (const table of tableOrder) {
       const rows = databasePayload.tables[table as EdgepressLogicalTable] ?? [];
+      counts[table] = rows.length;
       await bucket.put(importStagingKey(jobId, `tables/${table}.json`), encodeJson(rows), {
         httpMetadata: { contentType: "application/json" },
       });
     }
+
+    manifest = { ...parsed.manifest, counts };
 
     if (databasePayload.fts?.length) {
       await bucket.put(importStagingKey(jobId, "fts.json"), encodeJson(databasePayload.fts), {
@@ -184,8 +188,12 @@ export async function stageImportArchive(
     }
   }
 
+  await bucket.put(importStagingKey(jobId, "manifest.json"), encodeJson(manifest), {
+    httpMetadata: { contentType: "application/json" },
+  });
+
   return {
-    manifest: parsed.manifest,
+    manifest,
     includes: parsed.includes,
     mediaFiles: parsed.mediaFiles,
     themeFiles: parsed.themeFiles,

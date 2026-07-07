@@ -8,6 +8,8 @@ import {
   settings,
   translations,
   translationsLanguages,
+  user,
+  account,
 } from "../../../db/schema.ts";
 import {
   EDGEPRESS_FORMAT,
@@ -20,6 +22,7 @@ import {
   THEME_PKG_TAR_PREFIX,
   buildExport,
   buildExportFilename,
+  resolveImportTableOrder,
   restoreImport,
   type ArchiveKvLike,
 } from "../edgepress-archive.ts";
@@ -140,6 +143,13 @@ describe("edgepress-archive unit", () => {
   it("FTS insert batch size stays within D1 parameter limit", () => {
     const ftsColumnCount = 9;
     expect(FTS_INSERT_BATCH_SIZE * ftsColumnCount).toBeLessThanOrEqual(100);
+  });
+
+  it("resolveImportTableOrder keeps user before account regardless of manifest order", () => {
+    const order = resolveImportTableOrder(["post_types", "account", "user", "posts"]);
+    expect(order.indexOf("user")).toBeLessThan(order.indexOf("account"));
+    expect(order.indexOf("post_types")).toBeLessThan(order.indexOf("user"));
+    expect(order.indexOf("posts")).toBeGreaterThan(order.indexOf("account"));
   });
 
   it("restoreImport rejects invalid manifest format", async () => {
@@ -365,6 +375,66 @@ describe("edgepress-archive integration", () => {
       .where(eq(posts.id, 10));
     expect(restored?.slug).toBe("hello-export");
     expect(restored?.title).toBe("Hello Export");
+  });
+
+  it("restoreImport restores auth rows when manifest lists account before user", async () => {
+    const { createTarGzip } = await import("nanotar");
+    const { db } = await createArchiveTestDb();
+    const bucket = createMockR2Bucket();
+    const now = Date.now();
+
+    const archive = await createTarGzip([
+      {
+        name: "manifest.json",
+        data: JSON.stringify({
+          format: EDGEPRESS_FORMAT,
+          schemaVersion: EDGEPRESS_SCHEMA_VERSION,
+          includes: { database: true, media: false, themes: false },
+          tableOrder: ["post_types", "account", "user"],
+          counts: { account: 1, user: 1, post_types: 0 },
+          mediaCount: 0,
+          mediaFiles: [],
+          themeCount: 0,
+          themePackages: [],
+        }),
+      },
+      {
+        name: "database.json",
+        data: JSON.stringify({
+          tables: {
+            post_types: [],
+            user: [
+              {
+                id: "user-auth-1",
+                name: "Admin",
+                email: "admin@example.com",
+                email_verified: 1,
+                created_at: now,
+                updated_at: now,
+              },
+            ],
+            account: [
+              {
+                id: "account-auth-1",
+                user_id: "user-auth-1",
+                account_id: "user-auth-1",
+                provider_id: "credential",
+                password: "v1:hash",
+                created_at: now,
+                updated_at: now,
+              },
+            ],
+          },
+        }),
+      },
+    ]);
+
+    await restoreImport(db, bucket, archive.buffer);
+
+    const users = await db.select({ id: user.id }).from(user);
+    const accounts = await db.select({ id: account.id, userId: account.userId }).from(account);
+    expect(users).toEqual([{ id: "user-auth-1" }]);
+    expect(accounts).toEqual([{ id: "account-auth-1", userId: "user-auth-1" }]);
   });
 
   it("restoreImport skips seed tables from legacy archives", async () => {
