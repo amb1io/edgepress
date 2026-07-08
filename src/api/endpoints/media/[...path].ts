@@ -15,6 +15,10 @@ import { getMediaById } from "../../../core/services/media-service.ts";
 import { parseMetaValues } from "../../../utils/meta-parser.ts";
 import { env as cfEnv } from "cloudflare:workers";
 import { getCacheKvFromLocals } from "../../../utils/runtime-locals.ts";
+import {
+  MEDIA_SIZE_PRESETS,
+  type MediaSize,
+} from "../../../utils/media-urls.ts";
 
 export const prerender = false;
 
@@ -25,13 +29,7 @@ type MediaEnv = {
   CLOUDFLARE_IMAGES_VARIANT?: string;
 };
 
-const SIZE_PRESETS = {
-  thumbnail: { width: 300, height: 300 },
-  medium: { width: 800, height: 800 },
-  large: { width: 1920, height: 1920 },
-} as const;
-
-type SizePreset = keyof typeof SIZE_PRESETS;
+type SizePreset = Exclude<MediaSize, "original">;
 
 function parseImageParams(url: URL): {
   width: number | undefined;
@@ -82,7 +80,7 @@ function resolveDimensions(params: {
     return { width: height, height };
   }
   if (size !== undefined) {
-    return { ...SIZE_PRESETS[size] };
+    return { ...MEDIA_SIZE_PRESETS[size] };
   }
   return { width: 1920, height: 1920 };
 }
@@ -208,9 +206,12 @@ export const GET: APIRoute = async ({ params, request, locals }) => {
         if (optimized.ok && optimized.body) {
           const outHeaders = new Headers(optimized.headers);
           outHeaders.set("Content-Type", "image/webp");
-          if (object.httpMetadata?.cacheControl) {
-            outHeaders.set("Cache-Control", object.httpMetadata.cacheControl);
-          }
+          // Long-lived cache so the same image+preset is served from CDN
+          // without re-spending Free-plan transformation quota.
+          outHeaders.set(
+            "Cache-Control",
+            "public, max-age=31536000, immutable",
+          );
           return new Response(optimized.body, { status: 200, headers: outHeaders });
         }
       } catch (subErr) {

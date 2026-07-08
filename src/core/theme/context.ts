@@ -47,6 +47,7 @@ import {
   getMenusFromCache,
   putMenusCache,
 } from "../../utils/menu-cache.ts";
+import { buildMediaUrl, type MediaSize } from "../../utils/media-urls.ts";
 import { searchPosts } from "../services/search-service.ts";
 import { resolveLocaleId } from "../services/post-translation-service.ts";
 import { buildContentPostPayload } from "../../utils/content-post-payload.ts";
@@ -157,8 +158,9 @@ async function enrichPostViewWithCover(
   baseUrl: string,
   cache: CoverImageAttachmentCache,
   kv?: ReturnType<typeof getCacheKvFromLocals>,
+  size: MediaSize = "medium",
 ): Promise<ThemePostView> {
-  const cover = await resolveCoverImage(source, baseUrl, db, cache, kv);
+  const cover = await resolveCoverImage(source, baseUrl, db, cache, kv, size);
   return cover ? { ...view, cover_image: cover } : view;
 }
 
@@ -456,7 +458,9 @@ export async function buildThemeRenderContext(
       siteName,
       siteDescription,
       canonicalUrl,
-      ...(is_archive && posts[0]?.cover_image ? { ogImage: posts[0].cover_image } : {}),
+      ...(is_archive && posts[0]?.cover_image
+        ? { ogImage: buildMediaUrl(posts[0].cover_image, "large") }
+        : {}),
     });
 
     return {
@@ -620,7 +624,9 @@ export async function buildThemeRenderContext(
       siteName,
       siteDescription,
       canonicalUrl: canonicalFull,
-      ...(posts[0]?.cover_image ? { ogImage: posts[0].cover_image } : {}),
+      ...(posts[0]?.cover_image
+        ? { ogImage: buildMediaUrl(posts[0].cover_image, "large") }
+        : {}),
     });
 
     const searchLocaleSwitcher = await buildLocaleSwitcher(locale, route, "search");
@@ -740,6 +746,7 @@ export async function buildThemeRenderContext(
       baseUrl,
       attachmentCache,
       cacheKv,
+      "large",
     );
     finalKind = post.post_type_slug === "post" ? "single" : "page";
   } else if (route.slug && resolvedKind !== "404") {
@@ -752,6 +759,7 @@ export async function buildThemeRenderContext(
       baseUrl,
       attachmentCache,
       cacheKv,
+      "large",
     );
     finalKind = "home";
   } else if (route.kind === "home") {
@@ -802,9 +810,9 @@ export async function buildThemeRenderContext(
 
   const canonicalUrl = new URL(route.path || "/", baseUrl).href;
   const seoOgImage = seoPost
-    ? await resolveCoverImage(seoPost, baseUrl, db, attachmentCache, cacheKv)
+    ? await resolveCoverImage(seoPost, baseUrl, db, attachmentCache, cacheKv, "large")
     : finalKind === "home" && homeListPosts && posts[0]
-      ? posts[0].cover_image
+      ? buildMediaUrl(posts[0].cover_image, "large")
       : undefined;
   const seo = resolveThemeSeoContext({
     resolvedKind: finalKind,
