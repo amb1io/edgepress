@@ -12,6 +12,7 @@ const themeTemplates = [
   "category/[slug]",
   "trabalhos/index",
   "trabalhos/[categorias]",
+  "portfolio/[slug]",
   "[slug]",
 ];
 
@@ -111,6 +112,39 @@ describe("resolveThemeRoute", () => {
       slug: "trabalhos",
       params: { categorias: "publicidade" },
     });
+  });
+
+  it("resolves portfolio job detail at /portfolio/{slug}", async () => {
+    const route = await resolveThemeRoute(
+      "/portfolio/marketing-day-nem-te-conto-com-luana-piovani-audible",
+      new URLSearchParams(),
+      themeTemplates,
+      mockDeps({
+        resolvePostBySlug: async (slug) =>
+          slug === "marketing-day-nem-te-conto-com-luana-piovani-audible"
+            ? { post_type_slug: "jobs" }
+            : null,
+      }),
+    );
+    expect(route).toMatchObject({
+      kind: "page",
+      templateKey: "portfolio/[slug]",
+      slug: "marketing-day-nem-te-conto-com-luana-piovani-audible",
+      params: { slug: "marketing-day-nem-te-conto-com-luana-piovani-audible" },
+    });
+  });
+
+  it("returns 404 for nested prefix when dynamic slug post is missing", async () => {
+    const route = await resolveThemeRoute(
+      "/portfolio/missing-job",
+      new URLSearchParams(),
+      themeTemplates,
+      mockDeps({
+        resolvePostBySlug: async () => null,
+      }),
+    );
+    expect(route.kind).toBe("404");
+    expect(route.templateKey).toBe("404");
   });
 
   it("returns 404 when no template matches", async () => {

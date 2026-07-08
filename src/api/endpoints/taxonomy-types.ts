@@ -14,7 +14,7 @@ import {
   listTaxonomyTypes,
   type TaxonomyTranslationInput,
 } from "../../core/services/taxonomy-type-registry.ts";
-import { invalidateContentListByTable, invalidateI18nCache } from "../../utils/kv-cache-sync.ts";
+import { invalidateContentListByTable, invalidateI18nCache, invalidateTaxonomyCache } from "../../utils/kv-cache-sync.ts";
 import { invalidateTranslationsCache } from "../../i18n/translations.ts";
 
 export const prerender = false;
@@ -89,6 +89,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const created = await createTaxonomyType(db, { name: keyTitle, translations });
 
     await invalidateContentListByTable(locals, "taxonomies");
+    await invalidateTaxonomyCache(locals);
     await invalidateI18nCache(locals);
     invalidateTranslationsCache();
 

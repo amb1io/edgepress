@@ -4,7 +4,7 @@ import { translations as translationsTable, translationsLanguages as translation
 import { and, eq } from "drizzle-orm";
 import { requireMinRole } from "../../../utils/api-auth.ts";
 import { badRequestResponse, htmxRefreshResponse, notFoundResponse } from "../../../utils/http-responses.ts";
-import { invalidateI18nCache } from "../../../utils/kv-cache-sync.ts";
+import { invalidateI18nCache, invalidateTaxonomyI18nCache } from "../../../utils/kv-cache-sync.ts";
 import { invalidateTranslationsCache } from "../../../i18n/translations.ts";
 
 export const prerender = false;
@@ -50,6 +50,7 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
     }
 
     await invalidateI18nCache(locals);
+    await invalidateTaxonomyI18nCache(locals);
     invalidateTranslationsCache();
 
     if (request.headers.get("HX-Request") === "true") return htmxRefreshResponse();
@@ -80,6 +81,7 @@ export const DELETE: APIRoute = async ({ params, request, locals }) => {
   await db.delete(translationsTable).where(eq(translationsTable.id, id));
 
   await invalidateI18nCache(locals);
+  await invalidateTaxonomyI18nCache(locals);
   invalidateTranslationsCache();
 
   if (request.headers.get("HX-Request") === "true") return htmxRefreshResponse();

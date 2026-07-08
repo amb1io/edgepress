@@ -6,8 +6,9 @@ import {
   buildPublicPostPath,
   getSiteOrigin,
   normalizeSiteOrigin,
+  type SettingsCacheOptions,
 } from "./sitemap-service.ts";
-import { getSettingsFromDb } from "./settings-service.ts";
+import { getSettingsWithCache } from "./settings-service.ts";
 
 const SCHEMA_CONTEXT = "https://schema.org";
 const MAX_ANCESTOR_DEPTH = 10;
@@ -292,12 +293,17 @@ export function buildWebPageJsonLd(
 export async function buildWebSiteJsonLd(
   db: Database,
   baseUrl?: string,
+  cacheOptions: SettingsCacheOptions = {},
 ): Promise<Record<string, unknown>[]> {
-  const origin = normalizeSiteOrigin(baseUrl ?? (await getSiteOrigin(db)));
+  const origin = normalizeSiteOrigin(
+    baseUrl ?? (await getSiteOrigin(db, {}, cacheOptions)),
+  );
   if (!origin) return [];
 
-  const settings = await getSettingsFromDb(db, {
-    names: ["site_name", "site_description"],
+  const settings = await getSettingsWithCache(db, {
+    namesParam: "site_name,site_description",
+    kv: cacheOptions.kv ?? null,
+    isAuthenticated: cacheOptions.isAuthenticated ?? false,
   });
   const name = (settings.site_name ?? "").trim() || "Site";
   const description = (settings.site_description ?? "").trim();
@@ -317,15 +323,23 @@ export async function buildPostJsonLd(
   post: JsonLdPostInput,
   context: Omit<JsonLdBuildContext, "origin" | "site_name" | "site_description"> & {
     baseUrl?: string;
+    kv?: SettingsCacheOptions["kv"];
+    isAuthenticated?: boolean;
   },
 ): Promise<Record<string, unknown>[]> {
+  const cacheOptions: SettingsCacheOptions = {
+    kv: context.kv ?? null,
+    isAuthenticated: context.isAuthenticated ?? false,
+  };
   const origin = normalizeSiteOrigin(
-    context.baseUrl ?? (await getSiteOrigin(db)),
+    context.baseUrl ?? (await getSiteOrigin(db, {}, cacheOptions)),
   );
   if (!origin) return [];
 
-  const settings = await getSettingsFromDb(db, {
-    names: ["site_name", "site_description"],
+  const settings = await getSettingsWithCache(db, {
+    namesParam: "site_name,site_description",
+    kv: cacheOptions.kv ?? null,
+    isAuthenticated: cacheOptions.isAuthenticated ?? false,
   });
 
   let author_name: string | undefined;

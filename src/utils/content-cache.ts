@@ -2,17 +2,21 @@
  * Cache-aside para conteúdo de tabelas: consulta primeiro o KV; em caso de miss, busca no banco
  * e armazena no KV apenas quando o resultado não é vazio. Resultados vazios ou null não são salvos no KV.
  */
+import { sql } from "drizzle-orm";
 import type { GetTableListParams, GetTableListResult } from "./list-table-dynamic.ts";
 import { getTableList } from "./list-table-dynamic.ts";
 import type { Database } from "./types/database.ts";
+import { escapeIdentifier, prefixedTable, TABLE_PREFIX } from "./db-utils.ts";
 
 /** Interface mínima do KV para permitir testes com mock (KVNamespace do Cloudflare). */
 export type KVLike = {
   get(key: string, type?: "text" | "json"): Promise<string | unknown | null>;
   put(key: string, value: string): Promise<void>;
+  delete?(key: string): Promise<void>;
 };
 
 const CACHE_KEY_PREFIX = "content:";
+const ROW_CACHE_KEY_PREFIX = "content:row:";
 
 function buildParamsHash(params: GetTableListParams): string {
   const normalized = {
@@ -28,6 +32,11 @@ function buildParamsHash(params: GetTableListParams): string {
 export function buildContentCacheKey(table: string, params: GetTableListParams): string {
   const safeTable = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(table) ? table : "invalid";
   return `${CACHE_KEY_PREFIX}${safeTable}:${buildParamsHash(params)}`;
+}
+
+export function buildContentRowCacheKey(table: string, id: number): string {
+  const safeTable = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(table) ? table : "invalid";
+  return `${ROW_CACHE_KEY_PREFIX}${safeTable}:${id}`;
 }
 
 function hasContent(result: GetTableListResult | null): boolean {
@@ -76,4 +85,59 @@ export async function getTableContentWithCache(
   }
 
   return result;
+}
+
+export type GetRowContentWithCacheOptions = {
+  kv: KVLike | null;
+  db: Database;
+  /** Logical table name (ex.: taxonomies) or physical (edp_taxonomies). */
+  table: string;
+  id: number;
+  fetchRow?: () => Promise<Record<string, unknown> | null>;
+};
+
+/**
+ * Cache-aside para uma linha única por id (tabelas que não são posts).
+ * Chave: content:row:{table}:{id}
+ */
+export async function getRowContentWithCache(
+  options: GetRowContentWithCacheOptions,
+): Promise<Record<string, unknown> | null> {
+  const { kv, db, table, id, fetchRow } = options;
+  const logical =
+    table.startsWith(TABLE_PREFIX) ? table.slice(TABLE_PREFIX.length) : table;
+  const key = buildContentRowCacheKey(logical, id);
+
+  if (kv) {
+    try {
+      const cached = (await kv.get(key, "json")) as Record<string, unknown> | null;
+      if (cached != null && typeof cached === "object" && !Array.isArray(cached)) {
+        return cached;
+      }
+    } catch {
+      // segue para o banco
+    }
+  }
+
+  let row: Record<string, unknown> | null = null;
+  if (fetchRow) {
+    row = await fetchRow();
+  } else {
+    const physical = prefixedTable(logical);
+    const quotedTable = `"${escapeIdentifier(physical)}"`;
+    const rows = (await db.all(
+      sql.raw(`SELECT * FROM ${quotedTable} WHERE "id" = ${id} LIMIT 1`),
+    )) as Record<string, unknown>[];
+    row = rows?.[0] ?? null;
+  }
+
+  if (kv && row != null && typeof row === "object") {
+    try {
+      await kv.put(key, JSON.stringify(row));
+    } catch {
+      // ignora
+    }
+  }
+
+  return row;
 }

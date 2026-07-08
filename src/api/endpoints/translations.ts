@@ -13,7 +13,7 @@ import { requireMinRole } from "../../utils/api-auth.ts";
 import { getString, getNumber } from "../../utils/form-data.ts";
 import { badRequestResponse, badRequestHtmlResponse, jsonResponse, redirectResponse, htmxRedirectResponse } from "../../utils/http-responses.ts";
 import { buildAbsoluteUrl, buildContentUrl, buildListUrl } from "../../utils/url.ts";
-import { invalidateI18nCache } from "../../utils/kv-cache-sync.ts";
+import { invalidateI18nCache, invalidateTaxonomyI18nCache } from "../../utils/kv-cache-sync.ts";
 import { invalidateTranslationsCache } from "../../i18n/translations.ts";
 
 export const prerender = false;
@@ -151,6 +151,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
 
     await invalidateI18nCache(locals);
+    await invalidateTaxonomyI18nCache(locals);
     invalidateTranslationsCache();
 
     const acceptsJson = request.headers.get("Accept")?.includes("application/json");
