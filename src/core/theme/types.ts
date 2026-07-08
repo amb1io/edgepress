@@ -202,6 +202,8 @@ export type ThemeRenderContext = {
   get_author?: (idOrSlug: string | number) => Promise<ThemeAuthorView | null>;
   /** Injected by layout wrapper */
   content?: string;
+  /** Internal: features whose Liquid tags ran during page render (drives conditional assets). */
+  _usedFeatures?: Set<string>;
 };
 
 export type ResolvedPublicRoute = {

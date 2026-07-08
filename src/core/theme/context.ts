@@ -28,6 +28,10 @@ import {
 } from "./resolve-route.ts";
 import { buildLocaleSwitcher } from "./locale-switcher.ts";
 import { filterPublicThemeListPosts, isPublicThemeListPost } from "./post-filters.ts";
+
+function createUsedFeaturesRegistry(): Set<string> {
+  return new Set();
+}
 import {
   resolveCoverImage,
   type CoverImageAttachmentCache,
@@ -507,6 +511,7 @@ export async function buildThemeRenderContext(
       get_posts: buildGetPostsHandler(content, dbLocale, baseUrl, cacheKv),
       get_posts_details: buildGetPostsDetailsHandler(content, dbLocale, baseUrl, cacheKv),
       get_author: buildGetAuthorHandler(content, dbLocale),
+      _usedFeatures: createUsedFeaturesRegistry(),
     };
   }
 
@@ -672,6 +677,7 @@ export async function buildThemeRenderContext(
       get_posts: buildGetPostsHandler(content, dbLocale, baseUrl, cacheKv),
       get_posts_details: buildGetPostsDetailsHandler(content, dbLocale, baseUrl, cacheKv),
       get_author: buildGetAuthorHandler(content, dbLocale),
+      _usedFeatures: createUsedFeaturesRegistry(),
     };
   }
 
@@ -874,5 +880,6 @@ export async function buildThemeRenderContext(
     get_posts: buildGetPostsHandler(content, dbLocale, baseUrl, cacheKv),
     get_posts_details: buildGetPostsDetailsHandler(content, dbLocale, baseUrl, cacheKv),
     get_author: buildGetAuthorHandler(content, dbLocale),
+    _usedFeatures: createUsedFeaturesRegistry(),
   };
 }
