@@ -4,6 +4,7 @@ import type { ThemeRenderContext } from "./types.ts";
 import { renderSeoHead } from "./seo-head.ts";
 import { registerGetTaxonomiesTag, registerGetRelatedPostsTag, registerGetTaxonomyPostsTag, registerGetPostsTag, registerGetPostsDetailsTag, registerGetAuthorTag, registerMenuFilters, registerCustomFieldTag, registerGetTaxonomiesLocaleTag } from "./theme-functions.ts";
 import { getBlockNotePublicAssets } from "./blocknote-public-assets.ts";
+import { buildMediaUrl, isMediaSize } from "../../utils/media-urls.ts";
 
 type TagImpl = {
   render: (ctx: ThemeRenderContext) => string;
@@ -245,6 +246,13 @@ export function registerThemeApi(liquid: Liquid): void {
     const n = typeof ts === "number" ? ts : Date.parse(String(ts));
     if (!Number.isFinite(n)) return "";
     return new Date(n).toLocaleDateString("pt-BR");
+  });
+
+  liquid.registerFilter("image_size", (value: unknown, size: unknown) => {
+    const url = String(value ?? "").trim();
+    if (!url) return "";
+    if (!isMediaSize(size)) return url;
+    return buildMediaUrl(url, size) ?? url;
   });
 
   liquid.registerFilter("escape", (value: unknown) => escapeHtml(String(value ?? "")));

@@ -7,6 +7,7 @@ import { db } from "../../../db/index.ts";
 import { getImageAttachments } from "../../../core/services/media-service.ts";
 import { parseMetaValues } from "../../../utils/meta-parser.ts";
 import { getCacheKvFromLocals } from "../../../utils/runtime-locals.ts";
+import { buildMediaUrlSet } from "../../../utils/media-urls.ts";
 
 export const prerender = false;
 
@@ -32,11 +33,13 @@ export const GET: APIRoute = async ({ url, locals }) => {
   const items = mediaList.map((m) => {
     const meta = parseMetaValues(m.meta_values);
     const path = meta["attachment_path"] ?? meta["file_path"] ?? "";
+    const mediaUrl = attachmentPathToUrl(path);
     return {
       id: m.id,
       title: m.title ?? "",
-      url: attachmentPathToUrl(path),
+      url: mediaUrl,
       path: path || "",
+      urls: buildMediaUrlSet(mediaUrl),
     };
   });
 

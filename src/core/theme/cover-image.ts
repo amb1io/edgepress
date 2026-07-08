@@ -3,6 +3,7 @@ import { getMediaById } from "../services/media-service.ts";
 import { parseMetaValues } from "../../utils/meta-parser.ts";
 import type { Database } from "../../shared/types/database.ts";
 import type { KVLike } from "../../utils/content-cache.ts";
+import { buildMediaUrl, type MediaSize } from "../../utils/media-urls.ts";
 
 export function parsePostThumbnailId(metaValues: Record<string, unknown>): number | null {
   const raw = metaValues["post_thumbnail_id"];
@@ -30,10 +31,16 @@ function attachmentPathFromMeta(meta: Record<string, unknown>): string {
   );
 }
 
+function applyCoverSize(url: string | undefined, size: MediaSize): string | undefined {
+  if (!url) return undefined;
+  return buildMediaUrl(url, size) ?? url;
+}
+
 /** Resolves cover from linked `post.media` (posts_media). */
 export function resolveCoverImageFromMedia(
   post: Pick<ContentPostDetail, "media" | "meta_values">,
   baseUrl: string,
+  size: MediaSize = "medium",
 ): string | undefined {
   const media = Array.isArray(post.media) ? post.media : [];
   const thumbId = parsePostThumbnailId((post.meta_values ?? {}) as Record<string, unknown>);
@@ -43,7 +50,7 @@ export function resolveCoverImageFromMedia(
     if (thumbId != null && row.id !== thumbId) continue;
     const path = attachmentPathFromMeta(row.meta_values ?? {});
     if (!path) continue;
-    return resolveMediaPathToAbsoluteUrl(path, baseUrl);
+    return applyCoverSize(resolveMediaPathToAbsoluteUrl(path, baseUrl), size);
   }
   return undefined;
 }
@@ -51,10 +58,11 @@ export function resolveCoverImageFromMedia(
 function resolveCoverImageFromMetaPath(
   metaValues: Record<string, unknown>,
   baseUrl: string,
+  size: MediaSize = "medium",
 ): string | undefined {
   const thumbPath = metaValues["post_thumbnail_path"];
   if (typeof thumbPath !== "string" || !thumbPath.trim()) return undefined;
-  return resolveMediaPathToAbsoluteUrl(thumbPath.trim(), baseUrl);
+  return applyCoverSize(resolveMediaPathToAbsoluteUrl(thumbPath.trim(), baseUrl), size);
 }
 
 export type CoverImageAttachmentCache = Map<number, string | undefined>;
@@ -66,19 +74,20 @@ export async function resolveCoverImage(
   db: Database,
   attachmentCache: CoverImageAttachmentCache,
   kv?: KVLike | null,
+  size: MediaSize = "medium",
 ): Promise<string | undefined> {
-  const fromMedia = resolveCoverImageFromMedia(post, baseUrl);
+  const fromMedia = resolveCoverImageFromMedia(post, baseUrl, size);
   if (fromMedia) return fromMedia;
 
   const metaValues = (post.meta_values ?? {}) as Record<string, unknown>;
-  const fromMetaPath = resolveCoverImageFromMetaPath(metaValues, baseUrl);
+  const fromMetaPath = resolveCoverImageFromMetaPath(metaValues, baseUrl, size);
   if (fromMetaPath) return fromMetaPath;
 
   const thumbId = parsePostThumbnailId(metaValues);
   if (thumbId == null) return undefined;
 
   if (attachmentCache.has(thumbId)) {
-    return attachmentCache.get(thumbId);
+    return applyCoverSize(attachmentCache.get(thumbId), size);
   }
 
   const attachment = await getMediaById(db, thumbId, kv);
@@ -89,7 +98,7 @@ export async function resolveCoverImage(
 
   const meta = parseMetaValues(attachment.meta_values) as Record<string, unknown>;
   const path = attachmentPathFromMeta(meta);
-  const url = path ? resolveMediaPathToAbsoluteUrl(path, baseUrl) : undefined;
-  attachmentCache.set(thumbId, url);
-  return url;
+  const originalUrl = path ? resolveMediaPathToAbsoluteUrl(path, baseUrl) : undefined;
+  attachmentCache.set(thumbId, originalUrl);
+  return applyCoverSize(originalUrl, size);
 }

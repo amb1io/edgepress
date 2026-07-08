@@ -169,7 +169,7 @@ Preenchido pelo core a partir do post da rota ou fallbacks do site.
 | `seo.title` | string | Título da página |
 | `seo.description` | string | Meta description |
 | `seo.canonical` | string | URL canônica |
-| `seo.og_image` | string? | Imagem Open Graph |
+| `seo.og_image` | string? | Imagem Open Graph (preset `large` quando derivada de `cover_image`) |
 | `seo.og_type` | string | Ex.: `website`, `article` |
 | `seo.site_name` | string? | Nome do site para OG |
 | `seo.json_ld_html` | string? | `<script type="application/ld+json">` (não use direto; prefira `{% seo_head %}`) |
@@ -218,12 +218,14 @@ Disponível quando há conteúdo singular na rota (slug, ou home via `home_conte
 | `post.author_name` | string | Nome do autor |
 | `post.published_at` | number \| null | Timestamp Unix (ms) |
 | `post.post_type_slug` | string | `post`, `page`, etc. |
-| `post.cover_image` | string? | URL absoluta da imagem de capa |
+| `post.cover_image` | string? | URL absoluta da imagem de capa. No post singular (`single`/`page`/home singular) o preset padrão é `large`; em listagens (`posts`, tags de listagem) o padrão é `medium`. Use `\| image_size` para sobrescrever. |
 | `post.meta` | objeto | Metadados (`translation_key`, campos customizados, etc.) |
 
 ### `posts` (listagem)
 
-Sempre disponível em todas as rotas. Cada item tem a mesma forma de `post`. O template escolhe quando iterar (ex.: `home.liquid` pode listar `posts` na `/`).
+Sempre disponível em todas as rotas. Cada item tem a mesma forma de `post`. O template escolhe quando iterar (ex.: `home.liquid` pode listar `posts` na `/`). Em listagens (home com posts, archive, taxonomy, search, `{% get_posts %}`, `{% get_related_posts %}`, `{% get_taxonomy_posts %}`), `cover_image` usa o preset **`medium`** por padrão. `seo.og_image` usa **`large`** quando derivado de uma capa.
+
+> **Free plan / Image Resizing:** temas só devem usar os presets fixos (`thumbnail`, `medium`, `large`, `original`) — nunca `width`/`height` arbitrários — para manter o uso de transformações previsível dentro do limite gratuito.
 
 ### `archive`
 
@@ -674,7 +676,7 @@ Retorna o autor de um post (via ID ou slug). Se o post não existir ou não tive
 | 1º argumento | ID ou slug do post (expressão Liquid ou literal) |
 | `as` | Nome da variável que recebe o objeto ou `null` |
 
-**Formato quando encontrado:** `{ name, image, description }` — strings vazias quando o campo não está preenchido no banco.
+**Formato quando encontrado:** `{ name, image, description }` — strings vazias quando o campo não está preenchido no banco. Quando `image` aponta para `/api/media/...`, o core aplica o preset **`thumbnail`** automaticamente.
 
 **Exemplo em `single.liquid`:**
 
@@ -719,6 +721,19 @@ Equivalente a `the_date()`. Formata timestamp em **pt-BR** (`dd/mm/aaaa`).
 ```
 
 Aceita `number` (ms Unix) ou string parseável por `Date`. Retorna `""` se inválido.
+
+### `| image_size`
+
+Ajusta o preset de otimização de uma URL de mídia Edgepress (`/api/media/...`). Presets válidos: `thumbnail` (300), `medium` (800), `large` (1920), `original` (sem `?size=`).
+
+```liquid
+<img src="{{ post.cover_image | image_size: 'thumbnail' }}" alt="" />
+<img src="{{ post.cover_image | image_size: 'large' }}" alt="" />
+```
+
+- URLs que não sejam `/api/media/...` (avatar externo, CDN de terceiros) são devolvidas sem alteração.
+- Valor inválido no argumento → devolve a URL original.
+- Se o Image Resizing estiver indisponível ou acima da cota do plano Free, o endpoint `/api/media` faz fallback para o arquivo original automaticamente.
 
 ### `| escape`
 

@@ -46,6 +46,12 @@ import {
 } from "../../utils/author-cache.ts";
 import { getPublicAuthorById } from "./user-service.ts";
 import type { ThemeAuthorView } from "../theme/types.ts";
+import { buildMediaUrl } from "../../utils/media-urls.ts";
+
+function withAuthorThumbnail(author: ThemeAuthorView): ThemeAuthorView {
+  const image = buildMediaUrl(author.image, "thumbnail") ?? author.image;
+  return image === author.image ? author : { ...author, image };
+}
 
 // --- Erros (APIs HTTP podem mapear para Response) ---
 
@@ -786,13 +792,13 @@ export class EdgepressContent {
 
     const cacheKey = buildAuthorCacheKey(authorId);
     const cached = await getAuthorFromCache(kv, cacheKey);
-    if (cached) return cached;
+    if (cached) return withAuthorThumbnail(cached);
 
     const author = await getPublicAuthorById(db, authorId);
     if (!author) return null;
 
     await putAuthorCache(kv, cacheKey, author);
-    return author;
+    return withAuthorThumbnail(author);
   }
 
   async getAuthorByUserId(userId: string): Promise<ThemeAuthorView | null> {
@@ -802,13 +808,13 @@ export class EdgepressContent {
 
     const cacheKey = buildAuthorCacheKey(id);
     const cached = await getAuthorFromCache(kv, cacheKey);
-    if (cached) return cached;
+    if (cached) return withAuthorThumbnail(cached);
 
     const author = await getPublicAuthorById(db, id);
     if (!author) return null;
 
     await putAuthorCache(kv, cacheKey, author);
-    return author;
+    return withAuthorThumbnail(author);
   }
 
   async getTaxonomies(post_type: string, taxonomy_name: string): Promise<TaxonomiesResponse> {
