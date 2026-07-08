@@ -13,6 +13,7 @@ import {
   parseThemePackageTarPath,
   remapDatabasePayloadLocales,
   resolveImportTableOrder,
+  sanitizeDatabasePayload,
   type EdgepressLogicalTable,
   type EdgepressManifest,
   type ExportIncludes,
@@ -146,10 +147,13 @@ export async function stageImportArchive(
   db?: Database,
 ): Promise<ImportStagingManifest> {
   const parsed = await parseImportArchive(archiveBuffer);
-  const databasePayload =
+  const remappedDatabasePayload =
     db && parsed.includes.database
       ? await remapDatabasePayloadLocales(db, parsed.manifest, parsed.databasePayload)
       : parsed.databasePayload;
+  const databasePayload = parsed.includes.database
+    ? sanitizeDatabasePayload(remappedDatabasePayload)
+    : remappedDatabasePayload;
 
   let manifest = parsed.manifest;
 

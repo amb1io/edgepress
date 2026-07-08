@@ -713,6 +713,147 @@ export function remapLocaleId(
   return null;
 }
 
+function rowIdSet(rows: RowRecord[] | undefined): Set<string> {
+  const ids = new Set<string>();
+  for (const row of rows ?? []) {
+    const id = String(row["id"] ?? "").trim();
+    if (id) ids.add(id);
+  }
+  return ids;
+}
+
+function warnDropped(kind: string, dropped: number, detail: string): void {
+  if (dropped <= 0) return;
+  console.warn(`[import] dropping ${dropped} ${kind} (${detail})`);
+}
+
+/**
+ * Scrub dangling FK references before D1 sees them.
+ *
+ * D1 enforces foreign keys and does not support `PRAGMA foreign_keys = OFF` over
+ * the HTTP API, so a single orphan row rejects an entire multi-row INSERT.
+ *
+ * Not handled: posts.post_type_id is NOT NULL + RESTRICT; a post pointing at a
+ * missing post type would still hard-fail (no safe null-out without dropping the post).
+ */
+export function sanitizeDatabasePayload(
+  payload: EdgepressDatabasePayload,
+): EdgepressDatabasePayload {
+  const tables: EdgepressDatabasePayload["tables"] = { ...payload.tables };
+  const userIds = rowIdSet(tables.user);
+  const postIds = rowIdSet(tables.posts);
+  const taxonomyIds = rowIdSet(tables.taxonomies);
+
+  if (tables.account?.length) {
+    const kept: RowRecord[] = [];
+    let dropped = 0;
+    for (const row of tables.account) {
+      const userId = String(pickRowValue(row, "userId", "user_id") ?? "").trim();
+      if (userId && userIds.has(userId)) {
+        kept.push(row);
+      } else {
+        dropped++;
+      }
+    }
+    warnDropped("account row(s) with missing user_id", dropped, `users in archive: ${userIds.size}`);
+    tables.account = kept;
+  }
+
+  if (tables.posts?.length) {
+    let clearedAuthors = 0;
+    let clearedParents = 0;
+    tables.posts = tables.posts.map((row) => {
+      let next = row;
+      const authorId = row["author_id"];
+      if (authorId != null && authorId !== "" && !userIds.has(String(authorId))) {
+        next = { ...next, author_id: null };
+        clearedAuthors++;
+      }
+      const parentId = next["parent_id"];
+      if (parentId != null && parentId !== "" && !postIds.has(String(parentId))) {
+        next = next === row ? { ...next, parent_id: null } : { ...next, parent_id: null };
+        clearedParents++;
+      }
+      return next;
+    });
+    if (clearedAuthors > 0) {
+      console.warn(`[import] clearing ${clearedAuthors} posts.author_id pointing at missing users`);
+    }
+    if (clearedParents > 0) {
+      console.warn(`[import] clearing ${clearedParents} posts.parent_id pointing at missing posts`);
+    }
+  }
+
+  if (tables.taxonomies?.length) {
+    let clearedParents = 0;
+    tables.taxonomies = tables.taxonomies.map((row) => {
+      const parentId = row["parent_id"];
+      if (parentId == null || parentId === "") return row;
+      if (taxonomyIds.has(String(parentId))) return row;
+      clearedParents++;
+      return { ...row, parent_id: null };
+    });
+    if (clearedParents > 0) {
+      console.warn(
+        `[import] clearing ${clearedParents} taxonomies.parent_id pointing at missing taxonomies`,
+      );
+    }
+  }
+
+  if (tables.posts_taxonomies?.length) {
+    const kept: RowRecord[] = [];
+    let dropped = 0;
+    for (const row of tables.posts_taxonomies) {
+      const postId = String(row["post_id"] ?? "").trim();
+      const termId = String(row["term_id"] ?? "").trim();
+      if (postId && termId && postIds.has(postId) && taxonomyIds.has(termId)) {
+        kept.push(row);
+      } else {
+        dropped++;
+      }
+    }
+    warnDropped(
+      "posts_taxonomies row(s)",
+      dropped,
+      `posts=${postIds.size} taxonomies=${taxonomyIds.size}`,
+    );
+    tables.posts_taxonomies = kept;
+  }
+
+  if (tables.posts_media?.length) {
+    const kept: RowRecord[] = [];
+    let dropped = 0;
+    for (const row of tables.posts_media) {
+      const postId = String(row["post_id"] ?? "").trim();
+      const mediaId = String(row["media_id"] ?? "").trim();
+      if (postId && mediaId && postIds.has(postId) && postIds.has(mediaId)) {
+        kept.push(row);
+      } else {
+        dropped++;
+      }
+    }
+    warnDropped("posts_media row(s)", dropped, `posts=${postIds.size}`);
+    tables.posts_media = kept;
+  }
+
+  if (tables.seo_metadata?.length) {
+    const kept: RowRecord[] = [];
+    let dropped = 0;
+    for (const row of tables.seo_metadata) {
+      const postId = String(row["post_id"] ?? "").trim();
+      if (postId && postIds.has(postId)) {
+        kept.push(row);
+      } else {
+        dropped++;
+      }
+    }
+    warnDropped("seo_metadata row(s)", dropped, `posts=${postIds.size}`);
+    tables.seo_metadata = kept;
+  }
+
+  return { ...payload, tables };
+}
+
 export async function remapDatabasePayloadLocales(
   db: Database,
   manifest: Pick<EdgepressManifest, "localeMap">,
@@ -756,7 +897,7 @@ export async function remapDatabasePayloadLocales(
     ),
   }));
 
-  return { tables, fts };
+  return sanitizeDatabasePayload({ tables, fts });
 }
 
 type MediaObject = { key: string; data: Uint8Array; contentType: string };
@@ -873,7 +1014,11 @@ export async function buildExportParts(
     for (const logicalTable of TABLE_ORDER) {
       const rows = await TABLE_READERS[logicalTable](db);
       tables[logicalTable] = rows;
-      counts[logicalTable] = rows.length;
+    }
+    const sanitized = sanitizeDatabasePayload({ tables });
+    Object.assign(tables, sanitized.tables);
+    for (const logicalTable of TABLE_ORDER) {
+      counts[logicalTable] = tables[logicalTable]?.length ?? 0;
     }
     ftsRows = await readAllFtsRows(db);
     localeMap = await readLocaleIdMap(db);
@@ -1177,8 +1322,9 @@ export async function restoreImport(
     await resetAutoIncrementSequences(db);
 
     // Second pass: restore self-referential parent_id values nullified during insert.
-    await restorePostParentIds(db, databasePayload.tables["posts"] ?? []);
-    await restoreTaxonomyParentIds(db, databasePayload.tables["taxonomies"] ?? []);
+    // Use sanitized importPayload so dangling parent_ids are not re-applied.
+    await restorePostParentIds(db, importPayload.tables["posts"] ?? []);
+    await restoreTaxonomyParentIds(db, importPayload.tables["taxonomies"] ?? []);
   }
 
   const contentTypeByKey = new Map(
