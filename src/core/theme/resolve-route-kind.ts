@@ -121,6 +121,24 @@ export async function resolveRouteKind(
     };
   }
 
+  // Nested detail routes like /portfolio/{slug} use a static prefix that is not
+  // itself a post. Resolve the dynamic param when the base segment misses.
+  if (hasExtraDynamicParams(matched)) {
+    const nestedSlug = firstDynamicParamValue(params);
+    if (nestedSlug && nestedSlug !== base) {
+      const nestedPost = await deps.resolvePostBySlug(nestedSlug);
+      if (nestedPost) {
+        const kind: ThemeRouteKind = nestedPost.post_type_slug === "post" ? "single" : "page";
+        return {
+          kind,
+          templateKey,
+          params,
+          slug: nestedSlug,
+        };
+      }
+    }
+  }
+
   return { kind: "404", templateKey: "404", params };
 }
 
