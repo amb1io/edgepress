@@ -92,7 +92,9 @@ function hasHydratableBodyBlocks(post: ThemeRenderContext["post"]): boolean {
 }
 
 export function shouldLoadBlockNoteAssets(ctx: ThemeRenderContext): boolean {
-  return themeSupportsBlockNote(ctx) && hasHydratableBodyBlocks(ctx.post);
+  return (
+    themeSupportsBlockNote(ctx) && Boolean(ctx._usedFeatures?.has("blocknote"))
+  );
 }
 
 function escapeJsonForInlineScript(json: string): string {
@@ -118,6 +120,7 @@ function renderBlockNoteContent(ctx: ThemeRenderContext): string {
   }
 
   if (hasHydratableBodyBlocks(ctx.post)) {
+    ctx._usedFeatures?.add("blocknote");
     const blocksJson = escapeJsonForInlineScript(String(ctx.post!.body_blocks ?? "").trim());
     const locale = escapeAttr(ctx.route.locale || ctx.site.locale || "pt-br");
     parts.push(

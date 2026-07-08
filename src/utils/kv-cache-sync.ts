@@ -27,6 +27,10 @@ import {
 import { upsertActiveThemeSetting } from "./services/settings-service.ts";
 import { ARCHIVABLE_POST_TYPES_KV_KEY } from "../core/theme/post-type-routes.ts";
 import { deleteCustomFieldsCache } from "./custom-fields-cache.ts";
+import {
+  bumpHtmlCacheVersion,
+  purgePostPublicHtmlCache,
+} from "../core/theme/html-edge-cache.ts";
 
 /** Deleta todas as chaves com o prefixo dado. Ignora erros de KV. */
 export async function deleteKvKeysByPrefix(kv: App.KVLike, prefix: string): Promise<void> {
@@ -57,6 +61,7 @@ export async function syncPostCache(
   locals: App.Locals,
   db: Database,
   postId: number,
+  options?: { previousSlug?: string },
 ): Promise<void> {
   const kv = getKvFromLocals(locals);
   if (!kv) return;
@@ -133,6 +138,15 @@ export async function syncPostCache(
   await invalidateContentListByTable(locals, "posts");
   await invalidateRelatedPostsCache(locals);
   await invalidateThemeContentCache(locals);
+  try {
+    const extraPaths =
+      options?.previousSlug && options.previousSlug !== post.slug
+        ? [`/${options.previousSlug.trim()}`]
+        : [];
+    await purgePostPublicHtmlCache(kv, post.slug, extraPaths);
+  } catch {
+    // ignora falha de purge HTML
+  }
   try {
     const [postRow] = await db
       .select({ post_type_id: posts.post_type_id })
@@ -224,6 +238,11 @@ export async function invalidatePostCache(
   await invalidateContentListByTable(locals, "posts");
   await invalidateRelatedPostsCache(locals);
   await invalidateThemeContentCache(locals);
+  try {
+    await purgePostPublicHtmlCache(kv, post.slug);
+  } catch {
+    // ignora falha de purge HTML
+  }
 
   try {
     const [typeRow] = await db
@@ -306,6 +325,11 @@ export async function invalidateSettingsCache(locals: App.Locals): Promise<void>
   const kv = getKvFromLocals(locals);
   if (!kv) return;
   await deleteKvKeysByPrefix(kv, "settings:");
+  try {
+    await bumpHtmlCacheVersion(kv);
+  } catch {
+    // ignora
+  }
 }
 
 /**
@@ -341,17 +365,17 @@ export async function invalidateThemeCache(locals: App.Locals): Promise<void> {
   }
   await deleteKvKeysByPrefix(kv, THEME_META_KV_PREFIX);
   await deleteKvKeysByPrefix(kv, THEME_STATUS_KV_PREFIX);
+  try {
+    await bumpHtmlCacheVersion(kv);
+  } catch {
+    // ignora
+  }
 }
 
 /**
- * Recalcula e projeta em KV o tema ativo e seus metadados canônicos.
+ * Recalcula e projeta em KV o tema ativo e seus metadados canônicos (sem locals).
  */
-export async function syncThemeCache(
-  locals: App.Locals,
-  db: Database,
-): Promise<void> {
-  const kv = getKvFromLocals(locals);
-  if (!kv) return;
+export async function syncThemeCacheToKv(db: Database, kv: KVLike): Promise<void> {
   try {
     const activeTheme = await getActiveThemeFromDb(db);
     await kv.put(THEME_ACTIVE_KV_KEY, JSON.stringify(activeTheme));
@@ -369,6 +393,23 @@ export async function syncThemeCache(
     }
   } catch {
     // ignora falhas de sync de tema para não impactar fluxo principal
+  }
+}
+
+/**
+ * Recalcula e projeta em KV o tema ativo e seus metadados canônicos.
+ */
+export async function syncThemeCache(
+  locals: App.Locals,
+  db: Database,
+): Promise<void> {
+  const kv = getKvFromLocals(locals);
+  if (!kv) return;
+  await syncThemeCacheToKv(db, kv);
+  try {
+    await bumpHtmlCacheVersion(kv);
+  } catch {
+    // ignora
   }
 }
 
@@ -417,6 +458,11 @@ export async function invalidateMenuCache(locals: App.Locals): Promise<void> {
   const kv = getKvFromLocals(locals);
   if (!kv) return;
   await deleteKvKeysByPrefix(kv, "menu:");
+  try {
+    await bumpHtmlCacheVersion(kv);
+  } catch {
+    // ignora
+  }
 }
 
 /** Invalida todo o cache de taxonomia (prefixo taxonomy:). */

@@ -53,6 +53,8 @@ declare global {
     interface Locals {
       user: import("better-auth").User | null;
       session: import("better-auth").Session | null;
+      /** Cloudflare Worker execution context (waitUntil, passThroughOnException). */
+      cfContext?: ExecutionContext;
     }
   }
 

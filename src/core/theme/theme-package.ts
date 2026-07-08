@@ -3,12 +3,17 @@ import type { KVLike } from "../../utils/runtime-locals.ts";
 
 export const THEME_PKG_KV_PREFIX = "theme:pkg:";
 
+type R2ObjectBody = {
+  text: () => Promise<string>;
+};
+
 type R2Bucket = {
   put: (
     key: string,
     value: ArrayBuffer | ArrayBufferView | string | ReadableStream | Blob,
     options?: { httpMetadata?: { contentType?: string } },
   ) => Promise<unknown>;
+  get: (key: string) => Promise<R2ObjectBody | null>;
   delete: (key: string) => Promise<void>;
 };
 
@@ -25,6 +30,11 @@ export function themeAssetR2Prefix(slug: string): string {
 export function themeAssetR2Key(slug: string, relativePath: string): string {
   const clean = relativePath.trim().replace(/^\/+/, "");
   return `${themeAssetR2Prefix(slug)}/${clean}`;
+}
+
+/** R2 backup of the full theme package (self-heal when KV is cleared). */
+export function themePackageR2Key(slug: string): string {
+  return `themes/${slug.trim().toLowerCase()}/package.json`;
 }
 
 export function validateThemeManifest(raw: unknown): ThemeManifest {
@@ -73,9 +83,13 @@ export async function saveThemePackage(
   assets: Map<string, ArrayBuffer>,
 ): Promise<void> {
   const slug = pkg.manifest.slug;
-  await kv.put(themePackageKvKey(slug), JSON.stringify(pkg));
+  const serialized = JSON.stringify(pkg);
+  await kv.put(themePackageKvKey(slug), serialized);
 
   if (bucket) {
+    await bucket.put(themePackageR2Key(slug), serialized, {
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
     for (const [relativePath, data] of assets.entries()) {
       const key = themeAssetR2Key(slug, relativePath);
       await bucket.put(key, data, {
@@ -87,29 +101,65 @@ export async function saveThemePackage(
   packageCache.set(slug, pkg);
 }
 
-export async function loadThemePackage(
-  kv: KVLike | null,
-  slug: string,
-): Promise<ThemePackageRecord | null> {
-  const normalized = slug.trim().toLowerCase();
-  const cached = packageCache.get(normalized);
-  if (cached) return cached;
-
-  if (!kv) return null;
-  const raw = await kv.get(themePackageKvKey(normalized));
-  if (!raw) return null;
-
+function parseThemePackageRecord(raw: string): ThemePackageRecord | null {
   try {
     const pkg = JSON.parse(raw) as ThemePackageRecord;
-    const cached = packageCache.get(normalized);
-    if (cached && cached.updated_at === pkg.updated_at) {
-      return cached;
+    if (!pkg?.manifest?.slug || typeof pkg.templates !== "object") return null;
+    return pkg;
+  } catch {
+    return null;
+  }
+}
+
+async function loadThemePackageFromR2(
+  bucket: R2Bucket,
+  normalized: string,
+  kv: KVLike | null,
+): Promise<ThemePackageRecord | null> {
+  try {
+    const object = await bucket.get(themePackageR2Key(normalized));
+    if (!object) return null;
+    const pkg = parseThemePackageRecord(await object.text());
+    if (!pkg) return null;
+    if (kv) {
+      try {
+        await kv.put(themePackageKvKey(normalized), JSON.stringify(pkg));
+      } catch {
+        // self-heal best-effort
+      }
     }
     packageCache.set(normalized, pkg);
     return pkg;
   } catch {
     return null;
   }
+}
+
+export async function loadThemePackage(
+  kv: KVLike | null,
+  slug: string,
+  bucket: R2Bucket | null = null,
+): Promise<ThemePackageRecord | null> {
+  const normalized = slug.trim().toLowerCase();
+  const cached = packageCache.get(normalized);
+  if (cached) return cached;
+
+  if (kv) {
+    const raw = await kv.get(themePackageKvKey(normalized));
+    if (raw) {
+      const pkg = parseThemePackageRecord(String(raw));
+      if (pkg) {
+        packageCache.set(normalized, pkg);
+        return pkg;
+      }
+    }
+  }
+
+  if (bucket) {
+    return loadThemePackageFromR2(bucket, normalized, kv);
+  }
+
+  return null;
 }
 
 export function clearThemePackageCache(slug?: string): void {

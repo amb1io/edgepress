@@ -69,6 +69,7 @@ function baseContext(overrides: Partial<ThemeRenderContext> = {}): ThemeRenderCo
     is_search: false,
     is_404: false,
     have_posts: true,
+    _usedFeatures: new Set<string>(),
     ...overrides,
   };
 }
@@ -331,6 +332,44 @@ describe("renderTheme", () => {
     expect(html).toContain("edgepress-blocknote-data");
     expect(html).toContain("blocknote-readonly-mount");
     expect(html).toContain("blocknote-bundle");
+  });
+
+  it("does not inject BlockNote assets when body_blocks exist but blocknote_content tag is not used", async () => {
+    const pkg = minimalPackage({
+      "layouts/base": "<html><head>{% scripts_footer %}</head><body>{% the_content %}</body></html>",
+      index: "{% layout 'layouts/base' %}",
+    });
+
+    const html = await renderTheme(
+      {
+        ...pkg,
+        manifest: { ...pkg.manifest, supports: ["home", "blocknote"] },
+      },
+      baseContext({
+        theme: {
+          slug: "test",
+          version: "1.0.0",
+          asset_base_url: "http://localhost:8787/themes-assets/test",
+          supports: ["home", "blocknote"],
+        },
+        post: {
+          id: 1,
+          title: "Home",
+          slug: "home",
+          excerpt: "",
+          body_html: "<p>Body</p>",
+          body_blocks: '[{"id":"a","type":"paragraph"}]',
+          author_name: "",
+          published_at: null,
+          post_type_slug: "page",
+          meta: {},
+        },
+      }),
+    );
+
+    expect(html).toContain("<p>Body</p>");
+    expect(html).not.toContain("blocknote-readonly-mount");
+    expect(html).not.toContain("blocknote-bundle");
   });
 
   it("does not inject BlockNote assets when theme lacks blocknote support", async () => {
