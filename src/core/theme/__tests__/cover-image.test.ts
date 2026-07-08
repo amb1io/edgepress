@@ -46,7 +46,7 @@ describe("resolveMediaPathToAbsoluteUrl", () => {
 });
 
 describe("resolveCoverImageFromMedia", () => {
-  it("matches post_thumbnail_id in media array", () => {
+  it("matches post_thumbnail_id in media array with medium preset by default", () => {
     const post = {
       meta_values: { post_thumbnail_id: 64 },
       media: [
@@ -56,7 +56,18 @@ describe("resolveCoverImageFromMedia", () => {
     };
 
     expect(resolveCoverImageFromMedia(post, baseUrl)).toBe(
-      "http://localhost:8787/api/media/uploads/cover.jpg",
+      "http://localhost:8787/api/media/uploads/cover.jpg?size=medium",
+    );
+  });
+
+  it("applies an explicit size preset", () => {
+    const post = {
+      meta_values: { post_thumbnail_id: 64 },
+      media: [{ id: 64, meta_values: { attachment_path: "/uploads/cover.jpg" } }],
+    };
+
+    expect(resolveCoverImageFromMedia(post, baseUrl, "large")).toBe(
+      "http://localhost:8787/api/media/uploads/cover.jpg?size=large",
     );
   });
 });
@@ -66,7 +77,7 @@ describe("resolveCoverImage", () => {
     getMediaById.mockReset();
   });
 
-  it("falls back to post_thumbnail_path when media is empty", async () => {
+  it("falls back to post_thumbnail_path when media is empty (medium default)", async () => {
     const post = {
       meta_values: {
         post_thumbnail_id: 64,
@@ -76,7 +87,7 @@ describe("resolveCoverImage", () => {
     } as ContentPostDetail;
 
     const url = await resolveCoverImage(post, baseUrl, {} as never, new Map());
-    expect(url).toBe("http://localhost:8787/api/media/uploads/fallback.jpg");
+    expect(url).toBe("http://localhost:8787/api/media/uploads/fallback.jpg?size=medium");
     expect(getMediaById).not.toHaveBeenCalled();
   });
 
@@ -93,9 +104,22 @@ describe("resolveCoverImage", () => {
 
     const cache = new Map<number, string | undefined>();
     const url = await resolveCoverImage(post, baseUrl, {} as never, cache);
-    expect(url).toBe("http://localhost:8787/api/media/uploads/thumb-64.jpg");
+    expect(url).toBe("http://localhost:8787/api/media/uploads/thumb-64.jpg?size=medium");
     expect(getMediaById).toHaveBeenCalledWith({}, 64, undefined);
-    expect(cache.get(64)).toBe(url);
+    // Cache stores the original (unsized) URL so other presets can reuse it.
+    expect(cache.get(64)).toBe("http://localhost:8787/api/media/uploads/thumb-64.jpg");
+  });
+
+  it("applies large preset for singular/SEO covers", async () => {
+    const post = {
+      meta_values: {
+        post_thumbnail_path: "/uploads/hero.jpg",
+      },
+      media: [],
+    } as ContentPostDetail;
+
+    const url = await resolveCoverImage(post, baseUrl, {} as never, new Map(), undefined, "large");
+    expect(url).toBe("http://localhost:8787/api/media/uploads/hero.jpg?size=large");
   });
 
   it("reuses attachment cache for repeated thumb ids", async () => {
@@ -111,7 +135,7 @@ describe("resolveCoverImage", () => {
 
     const cache = new Map<number, string | undefined>();
     await resolveCoverImage(post, baseUrl, {} as never, cache);
-    await resolveCoverImage(post, baseUrl, {} as never, cache);
+    await resolveCoverImage(post, baseUrl, {} as never, cache, undefined, "large");
     expect(getMediaById).toHaveBeenCalledTimes(1);
   });
 });
