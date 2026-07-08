@@ -5,7 +5,10 @@ import {
   locales,
   postTypes,
   posts,
+  postsMedia,
+  postsTaxonomies,
   settings,
+  taxonomies,
   translations,
   translationsLanguages,
   user,
@@ -24,6 +27,7 @@ import {
   buildExportFilename,
   resolveImportTableOrder,
   restoreImport,
+  sanitizeDatabasePayload,
   type ArchiveKvLike,
 } from "../edgepress-archive.ts";
 import { createArchiveTestDb } from "./edgepress-archive-db.setup.ts";
@@ -150,6 +154,59 @@ describe("edgepress-archive unit", () => {
     expect(order.indexOf("user")).toBeLessThan(order.indexOf("account"));
     expect(order.indexOf("post_types")).toBeLessThan(order.indexOf("user"));
     expect(order.indexOf("posts")).toBeGreaterThan(order.indexOf("account"));
+  });
+
+  it("sanitizeDatabasePayload drops dangling FK rows and clears missing parents/authors", () => {
+    const sanitized = sanitizeDatabasePayload({
+      tables: {
+        user: [{ id: "user-1", name: "A", email: "a@example.com" }],
+        account: [
+          { id: "acc-ok", userId: "user-1", accountId: "user-1", providerId: "credential" },
+          { id: "acc-orphan", userId: "missing-user", accountId: "missing-user", providerId: "credential" },
+        ],
+        taxonomies: [
+          { id: 1, name: "Cat", slug: "cat", type: "category", parent_id: null },
+          { id: 2, name: "Child", slug: "child", type: "category", parent_id: 999 },
+        ],
+        posts: [
+          { id: 1, author_id: "user-1", parent_id: null, title: "ok" },
+          { id: 2, author_id: "missing-user", parent_id: 999, title: "orphan-refs" },
+        ],
+        posts_taxonomies: [
+          { post_id: 1, term_id: 1 },
+          { post_id: 2, term_id: 1 },
+          { post_id: 99, term_id: 1 },
+          { post_id: 1, term_id: 88 },
+        ],
+        posts_media: [
+          { post_id: 1, media_id: 2 },
+          { post_id: 1, media_id: 99 },
+          { post_id: 99, media_id: 2 },
+        ],
+        seo_metadata: [
+          { id: 1, post_id: 1, seo_title: "ok" },
+          { id: 2, post_id: 99, seo_title: "orphan" },
+        ],
+      },
+    });
+
+    expect(sanitized.tables.account).toEqual([
+      { id: "acc-ok", userId: "user-1", accountId: "user-1", providerId: "credential" },
+    ]);
+    expect(sanitized.tables.posts).toEqual([
+      { id: 1, author_id: "user-1", parent_id: null, title: "ok" },
+      { id: 2, author_id: null, parent_id: null, title: "orphan-refs" },
+    ]);
+    expect(sanitized.tables.taxonomies).toEqual([
+      { id: 1, name: "Cat", slug: "cat", type: "category", parent_id: null },
+      { id: 2, name: "Child", slug: "child", type: "category", parent_id: null },
+    ]);
+    expect(sanitized.tables.posts_taxonomies).toEqual([
+      { post_id: 1, term_id: 1 },
+      { post_id: 2, term_id: 1 },
+    ]);
+    expect(sanitized.tables.posts_media).toEqual([{ post_id: 1, media_id: 2 }]);
+    expect(sanitized.tables.seo_metadata).toEqual([{ id: 1, post_id: 1, seo_title: "ok" }]);
   });
 
   it("restoreImport rejects invalid manifest format", async () => {
@@ -435,6 +492,185 @@ describe("edgepress-archive integration", () => {
     const accounts = await db.select({ id: account.id, userId: account.userId }).from(account);
     expect(users).toEqual([{ id: "user-auth-1" }]);
     expect(accounts).toEqual([{ id: "account-auth-1", userId: "user-auth-1" }]);
+  });
+
+  it("restoreImport drops orphan accounts that would violate FK constraints", async () => {
+    const { createTarGzip } = await import("nanotar");
+    const { db } = await createArchiveTestDb();
+    const bucket = createMockR2Bucket();
+    const now = Date.now();
+
+    const archive = await createTarGzip([
+      {
+        name: "manifest.json",
+        data: JSON.stringify({
+          format: EDGEPRESS_FORMAT,
+          schemaVersion: EDGEPRESS_SCHEMA_VERSION,
+          includes: { database: true, media: false, themes: false },
+          tableOrder: [...TABLE_ORDER],
+          counts: { account: 2, user: 1, post_types: 0 },
+          mediaCount: 0,
+          mediaFiles: [],
+          themeCount: 0,
+          themePackages: [],
+        }),
+      },
+      {
+        name: "database.json",
+        data: JSON.stringify({
+          tables: {
+            post_types: [],
+            user: [
+              {
+                id: "user-auth-1",
+                name: "Admin",
+                email: "admin@example.com",
+                emailVerified: true,
+                createdAt: now,
+                updatedAt: now,
+              },
+            ],
+            account: [
+              {
+                id: "account-orphan",
+                userId: "missing-user",
+                accountId: "missing-user",
+                providerId: "credential",
+                password: "v1:hash-orphan",
+                createdAt: now,
+                updatedAt: now,
+              },
+              {
+                id: "account-auth-1",
+                userId: "user-auth-1",
+                accountId: "user-auth-1",
+                providerId: "credential",
+                password: "v1:hash",
+                createdAt: now,
+                updatedAt: now,
+              },
+            ],
+          },
+        }),
+      },
+    ]);
+
+    await restoreImport(db, bucket, archive.buffer);
+
+    const users = await db.select({ id: user.id }).from(user);
+    const accounts = await db.select({ id: account.id, userId: account.userId }).from(account);
+    expect(users).toEqual([{ id: "user-auth-1" }]);
+    expect(accounts).toEqual([{ id: "account-auth-1", userId: "user-auth-1" }]);
+  });
+
+  it("restoreImport drops orphan pivot rows and clears dangling parent_id", async () => {
+    const { createTarGzip } = await import("nanotar");
+    const { db } = await createArchiveTestDb();
+    const bucket = createMockR2Bucket();
+    const now = Date.now();
+
+    const archive = await createTarGzip([
+      {
+        name: "manifest.json",
+        data: JSON.stringify({
+          format: EDGEPRESS_FORMAT,
+          schemaVersion: EDGEPRESS_SCHEMA_VERSION,
+          includes: { database: true, media: false, themes: false },
+          tableOrder: [...TABLE_ORDER],
+          counts: {
+            post_types: 1,
+            posts: 2,
+            taxonomies: 1,
+            posts_taxonomies: 2,
+            posts_media: 2,
+          },
+          mediaCount: 0,
+          mediaFiles: [],
+          themeCount: 0,
+          themePackages: [],
+        }),
+      },
+      {
+        name: "database.json",
+        data: JSON.stringify({
+          tables: {
+            post_types: [
+              {
+                id: 1,
+                slug: "post",
+                name: "Post",
+                meta_schema: "[]",
+                created_at: now,
+                updated_at: now,
+              },
+            ],
+            taxonomies: [
+              {
+                id: 4,
+                name: "Cliente",
+                slug: "cliente",
+                type: "category",
+                parent_id: 999,
+                created_at: now,
+                updated_at: now,
+              },
+            ],
+            posts: [
+              {
+                id: 11,
+                post_type_id: 1,
+                parent_id: null,
+                title: "Parent Post",
+                slug: "parent-post",
+                status: "published",
+                created_at: now,
+                updated_at: now,
+              },
+              {
+                id: 13,
+                post_type_id: 1,
+                parent_id: 19,
+                title: "Child Missing Parent",
+                slug: "child-missing-parent",
+                status: "published",
+                created_at: now,
+                updated_at: now,
+              },
+            ],
+            posts_taxonomies: [
+              { post_id: 11, term_id: 4 },
+              { post_id: 19, term_id: 4 },
+            ],
+            posts_media: [
+              { post_id: 11, media_id: 13 },
+              { post_id: 11, media_id: 10 },
+            ],
+          },
+        }),
+      },
+    ]);
+
+    await restoreImport(db, bucket, archive.buffer);
+
+    const restoredPosts = await db
+      .select({ id: posts.id, parent_id: posts.parent_id })
+      .from(posts)
+      .orderBy(posts.id);
+    expect(restoredPosts).toEqual([
+      { id: 11, parent_id: null },
+      { id: 13, parent_id: null },
+    ]);
+
+    const restoredTaxonomies = await db
+      .select({ id: taxonomies.id, parent_id: taxonomies.parent_id })
+      .from(taxonomies);
+    expect(restoredTaxonomies).toEqual([{ id: 4, parent_id: null }]);
+
+    const restoredLinks = await db.select().from(postsTaxonomies);
+    expect(restoredLinks).toEqual([{ post_id: 11, term_id: 4 }]);
+
+    const restoredMedia = await db.select().from(postsMedia);
+    expect(restoredMedia).toEqual([{ post_id: 11, media_id: 13 }]);
   });
 
   it("restoreImport skips seed tables from legacy archives", async () => {
