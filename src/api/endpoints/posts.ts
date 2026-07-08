@@ -1,6 +1,6 @@
 // Database
 import { db } from "../../db/index.ts";
-import { locales } from "../../db/schema.ts";
+import { locales, posts as postsTable } from "../../db/schema.ts";
 import { eq } from "drizzle-orm";
 
 // Services
@@ -362,11 +362,18 @@ export async function POST({
 
     const now = Date.now();
     let postId: number;
+    let previousSlugForCache: string | undefined;
 
     // Processar criação ou edição
     if (action === "edit" && postIdParam && parseNumericId(postIdParam)) {
       // EDIÇÃO
       postId = parseInt(postIdParam, 10);
+      const [existingPost] = await db
+        .select({ slug: postsTable.slug })
+        .from(postsTable)
+        .where(eq(postsTable.id, postId))
+        .limit(1);
+      previousSlugForCache = existingPost?.slug;
       const hierarchyParentId = await resolveHierarchyParentId(
         parentIdFromForm,
         postId,
@@ -695,7 +702,12 @@ export async function POST({
     for (const childId of menuChildIds) {
       await syncPostCache(locals, db, childId);
     }
-    await syncPostCache(locals, db, postId);
+    await syncPostCache(
+      locals,
+      db,
+      postId,
+      previousSlugForCache ? { previousSlug: previousSlugForCache } : undefined,
+    );
     if (postId) {
       await syncPostSearchIndex(db, postId);
     }

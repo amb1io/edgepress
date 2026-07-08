@@ -30,3 +30,12 @@ export function isAuthenticatedFromLocals(locals: App.Locals): boolean {
 export function getCacheKvFromLocals(locals: App.Locals): KVLike | null {
   return isAuthenticatedFromLocals(locals) ? null : getKvFromLocals(locals);
 }
+
+/**
+ * Retorna o ExecutionContext do Worker (para waitUntil em cache edge, etc.).
+ */
+export function getExecutionContextFromLocals(
+  locals: App.Locals,
+): ExecutionContext | null {
+  return locals.cfContext ?? null;
+}

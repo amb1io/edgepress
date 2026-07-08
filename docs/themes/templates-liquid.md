@@ -418,9 +418,11 @@ Variante **C3 híbrida** para conteúdo BlockNote:
 
 1. Renderiza o HTML sanitizado imediatamente (fallback SEO / sem JavaScript).
 2. Se `post.body_blocks` existir, inclui um nó de hidratação com o JSON dos blocos.
-3. Quando o tema declara `"blocknote"` em `theme.json` → `supports`, `{% scripts_footer %}` injeta o bundle público BlockNote (CSS + JS) para montar o editor readonly no cliente.
+3. Quando o template **efetivamente usa** `{% blocknote_content %}` e o tema declara `"blocknote"` em `theme.json` → `supports`, `{% scripts_footer %}` injeta o bundle público BlockNote (CSS + JS) para montar o editor readonly no cliente.
 
-Use em páginas com layout BlockNote (colunas, blocos custom). Templates que não precisam de hidratação podem continuar com `{% the_content %}`.
+**Importante:** a presença de `body_blocks` no post **não** carrega o bundle por si só. Só páginas cujo template chama `{% blocknote_content %}` pagam o custo do BlockNote. Templates que usam apenas `{% the_content %}` nunca injetam o bundle, mesmo com `body_blocks` salvos.
+
+Use em páginas com layout BlockNote (colunas, blocos custom). Templates que não precisam de hidratação devem usar `{% the_content %}`.
 
 Opt-in no manifest:
 
@@ -462,7 +464,7 @@ Equivalente a `wp_enqueue_style`. Inclui:
 
 ### `{% scripts_footer %}`
 
-Equivalente a `wp_footer()` (scripts). Inclui HTMX, Alpine.js e `theme.js` do tema. Quando o tema suporta `"blocknote"` e a página atual tem `body_blocks`, também inclui CSS/JS do BlockNote readonly (`/_astro/blocknote-readonly-mount.*`).
+Equivalente a `wp_footer()` (scripts). Inclui HTMX, Alpine.js e `theme.js` do tema. Quando o template da página usou `{% blocknote_content %}`, o tema declara `"blocknote"` em `supports` e há blocos para hidratar, também inclui CSS/JS do BlockNote readonly (`/_astro/blocknote-readonly-mount.*`).
 
 ```html
 <script src="https://unpkg.com/htmx.org@2.0.8" defer></script>
