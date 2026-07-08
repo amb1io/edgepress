@@ -1,6 +1,6 @@
 import { db } from "../../db/index.ts";
-import { getActiveThemeFromDb, getThemeSnapshotById } from "../services/theme-service.ts";
-import { getKvFromLocals } from "../../utils/runtime-locals.ts";
+import { getActiveTheme, getThemeSnapshotById } from "../services/theme-service.ts";
+import { getCacheKvFromLocals, getKvFromLocals } from "../../utils/runtime-locals.ts";
 import { parseMetaValues } from "../../utils/meta-parser.ts";
 import { loadThemePackage } from "./theme-package.ts";
 import { buildThemeRenderContext } from "./context.ts";
@@ -14,7 +14,7 @@ export async function handlePublicThemeRequest(
   const url = new URL(request.url);
 
   const kv = getKvFromLocals(locals);
-  const activeTheme = await getActiveThemeFromDb(db);
+  const activeTheme = await getActiveTheme(db, getCacheKvFromLocals(locals));
   const activeSlug = activeTheme.is_active ? activeTheme.meta.theme_slug?.trim() : "";
   const packageSlug = activeSlug || "";
 

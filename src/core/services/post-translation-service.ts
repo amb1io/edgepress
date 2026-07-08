@@ -11,9 +11,49 @@ import type { Database } from "../../utils/types/database.ts";
 import { db as defaultDb } from "../../db/index.ts";
 import { locales, posts } from "../../db/schema.ts";
 import type { PostRow } from "../../utils/content-post-payload.ts";
+import type { KVLike } from "../../utils/content-cache.ts";
 import { isValidSlug } from "../../utils/validation.ts";
 
 export const TRANSLATION_KEY_META = "translation_key";
+
+/**
+ * Cache Key: `locale:id:{code}`
+ *
+ * Exceção documentada: a tabela `locales` não tem endpoint de CRUD público.
+ * Por isso este cache não tem invalidação automática. Se locales forem
+ * editados manualmente no banco, use `/api/kv-clear` para limpar o KV.
+ */
+export function buildLocaleIdCacheKey(localeCode: string): string {
+  return `locale:id:${localeCode.trim()}`;
+}
+
+export async function getLocaleIdFromCache(
+  kv: KVLike | null | undefined,
+  key: string,
+): Promise<number | null | undefined> {
+  if (!kv) return undefined;
+  try {
+    const cached = (await kv.get(key, "json")) as unknown;
+    if (cached === null) return null;
+    if (typeof cached !== "number" || !Number.isFinite(cached)) return undefined;
+    return cached;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function putLocaleIdCache(
+  kv: KVLike | null | undefined,
+  key: string,
+  value: number | null,
+): Promise<void> {
+  if (!kv) return;
+  try {
+    await kv.put(key, JSON.stringify(value));
+  } catch {
+    // ignora falha de KV
+  }
+}
 
 const POST_SELECT = {
   id: posts.id,
@@ -40,22 +80,31 @@ export function normalizeTranslationKey(raw: string | null | undefined): string 
   return v;
 }
 
+export type LocaleIdCacheOptions = {
+  kv?: KVLike | null;
+};
+
 /** Resolve código de locale (pt-br, en, es_ES) para id em `locales`. */
 export async function resolveLocaleId(
   localeCode: string | null | undefined,
   database: Database = defaultDb,
+  options: LocaleIdCacheOptions = {},
 ): Promise<number | null> {
   const code = String(localeCode ?? "").trim();
   if (!code) return null;
+
+  const cacheKey = buildLocaleIdCacheKey(code);
+  const cached = await getLocaleIdFromCache(options.kv, cacheKey);
+  if (cached !== undefined) return cached;
 
   const [row] = await database
     .select({ id: locales.id })
     .from(locales)
     .where(eq(locales.locale_code, code))
     .limit(1);
-  if (row) return row.id;
-
-  return null;
+  const value = row?.id ?? null;
+  await putLocaleIdCache(options.kv, cacheKey, value);
+  return value;
 }
 
 function translationKeyMatch(key: string) {

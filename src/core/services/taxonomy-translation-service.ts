@@ -2,8 +2,20 @@
  * Resolução de termos de taxonomia por slug canônico ou traduzido (namespace taxonomy.slug).
  */
 import { and, eq, ne, or, isNull } from "drizzle-orm";
-import { locales, taxonomies, translations, translationsLanguages } from "../../db/schema.ts";
+import { taxonomies, translations, translationsLanguages } from "../../db/schema.ts";
 import type { Database } from "../../shared/types/database.ts";
+import type { KVLike } from "../../utils/content-cache.ts";
+import {
+  buildTaxonomyI18nCacheKey,
+  buildTaxonomyTermCacheKey,
+  buildTaxonomyTypeOriginalCacheKey,
+  getTaxonomyI18nFromCache,
+  getTaxonomyTermFromCache,
+  getTaxonomyTypeOriginalFromCache,
+  putTaxonomyI18nCache,
+  putTaxonomyTermCache,
+  putTaxonomyTypeOriginalCache,
+} from "../../utils/taxonomy-cache.ts";
 import {
   TAXONOMY_SLUG_I18N_NAMESPACE,
   TAXONOMY_TYPE_I18N_NAMESPACE,
@@ -17,14 +29,23 @@ export type TaxonomyTermRow = {
   type: string;
 };
 
+export type TaxonomyCacheOptions = {
+  kv?: KVLike | null;
+};
+
 export async function findTaxonomyByCanonicalSlug(
   db: Database,
   taxonomyType: string,
   slug: string,
+  options: TaxonomyCacheOptions = {},
 ): Promise<TaxonomyTermRow | null> {
   const type = taxonomyType.trim();
   const canonical = slug.trim();
   if (!type || !canonical) return null;
+
+  const cacheKey = buildTaxonomyTermCacheKey(type, canonical);
+  const cached = await getTaxonomyTermFromCache(options.kv, cacheKey);
+  if (cached !== undefined) return cached;
 
   const [row] = await db
     .select({
@@ -37,13 +58,18 @@ export async function findTaxonomyByCanonicalSlug(
     .where(and(eq(taxonomies.type, type), eq(taxonomies.slug, canonical)))
     .limit(1);
 
-  if (!row) return null;
-  return {
+  if (!row) {
+    await putTaxonomyTermCache(options.kv, cacheKey, null);
+    return null;
+  }
+  const term = {
     id: row.id,
     name: String(row.name ?? ""),
     slug: String(row.slug ?? ""),
     type: String(row.type ?? type),
   };
+  await putTaxonomyTermCache(options.kv, cacheKey, term);
+  return term;
 }
 
 async function findCanonicalSlugByTranslatedSlug(
@@ -76,26 +102,27 @@ export async function resolveTaxonomyTermBySlug(
   taxonomyType: string,
   slugOrTranslatedSlug: string,
   localeCode?: string | null,
+  options: TaxonomyCacheOptions = {},
 ): Promise<TaxonomyTermRow | null> {
   const input = slugOrTranslatedSlug.trim();
   if (!input) return null;
 
-  const direct = await findTaxonomyByCanonicalSlug(db, taxonomyType, input);
+  const direct = await findTaxonomyByCanonicalSlug(db, taxonomyType, input, options);
   if (direct) return direct;
 
-  const localeId = localeCode ? await resolveLocaleId(localeCode, db) : null;
+  const localeId = localeCode ? await resolveLocaleId(localeCode, db, options) : null;
 
   if (localeId != null) {
     const canonical = await findCanonicalSlugByTranslatedSlug(db, input, localeId);
     if (canonical) {
-      const term = await findTaxonomyByCanonicalSlug(db, taxonomyType, canonical);
+      const term = await findTaxonomyByCanonicalSlug(db, taxonomyType, canonical, options);
       if (term) return term;
     }
   }
 
   const canonicalAny = await findCanonicalSlugByTranslatedSlug(db, input, null);
   if (!canonicalAny) return null;
-  return findTaxonomyByCanonicalSlug(db, taxonomyType, canonicalAny);
+  return findTaxonomyByCanonicalSlug(db, taxonomyType, canonicalAny, options);
 }
 
 export async function resolveTaxonomySlugForFilter(
@@ -103,14 +130,15 @@ export async function resolveTaxonomySlugForFilter(
   taxonomyType: string,
   slugOrTranslatedSlug: string,
   localeCode?: string | null,
+  options: TaxonomyCacheOptions = {},
 ): Promise<string | null> {
   const input = slugOrTranslatedSlug.trim();
   if (!input) return null;
 
-  const direct = await findTaxonomyByCanonicalSlug(db, taxonomyType, input);
+  const direct = await findTaxonomyByCanonicalSlug(db, taxonomyType, input, options);
   if (direct) return direct.slug;
 
-  const term = await resolveTaxonomyTermBySlug(db, taxonomyType, input, localeCode);
+  const term = await resolveTaxonomyTermBySlug(db, taxonomyType, input, localeCode, options);
   return term?.slug ?? null;
 }
 
@@ -119,9 +147,17 @@ async function getTranslationValue(
   namespace: string,
   key: string,
   localeCode: string,
+  options: TaxonomyCacheOptions = {},
 ): Promise<string | null> {
-  const localeId = await resolveLocaleId(localeCode, db);
-  if (localeId == null) return null;
+  const cacheKey = buildTaxonomyI18nCacheKey(namespace, key, localeCode);
+  const cached = await getTaxonomyI18nFromCache(options.kv, cacheKey);
+  if (cached !== undefined) return cached;
+
+  const localeId = await resolveLocaleId(localeCode, db, options);
+  if (localeId == null) {
+    await putTaxonomyI18nCache(options.kv, cacheKey, null);
+    return null;
+  }
 
   const [row] = await db
     .select({ value: translationsLanguages.value })
@@ -136,18 +172,26 @@ async function getTranslationValue(
     )
     .limit(1);
 
-  const value = row?.value?.trim();
-  return value || null;
+  const value = row?.value?.trim() || null;
+  await putTaxonomyI18nCache(options.kv, cacheKey, value);
+  return value;
 }
 
 export async function getLocalizedTaxonomySlug(
   db: Database,
   canonicalSlug: string,
   localeCode: string,
+  options: TaxonomyCacheOptions = {},
 ): Promise<string> {
   const key = canonicalSlug.trim();
   if (!key) return "";
-  const translated = await getTranslationValue(db, TAXONOMY_SLUG_I18N_NAMESPACE, key, localeCode);
+  const translated = await getTranslationValue(
+    db,
+    TAXONOMY_SLUG_I18N_NAMESPACE,
+    key,
+    localeCode,
+    options,
+  );
   return translated ?? key;
 }
 
@@ -156,10 +200,17 @@ export async function getLocalizedTaxonomyName(
   canonicalSlug: string,
   fallbackName: string,
   localeCode: string,
+  options: TaxonomyCacheOptions = {},
 ): Promise<string> {
   const key = canonicalSlug.trim();
   if (!key) return fallbackName;
-  const translated = await getTranslationValue(db, TAXONOMY_TYPE_I18N_NAMESPACE, key, localeCode);
+  const translated = await getTranslationValue(
+    db,
+    TAXONOMY_TYPE_I18N_NAMESPACE,
+    key,
+    localeCode,
+    options,
+  );
   return translated ?? fallbackName;
 }
 
@@ -167,10 +218,11 @@ export async function getLocalizedTaxonomyTerm(
   db: Database,
   term: TaxonomyTermRow,
   localeCode: string,
+  options: TaxonomyCacheOptions = {},
 ): Promise<{ name: string; slug: string }> {
   const [name, slug] = await Promise.all([
-    getLocalizedTaxonomyName(db, term.slug, term.name, localeCode),
-    getLocalizedTaxonomySlug(db, term.slug, localeCode),
+    getLocalizedTaxonomyName(db, term.slug, term.name, localeCode, options),
+    getLocalizedTaxonomySlug(db, term.slug, localeCode, options),
   ]);
   return { name, slug };
 }
@@ -178,9 +230,14 @@ export async function getLocalizedTaxonomyTerm(
 export async function getTaxonomyTypeOriginal(
   db: Database,
   taxonomyType: string,
+  options: TaxonomyCacheOptions = {},
 ): Promise<{ original_name: string; original_slug: string }> {
   const canonical = taxonomyType.trim();
   if (!canonical) return { original_name: "", original_slug: "" };
+
+  const cacheKey = buildTaxonomyTypeOriginalCacheKey(canonical);
+  const cached = await getTaxonomyTypeOriginalFromCache(options.kv, cacheKey);
+  if (cached) return cached;
 
   const [root] = await db
     .select({ name: taxonomies.name, slug: taxonomies.slug })
@@ -193,17 +250,20 @@ export async function getTaxonomyTypeOriginal(
     )
     .limit(1);
 
-  return {
+  const value = {
     original_name: root?.name ? String(root.name) : canonical,
     original_slug: root?.slug ? String(root.slug) : canonical,
   };
+  await putTaxonomyTypeOriginalCache(options.kv, cacheKey, value);
+  return value;
 }
 
 export async function getTaxonomyTypeFallbackName(
   db: Database,
   taxonomyType: string,
+  options: TaxonomyCacheOptions = {},
 ): Promise<string> {
-  const { original_name } = await getTaxonomyTypeOriginal(db, taxonomyType);
+  const { original_name } = await getTaxonomyTypeOriginal(db, taxonomyType, options);
   return original_name;
 }
 
@@ -211,6 +271,7 @@ export async function getLocalizedTaxonomyType(
   db: Database,
   taxonomyType: string,
   localeCode: string,
+  options: TaxonomyCacheOptions = {},
 ): Promise<{
   name: string;
   slug: string;
@@ -222,10 +283,10 @@ export async function getLocalizedTaxonomyType(
     return { name: "", slug: "", original_name: "", original_slug: "" };
   }
 
-  const original = await getTaxonomyTypeOriginal(db, canonical);
+  const original = await getTaxonomyTypeOriginal(db, canonical, options);
   const [name, slug] = await Promise.all([
-    getLocalizedTaxonomyName(db, canonical, original.original_name, localeCode),
-    getLocalizedTaxonomySlug(db, canonical, localeCode),
+    getLocalizedTaxonomyName(db, canonical, original.original_name, localeCode, options),
+    getLocalizedTaxonomySlug(db, canonical, localeCode, options),
   ]);
   return { name, slug, ...original };
 }

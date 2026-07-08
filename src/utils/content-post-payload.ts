@@ -16,6 +16,11 @@ import {
   type SeoApiPayload,
 } from "./services/seo-metadata-service.ts";
 import { buildPostJsonLd } from "./services/json-ld-service.ts";
+import type { KVLike } from "./content-cache.ts";
+import {
+  getCustomFieldsFromCache,
+  putCustomFieldsCache,
+} from "./custom-fields-cache.ts";
 
 export type PostRow = {
   id: number;
@@ -117,8 +122,12 @@ function mapCustomFieldRow(r: CustomFieldRow): CustomFieldItem {
 /** Busca custom fields (posts filhos tipo custom_fields) e devolve como JSON estruturado. */
 export async function getPostCustomFields(
   db: Database,
-  postId: number
+  postId: number,
+  kv?: KVLike | null,
 ): Promise<CustomFieldItem[]> {
+  const cached = await getCustomFieldsFromCache(kv, postId);
+  if (cached) return cached;
+
   const customFieldsTypeId = await getPostTypeId(db, "custom_fields");
   if (!customFieldsTypeId) return [];
 
@@ -132,7 +141,9 @@ export async function getPostCustomFields(
     .from(posts)
     .where(and(eq(posts.parent_id, postId), eq(posts.post_type_id, customFieldsTypeId)));
 
-  return rows.map(mapCustomFieldRow);
+  const fields = rows.map(mapCustomFieldRow);
+  await putCustomFieldsCache(kv, postId, fields);
+  return fields;
 }
 
 /** D1 allows at most 100 bound parameters per query; reserve 1 for post_type_id. */
@@ -142,16 +153,29 @@ export const CUSTOM_FIELDS_BATCH_CHUNK_SIZE = 99;
 export async function getPostsCustomFieldsBatch(
   db: Database,
   postIds: number[],
+  kv?: KVLike | null,
 ): Promise<Map<number, CustomFieldItem[]>> {
   const result = new Map<number, CustomFieldItem[]>();
   const uniqueIds = [...new Set(postIds.filter((id) => Number.isFinite(id) && id > 0))];
   if (uniqueIds.length === 0) return result;
 
+  const missingIds: number[] = [];
+  for (const id of uniqueIds) {
+    const cached = await getCustomFieldsFromCache(kv, id);
+    if (cached) {
+      result.set(id, cached);
+    } else {
+      missingIds.push(id);
+    }
+  }
+
+  if (missingIds.length === 0) return result;
+
   const customFieldsTypeId = await getPostTypeId(db, "custom_fields");
   if (!customFieldsTypeId) return result;
 
-  for (let i = 0; i < uniqueIds.length; i += CUSTOM_FIELDS_BATCH_CHUNK_SIZE) {
-    const chunk = uniqueIds.slice(i, i + CUSTOM_FIELDS_BATCH_CHUNK_SIZE);
+  for (let i = 0; i < missingIds.length; i += CUSTOM_FIELDS_BATCH_CHUNK_SIZE) {
+    const chunk = missingIds.slice(i, i + CUSTOM_FIELDS_BATCH_CHUNK_SIZE);
     const rows = await db
       .select({
         id: posts.id,
@@ -178,12 +202,19 @@ export async function getPostsCustomFieldsBatch(
     }
   }
 
+  for (const id of missingIds) {
+    const fields = result.get(id) ?? [];
+    result.set(id, fields);
+    await putCustomFieldsCache(kv, id, fields);
+  }
+
   return result;
 }
 
 /** Monta o payload completo do post com hierarquia: post (pai) + meta_schema, meta_values, custom_fields, body_smart, media, taxonomies. */
 export type BuildContentPostPayloadOptions = {
   baseUrl?: string;
+  kv?: KVLike | null;
 };
 
 export async function buildContentPostPayload(
@@ -216,7 +247,7 @@ export async function buildContentPostPayload(
   const [meta_schema, custom_fields, media, taxonomiesList, seoRow, postTypeRow] =
     await Promise.all([
       getPostMetaSchema(db, post.post_type_id),
-      getPostCustomFields(db, post.id),
+      getPostCustomFields(db, post.id, options?.kv),
       getPostMedia(db as never, post.id),
       getPostTaxonomiesForPayload(db, post.id),
       getSeoMetadataForPost(db, post.id),

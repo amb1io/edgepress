@@ -14,6 +14,7 @@ import { db } from "../../../db/index.ts";
 import { getMediaById } from "../../../core/services/media-service.ts";
 import { parseMetaValues } from "../../../utils/meta-parser.ts";
 import { env as cfEnv } from "cloudflare:workers";
+import { getCacheKvFromLocals } from "../../../utils/runtime-locals.ts";
 
 export const prerender = false;
 
@@ -105,7 +106,7 @@ function pathToR2Key(path: string): string {
 /** Content types para os quais aplicamos otimização via Cloudflare Image Resizing (apenas imagens). */
 const IMAGE_CONTENT_TYPES = /^image\/(jpeg|jpg|png|gif|webp|avif|bmp|ico|svg\+xml)/i;
 
-export const GET: APIRoute = async ({ params, request }) => {
+export const GET: APIRoute = async ({ params, request, locals }) => {
   const pathArray = params["path"];
   if (!pathArray || (Array.isArray(pathArray) && pathArray.length === 0)) {
     return new Response("Not Found", { status: 404 });
@@ -130,7 +131,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   const isIdSegment = !path.includes("/") && /^\d+$/.test(path);
   if (isIdSegment) {
     const mediaId = parseInt(path, 10);
-    const media = await getMediaById(db, mediaId);
+    const media = await getMediaById(db, mediaId, getCacheKvFromLocals(locals));
     if (!media) {
       return new Response("File not found", { status: 404 });
     }

@@ -94,7 +94,7 @@ describe("resolveCoverImage", () => {
     const cache = new Map<number, string | undefined>();
     const url = await resolveCoverImage(post, baseUrl, {} as never, cache);
     expect(url).toBe("http://localhost:8787/api/media/uploads/thumb-64.jpg");
-    expect(getMediaById).toHaveBeenCalledWith({}, 64);
+    expect(getMediaById).toHaveBeenCalledWith({}, 64, undefined);
     expect(cache.get(64)).toBe(url);
   });
 

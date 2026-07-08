@@ -10,6 +10,7 @@ export type LocaleSwitcherOptions = {
   archivePostType?: string;
   taxonomyCanonicalSlug?: string;
   db?: Database;
+  kv?: import("../../utils/content-cache.ts").KVLike | null;
 };
 
 /** URL for switching to `targetLocale` while preserving the current public route shape. */
@@ -24,7 +25,12 @@ export async function buildLocaleSwitcherUrl(
     let termSlug = route.taxonomySlug;
     if (options.taxonomyCanonicalSlug && options.db) {
       const dbLocale = adminUrlLocaleToDbCode(targetLocale);
-      termSlug = await getLocalizedTaxonomySlug(options.db, options.taxonomyCanonicalSlug, dbLocale);
+      termSlug = await getLocalizedTaxonomySlug(
+        options.db,
+        options.taxonomyCanonicalSlug,
+        dbLocale,
+        { kv: options.kv },
+      );
     }
     return buildTaxonomyPublicPath(route.taxonomyType, termSlug, prefix);
   }

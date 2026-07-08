@@ -6,6 +6,7 @@ import type { APIRoute } from "astro";
 import { db } from "../../../db/index.ts";
 import { getImageAttachments } from "../../../core/services/media-service.ts";
 import { parseMetaValues } from "../../../utils/meta-parser.ts";
+import { getCacheKvFromLocals } from "../../../utils/runtime-locals.ts";
 
 export const prerender = false;
 
@@ -18,10 +19,15 @@ function attachmentPathToUrl(attachmentPath: string): string {
   return `/api/media/uploads/${attachmentPath}`;
 }
 
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ url, locals }) => {
   const limit = 100;
   const search = url.searchParams.get("q") ?? undefined;
-  const mediaList = await getImageAttachments(db, limit, search);
+  const mediaList = await getImageAttachments(
+    db,
+    limit,
+    search,
+    getCacheKvFromLocals(locals),
+  );
 
   const items = mediaList.map((m) => {
     const meta = parseMetaValues(m.meta_values);
