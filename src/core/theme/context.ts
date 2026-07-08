@@ -4,9 +4,12 @@ import {
   createEdgepressContent,
   type ContentPostDetail,
 } from "../services/edgepress-content.ts";
-import { getSettingsFromDb } from "../services/settings-service.ts";
+import { getSettingsWithCache } from "../services/settings-service.ts";
 import { db } from "../../db/index.ts";
-import { getKvFromLocals } from "../../utils/runtime-locals.ts";
+import {
+  getCacheKvFromLocals,
+  isAuthenticatedFromLocals,
+} from "../../utils/runtime-locals.ts";
 import { adminUrlLocaleToDbCode } from "../../utils/admin-locale-constants.ts";
 import type {
   MenuItem,
@@ -39,12 +42,30 @@ import {
 import type { ThemeRouteKind } from "./types.ts";
 import type { EdgepressContent } from "../services/edgepress-content.ts";
 import { loadPublishedMenusByLocation, type MenuItemPublicRaw } from "../services/menu-items-service.ts";
+import {
+  buildMenuCacheKey,
+  getMenusFromCache,
+  putMenusCache,
+} from "../../utils/menu-cache.ts";
 import { searchPosts } from "../services/search-service.ts";
 import { resolveLocaleId } from "../services/post-translation-service.ts";
 import { buildContentPostPayload } from "../../utils/content-post-payload.ts";
 import { inArray } from "drizzle-orm";
 import { injectCategoryMeta } from "./post-category-meta.ts";
 import { injectCustomFieldsMeta } from "./custom-fields-meta.ts";
+import { posts as postsTable } from "../../db/schema.ts";
+
+async function loadMenusWithCache(
+  cacheKv: ReturnType<typeof getCacheKvFromLocals>,
+  dbLocale: string,
+): Promise<Record<string, MenuItemPublicRaw[]>> {
+  const key = buildMenuCacheKey(dbLocale);
+  const cached = await getMenusFromCache(cacheKv, key);
+  if (cached) return cached;
+  const menus = await loadPublishedMenusByLocation(db, dbLocale);
+  await putMenusCache(cacheKv, key, menus);
+  return menus;
+}
 
 function routeContextFields(
   route: ResolvedPublicRoute,
@@ -135,8 +156,9 @@ async function enrichPostViewWithCover(
   source: ContentPostDetail,
   baseUrl: string,
   cache: CoverImageAttachmentCache,
+  kv?: ReturnType<typeof getCacheKvFromLocals>,
 ): Promise<ThemePostView> {
-  const cover = await resolveCoverImage(source, baseUrl, db, cache);
+  const cover = await resolveCoverImage(source, baseUrl, db, cache, kv);
   return cover ? { ...view, cover_image: cover } : view;
 }
 
@@ -144,6 +166,7 @@ function buildGetRelatedPostsHandler(
   content: EdgepressContent,
   dbLocale: string,
   baseUrl: string,
+  cacheKv: ReturnType<typeof getCacheKvFromLocals>,
 ) {
   return createGetRelatedPostsHandler(async (idOrSlug, limit) => {
     const rows = filterPublicThemeListPosts(
@@ -156,9 +179,61 @@ function buildGetRelatedPostsHandler(
     const attachmentCache: CoverImageAttachmentCache = new Map();
     return Promise.all(
       rows.map(async (item) =>
-        enrichPostViewWithCover(toPostView(item), item, baseUrl, attachmentCache),
+        enrichPostViewWithCover(toPostView(item), item, baseUrl, attachmentCache, cacheKv),
       ),
     );
+  });
+}
+
+function buildLocalizedGetTaxonomiesHandler(
+  content: EdgepressContent,
+  database: typeof db,
+  dbLocale: string,
+  cacheKv: ReturnType<typeof getCacheKvFromLocals>,
+) {
+  const taxonomyCache = { kv: cacheKv };
+  return createGetTaxonomiesHandler(async (postType, taxonomyType) => {
+    const res = await content.getTaxonomies(postType, taxonomyType);
+    return Promise.all(
+      res.items.map(async (item) => {
+        const term = {
+          id: Number(item.id ?? 0),
+          name: String(item.name ?? ""),
+          slug: String(item.slug ?? ""),
+          type: taxonomyType,
+        };
+        const localized = await getLocalizedTaxonomyTerm(database, term, dbLocale, taxonomyCache);
+        return { ...item, name: localized.name, slug: localized.slug };
+      }),
+    );
+  });
+}
+
+function buildGetTaxonomiesLocaleHandler(
+  content: EdgepressContent,
+  database: typeof db,
+  cacheKv: ReturnType<typeof getCacheKvFromLocals>,
+) {
+  const taxonomyCache = { kv: cacheKv };
+  return createGetTaxonomiesLocaleHandler(async (postType, taxonomyType, locale) => {
+    const dbLocale = adminUrlLocaleToDbCode(locale);
+    const [res, taxonomy] = await Promise.all([
+      content.getTaxonomies(postType, taxonomyType),
+      getLocalizedTaxonomyType(database, taxonomyType, dbLocale, taxonomyCache),
+    ]);
+    const values = await Promise.all(
+      res.items.map(async (item) => {
+        const term = {
+          id: Number(item.id ?? 0),
+          name: String(item.name ?? ""),
+          slug: String(item.slug ?? ""),
+          type: taxonomyType,
+        };
+        const localized = await getLocalizedTaxonomyTerm(database, term, dbLocale, taxonomyCache);
+        return { id: term.id, name: localized.name, slug: localized.slug, locale };
+      }),
+    );
+    return { taxonomy, values };
   });
 }
 
@@ -167,13 +242,16 @@ function buildGetTaxonomyPostsHandler(
   dbLocale: string,
   baseUrl: string,
   database: typeof db,
+  cacheKv: ReturnType<typeof getCacheKvFromLocals>,
 ) {
+  const taxonomyCache = { kv: cacheKv };
   return createGetTaxonomyPostsHandler(async (taxonomyType, taxonomySlug, limit) => {
     const canonicalSlug = await resolveTaxonomySlugForFilter(
       database,
       taxonomyType,
       taxonomySlug,
       dbLocale,
+      taxonomyCache,
     );
     if (!canonicalSlug) return [];
 
@@ -191,50 +269,9 @@ function buildGetTaxonomyPostsHandler(
     const attachmentCache: CoverImageAttachmentCache = new Map();
     return Promise.all(
       filtered.map(async (item) =>
-        enrichPostViewWithCover(toPostView(item), item, baseUrl, attachmentCache),
+        enrichPostViewWithCover(toPostView(item), item, baseUrl, attachmentCache, cacheKv),
       ),
     );
-  });
-}
-
-function buildLocalizedGetTaxonomiesHandler(content: EdgepressContent, database: typeof db, dbLocale: string) {
-  return createGetTaxonomiesHandler(async (postType, taxonomyType) => {
-    const res = await content.getTaxonomies(postType, taxonomyType);
-    return Promise.all(
-      res.items.map(async (item) => {
-        const term = {
-          id: Number(item.id ?? 0),
-          name: String(item.name ?? ""),
-          slug: String(item.slug ?? ""),
-          type: taxonomyType,
-        };
-        const localized = await getLocalizedTaxonomyTerm(database, term, dbLocale);
-        return { ...item, name: localized.name, slug: localized.slug };
-      }),
-    );
-  });
-}
-
-function buildGetTaxonomiesLocaleHandler(content: EdgepressContent, database: typeof db) {
-  return createGetTaxonomiesLocaleHandler(async (postType, taxonomyType, locale) => {
-    const dbLocale = adminUrlLocaleToDbCode(locale);
-    const [res, taxonomy] = await Promise.all([
-      content.getTaxonomies(postType, taxonomyType),
-      getLocalizedTaxonomyType(database, taxonomyType, dbLocale),
-    ]);
-    const values = await Promise.all(
-      res.items.map(async (item) => {
-        const term = {
-          id: Number(item.id ?? 0),
-          name: String(item.name ?? ""),
-          slug: String(item.slug ?? ""),
-          type: taxonomyType,
-        };
-        const localized = await getLocalizedTaxonomyTerm(database, term, dbLocale);
-        return { id: term.id, name: localized.name, slug: localized.slug, locale };
-      }),
-    );
-    return { taxonomy, values };
   });
 }
 
@@ -243,6 +280,7 @@ function buildGetPostsListHandler(
   dbLocale: string,
   baseUrl: string,
   includeCustomFields: boolean,
+  cacheKv: ReturnType<typeof getCacheKvFromLocals>,
 ) {
   return createGetPostsHandler(async (postTypeSlug, limit) => {
     const listResult = await content.getList("posts", {
@@ -257,7 +295,7 @@ function buildGetPostsListHandler(
     const attachmentCache: CoverImageAttachmentCache = new Map();
     return Promise.all(
       filtered.map(async (item) =>
-        enrichPostViewWithCover(toPostView(item), item, baseUrl, attachmentCache),
+        enrichPostViewWithCover(toPostView(item), item, baseUrl, attachmentCache, cacheKv),
       ),
     );
   });
@@ -267,16 +305,18 @@ function buildGetPostsHandler(
   content: EdgepressContent,
   dbLocale: string,
   baseUrl: string,
+  cacheKv: ReturnType<typeof getCacheKvFromLocals>,
 ) {
-  return buildGetPostsListHandler(content, dbLocale, baseUrl, false);
+  return buildGetPostsListHandler(content, dbLocale, baseUrl, false, cacheKv);
 }
 
 function buildGetPostsDetailsHandler(
   content: EdgepressContent,
   dbLocale: string,
   baseUrl: string,
+  cacheKv: ReturnType<typeof getCacheKvFromLocals>,
 ) {
-  return buildGetPostsListHandler(content, dbLocale, baseUrl, true);
+  return buildGetPostsListHandler(content, dbLocale, baseUrl, true, cacheKv);
 }
 
 function buildGetAuthorHandler(content: EdgepressContent, dbLocale: string) {
@@ -316,9 +356,10 @@ export async function buildThemeRenderContext(
 ): Promise<ThemeRenderContext> {
   const baseUrl = requestUrl.origin;
   const content = createEdgepressContent(locals, { baseUrl });
-  const kv = getKvFromLocals(locals);
-  const settings = await getSettingsFromDb(db, {
-    names: ["site_name", "site_description"],
+  const settings = await getSettingsWithCache(db, {
+    namesParam: "site_name,site_description",
+    kv: getCacheKvFromLocals(locals),
+    isAuthenticated: isAuthenticatedFromLocals(locals),
   });
 
   const siteName = String(settings["site_name"] ?? "").trim() || "Site";
@@ -332,12 +373,22 @@ export async function buildThemeRenderContext(
   const homeContentKey = pkg.manifest.home_content_key ?? "hello-world";
   const homeListPosts = pkg.manifest.home_list_posts === true;
 
-  const menusPromise = loadPublishedMenusByLocation(db, dbLocale);
+  const cacheKv = getCacheKvFromLocals(locals);
+  const menusPromise = loadMenusWithCache(cacheKv, dbLocale);
 
   if (route.kind === "taxonomy" && route.taxonomyType && route.taxonomySlug) {
     const listPage = route.page ?? 1;
-    const term = await getPublicTaxonomyTerm(db, route.taxonomyType, route.taxonomySlug, dbLocale);
-    const localized = term ? await getLocalizedTaxonomyTerm(db, term, dbLocale) : null;
+    const taxonomyCache = { kv: cacheKv };
+    const term = await getPublicTaxonomyTerm(
+      db,
+      route.taxonomyType,
+      route.taxonomySlug,
+      dbLocale,
+      taxonomyCache,
+    );
+    const localized = term
+      ? await getLocalizedTaxonomyTerm(db, term, dbLocale, taxonomyCache)
+      : null;
     const canonicalSlug = term?.slug;
 
     const [menusByLocation, listResult] = await Promise.all([
@@ -373,7 +424,7 @@ export async function buildThemeRenderContext(
       : [];
     const posts = await Promise.all(
       filteredListPosts.map(async (item) =>
-        enrichPostViewWithCover(toPostView(item), item, baseUrl, attachmentCache),
+        enrichPostViewWithCover(toPostView(item), item, baseUrl, attachmentCache, cacheKv),
       ),
     );
 
@@ -424,6 +475,7 @@ export async function buildThemeRenderContext(
       locale_switcher: await buildLocaleSwitcher(locale, route, resolvedKind, {
         taxonomyCanonicalSlug: term?.slug,
         db,
+        kv: cacheKv,
       }),
       theme: {
         slug: pkg.manifest.slug,
@@ -444,12 +496,12 @@ export async function buildThemeRenderContext(
       is_search: false,
       is_404: resolvedKind === "404",
       have_posts: posts.length > 0,
-      get_taxonomies: buildLocalizedGetTaxonomiesHandler(content, db, dbLocale),
-      get_taxonomies_locale: buildGetTaxonomiesLocaleHandler(content, db),
-      get_related_posts: buildGetRelatedPostsHandler(content, dbLocale, baseUrl),
-      get_taxonomy_posts: buildGetTaxonomyPostsHandler(content, dbLocale, baseUrl, db),
-      get_posts: buildGetPostsHandler(content, dbLocale, baseUrl),
-      get_posts_details: buildGetPostsDetailsHandler(content, dbLocale, baseUrl),
+      get_taxonomies: buildLocalizedGetTaxonomiesHandler(content, db, dbLocale, cacheKv),
+      get_taxonomies_locale: buildGetTaxonomiesLocaleHandler(content, db, cacheKv),
+      get_related_posts: buildGetRelatedPostsHandler(content, dbLocale, baseUrl, cacheKv),
+      get_taxonomy_posts: buildGetTaxonomyPostsHandler(content, dbLocale, baseUrl, db, cacheKv),
+      get_posts: buildGetPostsHandler(content, dbLocale, baseUrl, cacheKv),
+      get_posts_details: buildGetPostsDetailsHandler(content, dbLocale, baseUrl, cacheKv),
       get_author: buildGetAuthorHandler(content, dbLocale),
     };
   }
@@ -458,7 +510,7 @@ export async function buildThemeRenderContext(
     const q = route.searchQuery ?? "";
     const page = route.page ?? 1;
     const postTypeFilter = requestUrl.searchParams.get("post_type")?.trim() || undefined;
-    const localeId = await resolveLocaleId(dbLocale, db);
+    const localeId = await resolveLocaleId(dbLocale, db, { kv: cacheKv });
     const searchLimit = 20;
 
     const [menusByLocation, searchResult] = await Promise.all([
@@ -524,7 +576,7 @@ export async function buildThemeRenderContext(
             ) {
               return null;
             }
-            return enrichPostViewWithCover(toPostView(detail), detail, baseUrl, attachmentCache);
+            return enrichPostViewWithCover(toPostView(detail), detail, baseUrl, attachmentCache, cacheKv);
           }),
         )
       ).filter((item): item is ThemePostView => item != null);
@@ -607,12 +659,12 @@ export async function buildThemeRenderContext(
       is_search: true,
       is_404: false,
       have_posts: posts.length > 0,
-      get_taxonomies: buildLocalizedGetTaxonomiesHandler(content, db, dbLocale),
-      get_taxonomies_locale: buildGetTaxonomiesLocaleHandler(content, db),
-      get_related_posts: buildGetRelatedPostsHandler(content, dbLocale, baseUrl),
-      get_taxonomy_posts: buildGetTaxonomyPostsHandler(content, dbLocale, baseUrl, db),
-      get_posts: buildGetPostsHandler(content, dbLocale, baseUrl),
-      get_posts_details: buildGetPostsDetailsHandler(content, dbLocale, baseUrl),
+      get_taxonomies: buildLocalizedGetTaxonomiesHandler(content, db, dbLocale, cacheKv),
+      get_taxonomies_locale: buildGetTaxonomiesLocaleHandler(content, db, cacheKv),
+      get_related_posts: buildGetRelatedPostsHandler(content, dbLocale, baseUrl, cacheKv),
+      get_taxonomy_posts: buildGetTaxonomyPostsHandler(content, dbLocale, baseUrl, db, cacheKv),
+      get_posts: buildGetPostsHandler(content, dbLocale, baseUrl, cacheKv),
+      get_posts_details: buildGetPostsDetailsHandler(content, dbLocale, baseUrl, cacheKv),
       get_author: buildGetAuthorHandler(content, dbLocale),
     };
   }
@@ -670,7 +722,7 @@ export async function buildThemeRenderContext(
 
   const posts = await Promise.all(
     filteredListPosts.map(async (item) =>
-      enrichPostViewWithCover(toPostView(item), item, baseUrl, attachmentCache),
+      enrichPostViewWithCover(toPostView(item), item, baseUrl, attachmentCache, cacheKv),
     ),
   );
 
@@ -687,6 +739,7 @@ export async function buildThemeRenderContext(
       slugPostData,
       baseUrl,
       attachmentCache,
+      cacheKv,
     );
     finalKind = post.post_type_slug === "post" ? "single" : "page";
   } else if (route.slug && resolvedKind !== "404") {
@@ -698,6 +751,7 @@ export async function buildThemeRenderContext(
       seoPost,
       baseUrl,
       attachmentCache,
+      cacheKv,
     );
     finalKind = "home";
   } else if (route.kind === "home") {
@@ -748,7 +802,7 @@ export async function buildThemeRenderContext(
 
   const canonicalUrl = new URL(route.path || "/", baseUrl).href;
   const seoOgImage = seoPost
-    ? await resolveCoverImage(seoPost, baseUrl, db, attachmentCache)
+    ? await resolveCoverImage(seoPost, baseUrl, db, attachmentCache, cacheKv)
     : finalKind === "home" && homeListPosts && posts[0]
       ? posts[0].cover_image
       : undefined;
@@ -768,6 +822,7 @@ export async function buildThemeRenderContext(
 
   const localeSwitcher = await buildLocaleSwitcher(locale, route, finalKind, {
     archivePostType: isArchiveRoute ? archive.type : undefined,
+    kv: cacheKv,
   });
 
   return {
@@ -804,12 +859,12 @@ export async function buildThemeRenderContext(
     is_search: false,
     is_404,
     have_posts,
-    get_taxonomies: buildLocalizedGetTaxonomiesHandler(content, db, dbLocale),
-    get_taxonomies_locale: buildGetTaxonomiesLocaleHandler(content, db),
-    get_related_posts: buildGetRelatedPostsHandler(content, dbLocale, baseUrl),
-    get_taxonomy_posts: buildGetTaxonomyPostsHandler(content, dbLocale, baseUrl, db),
-    get_posts: buildGetPostsHandler(content, dbLocale, baseUrl),
-    get_posts_details: buildGetPostsDetailsHandler(content, dbLocale, baseUrl),
+    get_taxonomies: buildLocalizedGetTaxonomiesHandler(content, db, dbLocale, cacheKv),
+    get_taxonomies_locale: buildGetTaxonomiesLocaleHandler(content, db, cacheKv),
+    get_related_posts: buildGetRelatedPostsHandler(content, dbLocale, baseUrl, cacheKv),
+    get_taxonomy_posts: buildGetTaxonomyPostsHandler(content, dbLocale, baseUrl, db, cacheKv),
+    get_posts: buildGetPostsHandler(content, dbLocale, baseUrl, cacheKv),
+    get_posts_details: buildGetPostsDetailsHandler(content, dbLocale, baseUrl, cacheKv),
     get_author: buildGetAuthorHandler(content, dbLocale),
   };
 }

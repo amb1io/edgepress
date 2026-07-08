@@ -2,6 +2,7 @@ import type { ContentPostDetail } from "../services/edgepress-content.ts";
 import { getMediaById } from "../services/media-service.ts";
 import { parseMetaValues } from "../../utils/meta-parser.ts";
 import type { Database } from "../../shared/types/database.ts";
+import type { KVLike } from "../../utils/content-cache.ts";
 
 export function parsePostThumbnailId(metaValues: Record<string, unknown>): number | null {
   const raw = metaValues["post_thumbnail_id"];
@@ -64,6 +65,7 @@ export async function resolveCoverImage(
   baseUrl: string,
   db: Database,
   attachmentCache: CoverImageAttachmentCache,
+  kv?: KVLike | null,
 ): Promise<string | undefined> {
   const fromMedia = resolveCoverImageFromMedia(post, baseUrl);
   if (fromMedia) return fromMedia;
@@ -79,7 +81,7 @@ export async function resolveCoverImage(
     return attachmentCache.get(thumbId);
   }
 
-  const attachment = await getMediaById(db, thumbId);
+  const attachment = await getMediaById(db, thumbId, kv);
   if (!attachment) {
     attachmentCache.set(thumbId, undefined);
     return undefined;

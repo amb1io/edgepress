@@ -5,7 +5,7 @@ import { slugify } from "../../utils/slugify.ts";
 import { requireMinRole } from "../../utils/api-auth.ts";
 import { getString, getNumber } from "../../utils/form-data.ts";
 import { errorHtmlResponse, jsonResponse } from "../../utils/http-responses.ts";
-import { invalidateContentListByTable, invalidateI18nCache } from "../../utils/kv-cache-sync.ts";
+import { invalidateContentListByTable, invalidateI18nCache, invalidateTaxonomyCache, invalidateThemeContentCache } from "../../utils/kv-cache-sync.ts";
 import { invalidateTranslationsCache } from "../../i18n/translations.ts";
 import { persistTaxonomyTermTranslations } from "../../utils/taxonomy-translation-persist.ts";
 import { parseTaxonomySlugTranslationRows } from "../../utils/taxonomy-translation-form.ts";
@@ -84,6 +84,8 @@ export async function POST({
 
     await invalidateContentListByTable(locals, "taxonomies");
     await persistTaxonomyTermTranslations(db, formData, type, slug);
+    await invalidateTaxonomyCache(locals);
+    await invalidateThemeContentCache(locals);
     await invalidateI18nCache(locals);
     invalidateTranslationsCache();
 

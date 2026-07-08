@@ -4,7 +4,7 @@ import {
   createEdgepressContent,
 } from "../services/edgepress-content.ts";
 import { db } from "../../db/index.ts";
-import { getKvFromLocals } from "../../utils/runtime-locals.ts";
+import { getCacheKvFromLocals, getKvFromLocals } from "../../utils/runtime-locals.ts";
 import { adminUrlLocaleToDbCode } from "../../utils/admin-locale-constants.ts";
 import type { RouteKindResolverDeps } from "./resolve-route-kind.ts";
 import { resolveThemeRoute } from "./resolve-theme-route.ts";
@@ -19,6 +19,7 @@ export async function resolveThemeRouteForRequest(
   templateKeys: string[],
 ): Promise<ResolvedPublicRoute> {
   const kv = getKvFromLocals(locals);
+  const cacheKv = getCacheKvFromLocals(locals);
   const preLocale = pathname.startsWith("/en")
     ? "en"
     : pathname.startsWith("/es")
@@ -26,10 +27,11 @@ export async function resolveThemeRouteForRequest(
       : "pt-br";
   const dbLocale = adminUrlLocaleToDbCode(preLocale);
   const content = createEdgepressContent(locals, { baseUrl: "http://localhost" });
+  const taxonomyCache = { kv: cacheKv };
 
   const [archivablePostTypes, taxonomyTypes] = await Promise.all([
     getArchivablePostTypes(db, kv),
-    getExistingTaxonomyTypes(db),
+    getExistingTaxonomyTypes(db, cacheKv),
   ]);
 
   const deps: RouteKindResolverDeps = {
@@ -47,7 +49,13 @@ export async function resolveThemeRouteForRequest(
       }
     },
     resolveTaxonomyTerm: async (taxonomyType, termSlug) => {
-      const term = await getPublicTaxonomyTerm(db, taxonomyType, termSlug, dbLocale);
+      const term = await getPublicTaxonomyTerm(
+        db,
+        taxonomyType,
+        termSlug,
+        dbLocale,
+        taxonomyCache,
+      );
       if (!term) return null;
       return { slug: term.slug };
     },

@@ -26,6 +26,7 @@ import {
 } from "./services/theme-service.ts";
 import { upsertActiveThemeSetting } from "./services/settings-service.ts";
 import { ARCHIVABLE_POST_TYPES_KV_KEY } from "../core/theme/post-type-routes.ts";
+import { deleteCustomFieldsCache } from "./custom-fields-cache.ts";
 
 /** Deleta todas as chaves com o prefixo dado. Ignora erros de KV. */
 export async function deleteKvKeysByPrefix(kv: App.KVLike, prefix: string): Promise<void> {
@@ -123,8 +124,15 @@ export async function syncPostCache(
     // não falha a resposta da API por causa do cache
   }
 
+  try {
+    await deleteCustomFieldsCache(kv, postId);
+  } catch {
+    // ignora
+  }
+
   await invalidateContentListByTable(locals, "posts");
   await invalidateRelatedPostsCache(locals);
+  await invalidateThemeContentCache(locals);
   try {
     const [postRow] = await db
       .select({ post_type_id: posts.post_type_id })
@@ -139,6 +147,12 @@ export async function syncPostCache(
       .limit(1);
     if (typeRow?.slug === "themes") {
       await syncThemeCache(locals, db);
+    }
+    if (typeRow?.slug === "menus") {
+      await invalidateMenuCache(locals);
+    }
+    if (typeRow?.slug === "attachment") {
+      await invalidateMediaCache(locals, postId);
     }
   } catch {
     // ignora falha de sincronização de tema
@@ -168,6 +182,12 @@ export async function invalidatePostCache(
 
   try {
     await kv.delete?.(`post:id:${post.id}`);
+  } catch {
+    // ignora
+  }
+
+  try {
+    await deleteCustomFieldsCache(kv, post.id);
   } catch {
     // ignora
   }
@@ -203,6 +223,7 @@ export async function invalidatePostCache(
 
   await invalidateContentListByTable(locals, "posts");
   await invalidateRelatedPostsCache(locals);
+  await invalidateThemeContentCache(locals);
 
   try {
     const [typeRow] = await db
@@ -213,13 +234,19 @@ export async function invalidatePostCache(
     if (typeRow?.slug === "themes") {
       await invalidateThemeCache(locals);
     }
+    if (typeRow?.slug === "menus") {
+      await invalidateMenuCache(locals);
+    }
+    if (typeRow?.slug === "attachment") {
+      await invalidateMediaCache(locals, post.id);
+    }
   } catch {
     // ignora
   }
 }
 
 /**
- * Invalida todas as chaves de listagem de uma tabela (prefixo content:table:).
+ * Invalida listagens e/ou linhas em cache de uma tabela (content:{table}:* e content:row:{table}:*).
  */
 export async function invalidateContentListByTable(
   locals: App.Locals,
@@ -229,6 +256,22 @@ export async function invalidateContentListByTable(
   if (!kv) return;
   const prefix = `content:${table}:`;
   await deleteKvKeysByPrefix(kv, prefix);
+  await deleteKvKeysByPrefix(kv, `content:row:${table}:`);
+}
+
+/** Invalida uma linha específica do cache content:row:{table}:{id}. */
+export async function invalidateContentRowCache(
+  locals: App.Locals,
+  table: string,
+  id: number,
+): Promise<void> {
+  const kv = getKvFromLocals(locals);
+  if (!kv?.delete) return;
+  try {
+    await kv.delete(`content:row:${table}:${id}`);
+  } catch {
+    // ignora
+  }
 }
 
 /** Invalida cache de listas de posts relacionados (prefixo related:post:). */
@@ -367,4 +410,49 @@ export async function invalidateArchivablePostTypesCache(locals: App.Locals): Pr
   } catch {
     // ignora falha de delete
   }
+}
+
+/** Invalida cache de menus públicos (prefixo menu:). */
+export async function invalidateMenuCache(locals: App.Locals): Promise<void> {
+  const kv = getKvFromLocals(locals);
+  if (!kv) return;
+  await deleteKvKeysByPrefix(kv, "menu:");
+}
+
+/** Invalida todo o cache de taxonomia (prefixo taxonomy:). */
+export async function invalidateTaxonomyCache(locals: App.Locals): Promise<void> {
+  const kv = getKvFromLocals(locals);
+  if (!kv) return;
+  await deleteKvKeysByPrefix(kv, "taxonomy:");
+}
+
+/** Invalida apenas traduções de taxonomia cacheadas (prefixo taxonomy:i18n:). */
+export async function invalidateTaxonomyI18nCache(locals: App.Locals): Promise<void> {
+  const kv = getKvFromLocals(locals);
+  if (!kv) return;
+  await deleteKvKeysByPrefix(kv, "taxonomy:i18n:");
+}
+
+/** Invalida cache de mídia (media:id:{id} e listas media:list:). */
+export async function invalidateMediaCache(
+  locals: App.Locals,
+  mediaId?: number,
+): Promise<void> {
+  const kv = getKvFromLocals(locals);
+  if (!kv) return;
+  if (mediaId != null && Number.isFinite(mediaId) && mediaId > 0) {
+    try {
+      await kv.delete?.(`media:id:${mediaId}`);
+    } catch {
+      // ignora
+    }
+  }
+  await deleteKvKeysByPrefix(kv, "media:list:");
+}
+
+/** Invalida cache do gateway legado /api/theme-content (prefixo theme-content:). */
+export async function invalidateThemeContentCache(locals: App.Locals): Promise<void> {
+  const kv = getKvFromLocals(locals);
+  if (!kv) return;
+  await deleteKvKeysByPrefix(kv, "theme-content:");
 }

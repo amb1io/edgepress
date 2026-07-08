@@ -3,6 +3,14 @@ import { postTypes, posts, postsMedia } from "../../db/schema.ts";
 import type { Database } from "../../shared/types/database.ts";
 import type { Media, MediaMetadata, MediaWithMetadata } from "../../shared/types/media.ts";
 import { parseMetaValues } from "../../utils/meta-parser.ts";
+import type { KVLike } from "../../utils/content-cache.ts";
+import {
+  buildMediaListCacheKey,
+  getMediaFromCache,
+  getMediaListFromCache,
+  putMediaCache,
+  putMediaListCache,
+} from "../../utils/media-cache.ts";
 
 /**
  * Busca o ID do post_type 'attachment'
@@ -25,9 +33,17 @@ export async function getAttachmentTypeId(db: Database): Promise<number | null> 
  * @param mediaId - ID do attachment
  * @returns Media ou null se não encontrado
  */
-export async function getMediaById(db: Database, mediaId: number): Promise<Media | null> {
+export async function getMediaById(
+  db: Database,
+  mediaId: number,
+  kv?: KVLike | null,
+): Promise<Media | null> {
+  const cached = await getMediaFromCache(kv, mediaId);
+  if (cached !== undefined) return cached;
+
   const attachmentTypeId = await getAttachmentTypeId(db);
   if (!attachmentTypeId) {
+    await putMediaCache(kv, mediaId, null);
     return null;
   }
   
@@ -46,8 +62,10 @@ export async function getMediaById(db: Database, mediaId: number): Promise<Media
     .from(posts)
     .where(and(eq(posts.id, mediaId), eq(posts.post_type_id, attachmentTypeId)))
     .limit(1);
-  
-  return media as Media ?? null;
+
+  const result = (media as Media) ?? null;
+  await putMediaCache(kv, mediaId, result);
+  return result;
 }
 
 /**
@@ -242,8 +260,13 @@ export async function getMediaByMimeType(
 export async function getImageAttachments(
   db: Database,
   limit: number = 50,
-  search?: string
+  search?: string,
+  kv?: KVLike | null,
 ): Promise<Media[]> {
+  const listKey = buildMediaListCacheKey(limit, search);
+  const cached = await getMediaListFromCache(kv, listKey);
+  if (cached) return cached;
+
   const attachmentTypeId = await getAttachmentTypeId(db);
   if (!attachmentTypeId) {
     return [];
@@ -275,7 +298,11 @@ export async function getImageAttachments(
     .where(and(...conditions))
     .limit(limit);
 
-  return results as Media[];
+  const list = results as Media[];
+  if (list.length > 0) {
+    await putMediaListCache(kv, listKey, list);
+  }
+  return list;
 }
 
 /**

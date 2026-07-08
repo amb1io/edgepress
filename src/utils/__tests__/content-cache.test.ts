@@ -4,7 +4,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   getTableContentWithCache,
+  getRowContentWithCache,
   buildContentCacheKey,
+  buildContentRowCacheKey,
   type KVLike,
 } from "../content-cache.ts";
 import type { GetTableListResult } from "../list-table-dynamic.ts";
@@ -42,6 +44,12 @@ describe("buildContentCacheKey", () => {
   it("sanitizes invalid table name", () => {
     const key = buildContentCacheKey("invalid-table!", {});
     expect(key).toMatch(/^content:invalid:/);
+  });
+});
+
+describe("buildContentRowCacheKey", () => {
+  it("builds row key for table id", () => {
+    expect(buildContentRowCacheKey("taxonomies", 5)).toBe("content:row:taxonomies:5");
   });
 });
 
@@ -146,5 +154,44 @@ describe("getTableContentWithCache", () => {
 
     expect(result).toEqual(resultWithItems);
     expect(mockGetTableList).toHaveBeenCalled();
+  });
+});
+
+describe("getRowContentWithCache", () => {
+  const mockDb = {} as never;
+
+  it("returns cached row without calling fetchRow", async () => {
+    const cached = { id: 3, name: "News" };
+    const kv: KVLike = {
+      get: vi.fn().mockResolvedValue(cached),
+      put: vi.fn().mockResolvedValue(undefined),
+    };
+    const fetchRow = vi.fn();
+    const result = await getRowContentWithCache({
+      kv,
+      db: mockDb,
+      table: "taxonomies",
+      id: 3,
+      fetchRow,
+    });
+    expect(result).toEqual(cached);
+    expect(fetchRow).not.toHaveBeenCalled();
+  });
+
+  it("on miss fetches and stores row", async () => {
+    const row = { id: 3, name: "News" };
+    const kv: KVLike = {
+      get: vi.fn().mockResolvedValue(null),
+      put: vi.fn().mockResolvedValue(undefined),
+    };
+    const result = await getRowContentWithCache({
+      kv,
+      db: mockDb,
+      table: "taxonomies",
+      id: 3,
+      fetchRow: async () => row,
+    });
+    expect(result).toEqual(row);
+    expect(kv.put).toHaveBeenCalledWith("content:row:taxonomies:3", JSON.stringify(row));
   });
 });

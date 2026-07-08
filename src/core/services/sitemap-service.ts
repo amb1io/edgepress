@@ -1,7 +1,8 @@
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { posts, postTypes, seoMetadata } from "../../db/schema.ts";
 import type { Database } from "../../shared/types/database.ts";
-import { getSettingsFromDb } from "./settings-service.ts";
+import type { KVLike } from "../../utils/content-cache.ts";
+import { getSettingsWithCache } from "./settings-service.ts";
 
 export type SitemapEntry = {
   loc: string;
@@ -11,6 +12,11 @@ export type SitemapEntry = {
 export type SiteOriginEnvFallback = {
   siteUrl?: string;
   betterAuthUrl?: string;
+};
+
+export type SettingsCacheOptions = {
+  kv?: KVLike | null;
+  isAuthenticated?: boolean;
 };
 
 const PUBLIC_POST_TYPE_SLUGS = ["post", "page"] as const;
@@ -38,8 +44,13 @@ export function normalizeSiteOrigin(raw: string): string {
 export async function getSiteOrigin(
   db: Database,
   envFallback: SiteOriginEnvFallback = {},
+  cacheOptions: SettingsCacheOptions = {},
 ): Promise<string> {
-  const record = await getSettingsFromDb(db, { names: ["site_url"] });
+  const record = await getSettingsWithCache(db, {
+    namesParam: "site_url",
+    kv: cacheOptions.kv ?? null,
+    isAuthenticated: cacheOptions.isAuthenticated ?? false,
+  });
   const fromDb = normalizeSiteOrigin(record.site_url ?? "");
   if (fromDb) return fromDb;
 

@@ -8,7 +8,7 @@
 import { sql, eq, and, inArray } from "drizzle-orm";
 import { db } from "../../db/index.ts";
 import { posts, locales } from "../../db/schema.ts";
-import { getTableContentWithCache } from "../../utils/content-cache.ts";
+import { getTableContentWithCache, getRowContentWithCache } from "../../utils/content-cache.ts";
 import {
   getContentApiRuntime,
   getSafeTableName,
@@ -292,7 +292,7 @@ export async function getTableContentListResult(
     const postIds = result.items
       .map((item) => Number(item["id"]))
       .filter((id) => Number.isFinite(id) && id > 0);
-    const customFieldsByPost = await getPostsCustomFieldsBatch(db, postIds);
+    const customFieldsByPost = await getPostsCustomFieldsBatch(db, postIds, kv);
     result.items = result.items.map((item) => {
       const id = Number(item["id"]);
       return {
@@ -380,7 +380,7 @@ export async function getPostPayloadBySlug(
     throw new ContentNotFoundError("Post not found", { slug });
   }
 
-  const payload = await buildContentPostPayload(db, post, { baseUrl });
+  const payload = await buildContentPostPayload(db, post, { baseUrl, kv });
 
   if (kv) {
     try {
@@ -427,7 +427,7 @@ export async function getPostPayloadByTranslationKey(
     });
   }
 
-  const payload = await buildContentPostPayload(db, post, { baseUrl });
+  const payload = await buildContentPostPayload(db, post, { baseUrl, kv });
 
   if (kv) {
     try {
@@ -514,7 +514,7 @@ export async function getPostOrRowPayload(
       throw new ContentNotFoundError("Post not found", bySlug ? { slug: idOrSlug } : { id: idNum });
     }
 
-    const payload = await buildContentPostPayload(db, post, { baseUrl });
+    const payload = await buildContentPostPayload(db, post, { baseUrl, kv });
 
     if (kv) {
       try {
@@ -536,17 +536,25 @@ export async function getPostOrRowPayload(
     ? safeTable
     : prefixedTable(logicalTable);
   const quotedTable = `"${escapeIdentifier(physicalTable)}"`;
-  const rows = await db.all(sql.raw(`SELECT * FROM ${quotedTable} WHERE "id" = ${idNum} LIMIT 1`)) as Record<
-    string,
-    unknown
-  >[];
-  const row = rows?.[0];
+  const row = await getRowContentWithCache({
+    kv,
+    db,
+    table: logicalTable,
+    id: idNum,
+    fetchRow: async () => {
+      const rows = await db.all(sql.raw(`SELECT * FROM ${quotedTable} WHERE "id" = ${idNum} LIMIT 1`)) as Record<
+        string,
+        unknown
+      >[];
+      return rows?.[0] ?? null;
+    },
+  });
 
   if (!row || typeof row !== "object") {
     throw new ContentNotFoundError("Record not found", { table: safeTable, id: idNum });
   }
 
-  if ("meta_values" in row && row.meta_values != null) {
+  if ("meta_values" in row && row.meta_values != null && typeof row.meta_values === "string") {
     (row as Record<string, unknown>).meta_values = parseMetaValues(String(row.meta_values));
   }
 
