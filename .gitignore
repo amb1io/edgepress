@@ -25,6 +25,11 @@ src/generated/
 # Optional: TypeScript cache file
 *.tsbuildinfo
 
+# Client-specific migrations (never version control)
+migration/
+drizzle/seed/migrate-*.sql
+drizzle/seed/import-*-edgepress.sql
+
 # Editor/OS files
 .DS_Store
 .vscode-test
