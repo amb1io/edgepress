@@ -14,7 +14,7 @@ describe("media-cache", () => {
     expect(buildMediaListCacheKey(50, "Logo")).toBe("media:list:limit=50:search=logo");
   });
 
-  it("stores and reads media by id including null", async () => {
+  it("stores and reads media by id; skips negative cache", async () => {
     const store = new Map<string, string>();
     const kv = {
       get: vi.fn(async (key: string) => {
@@ -26,8 +26,11 @@ describe("media-cache", () => {
       }),
     };
     expect(await getMediaFromCache(kv, 1)).toBeUndefined();
+    store.set(buildMediaIdCacheKey(1), "null");
+    expect(await getMediaFromCache(kv, 1)).toBeUndefined();
+    store.delete(buildMediaIdCacheKey(1));
     await putMediaCache(kv, 1, null);
-    expect(await getMediaFromCache(kv, 1)).toBeNull();
+    expect(store.has(buildMediaIdCacheKey(1))).toBe(false);
   });
 
   it("stores media lists", async () => {

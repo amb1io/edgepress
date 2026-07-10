@@ -28,7 +28,8 @@ export async function getTaxonomyTermFromCache(
   if (!kv) return undefined;
   try {
     const cached = (await kv.get(key, "json")) as unknown;
-    if (cached === null) return null;
+    // Negative lookups were cached as null in older versions; treat as miss and re-query D1.
+    if (cached === null) return undefined;
     if (!cached || typeof cached !== "object") return undefined;
     const row = cached as Record<string, unknown>;
     return {
@@ -47,7 +48,7 @@ export async function putTaxonomyTermCache(
   key: string,
   term: TaxonomyTermRow | null,
 ): Promise<void> {
-  if (!kv) return;
+  if (!kv || term == null) return;
   try {
     await kv.put(key, JSON.stringify(term));
   } catch {
