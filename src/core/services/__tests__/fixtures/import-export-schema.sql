@@ -67,6 +67,8 @@ CREATE TABLE IF NOT EXISTS edp_settings (
   autoload INTEGER DEFAULT 1 NOT NULL
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS edp_settings_name_idx ON edp_settings (name);
+
 CREATE TABLE IF NOT EXISTS edp_posts (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
   post_type_id INTEGER NOT NULL REFERENCES edp_post_types(id) ON DELETE RESTRICT,

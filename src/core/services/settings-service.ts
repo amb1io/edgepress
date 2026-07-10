@@ -210,19 +210,31 @@ export async function createSetting(
   db: Database,
   payload: SettingCreatePayload
 ): Promise<{ id: number }> {
-  const [inserted] = await db
+  await db
     .insert(settingsTable)
     .values({
       name: payload.name,
       value: payload.value,
       autoload: payload.autoload ?? true,
     })
-    .returning({ id: settingsTable.id });
+    .onConflictDoUpdate({
+      target: settingsTable.name,
+      set: {
+        value: payload.value,
+        autoload: payload.autoload ?? true,
+      },
+    });
 
-  if (!inserted?.id) {
+  const [row] = await db
+    .select({ id: settingsTable.id })
+    .from(settingsTable)
+    .where(eq(settingsTable.name, payload.name))
+    .limit(1);
+
+  if (!row?.id) {
     throw new Error("Failed to create setting");
   }
-  return { id: inserted.id };
+  return { id: row.id };
 }
 
 /**

@@ -25,6 +25,7 @@ import {
   THEME_PKG_TAR_PREFIX,
   buildExport,
   buildExportFilename,
+  insertRowsInBatches,
   resolveImportTableOrder,
   restoreImport,
   sanitizeDatabasePayload,
@@ -410,6 +411,54 @@ describe("edgepress-archive integration", () => {
     expect(bucket.store.has("uploads/old/file.png")).toBe(false);
     expect(bucket.store.has("uploads/demo/photo.png")).toBe(true);
     expect([...bucket.store.keys()].every((key) => key.startsWith(MEDIA_PREFIX))).toBe(true);
+  });
+
+  it("insertRowsInBatches is idempotent for settings (upsert by name)", async () => {
+    const { db } = await createArchiveTestDb();
+    const rows = [
+      { id: 1, name: "default_posttype", value: "post", autoload: true },
+      { id: 2, name: "default_taxonomies", value: "category,tag", autoload: true },
+    ];
+
+    await insertRowsInBatches(db, "settings", rows);
+    await insertRowsInBatches(db, "settings", rows);
+
+    const allSettings = await db.select().from(settings).orderBy(settings.id);
+    expect(allSettings).toHaveLength(2);
+    expect(allSettings.map((row) => row.name).sort()).toEqual([
+      "default_posttype",
+      "default_taxonomies",
+    ]);
+  });
+
+  it("insertRowsInBatches is idempotent for post_types and posts on queue retry", async () => {
+    const { db } = await createArchiveTestDb();
+    const now = Date.now();
+
+    const postTypeRows = [
+      { id: 1, slug: "post", name: "Post", meta_schema: "[]", created_at: now, updated_at: now },
+    ];
+    const postRows = [
+      {
+        id: 10,
+        post_type_id: 1,
+        title: "Hello",
+        slug: "hello",
+        status: "published",
+        created_at: now,
+        updated_at: now,
+      },
+    ];
+
+    await insertRowsInBatches(db, "post_types", postTypeRows);
+    await insertRowsInBatches(db, "posts", postRows);
+    await insertRowsInBatches(db, "post_types", postTypeRows);
+    await insertRowsInBatches(db, "posts", postRows);
+
+    const postTypeCount = await db.select({ id: postTypes.id }).from(postTypes);
+    const postCount = await db.select({ id: posts.id }).from(posts);
+    expect(postTypeCount).toHaveLength(1);
+    expect(postCount).toHaveLength(1);
   });
 
   it("restoreImport replaces conflicting slugs after wipe (no upsert on slug)", async () => {

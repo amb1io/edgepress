@@ -1,4 +1,4 @@
-import { index, int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { int, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { indexName, tableName } from "../table-prefix.ts";
 
 /**
@@ -14,6 +14,6 @@ export const settings = sqliteTable(
     autoload: int("autoload", { mode: "boolean" }).notNull().default(true),
   },
   (table) => ({
-    nameIdx: index(indexName("settings_name_idx")).on(table.name),
+    nameIdx: uniqueIndex(indexName("settings_name_idx")).on(table.name),
   })
 );
