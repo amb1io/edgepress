@@ -61,21 +61,11 @@
     "db:studio": "drizzle-kit studio",
     "seed": "tsx scripts/seed-local.ts",
     "db:seed": "tsx scripts/seed-local.ts",
-    "theme:backfill-body": "tsx scripts/backfill-post-body-html.ts",
-    "db:backfill:search": "tsx scripts/backfill-post-search-index.ts",
-    "db:dedupe-locales": "tsx scripts/deduplicate-locales.ts",
     "db:seed:generate-sql": "tsx scripts/generate-seed-sql.ts",
-    "db:import:csv:generate-sql": "tsx scripts/generate-csv-import-sql.ts",
-    "db:import:csv:local": "tsx scripts/import-sql-local.ts drizzle/seed/import-edgepress-edgepress.sql",
-    "db:import:csv:remote": "wrangler d1 execute edgepress --remote --file=./drizzle/seed/import-edgepress-edgepress.sql -c wrangler.toml",
-    "db:import:csv:remote:dev": "wrangler d1 execute edgepress-1 --remote --file=./drizzle/seed/import-edgepress-edgepress.sql -c wrangler.toml",
-    "db:jobs-order:local": "tsx scripts/import-sql-local.ts drizzle/seed/migrate-jobs-order-pt-br.sql",
-    "db:jobs-order:remote": "wrangler d1 execute edgepress --remote --file=./drizzle/seed/migrate-jobs-order-pt-br.sql -c wrangler.toml",
     "db:seed:remote": "npm run db:seed:generate-sql && wrangler d1 execute edgepress --remote --file=./drizzle/seed/seed-remote.sql -c wrangler.toml",
     "db:seed:remote:dev": "npm run db:seed:generate-sql && wrangler d1 execute edgepress-1 --remote --file=./drizzle/seed/seed-remote.sql -c wrangler.toml",
     "warm-kv": "tsx scripts/warm-kv.ts",
-    "warm-kv:remote": "tsx scripts/warm-kv.ts --remote",
-    "migrate:blog:local": "tsx migration/blog-rhamses/scripts/run-migration.ts"
+    "warm-kv:remote": "tsx scripts/warm-kv.ts --remote"
   },
   "devDependencies": {
     "@astrojs/compiler-rs": "^0.1.6",
