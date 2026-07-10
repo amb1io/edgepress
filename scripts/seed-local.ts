@@ -1,8 +1,8 @@
 /**
  * Executa o seed no banco D1 local.
- * Uso: npm run db:seed
+ * Uso: npm run setup:local
  *
- * Requer que o banco local já exista (rode antes: npm run db:migrate:local).
+ * Requer que o banco local já exista (rode antes: npm run setup:local).
  * Usa o arquivo SQLite em .wrangler/state/v3/d1/ gerado pelo wrangler.
  */
 import { readdirSync } from "node:fs";
@@ -50,13 +50,9 @@ async function main(): Promise<void> {
     console.error(`
 ⚠️  Banco D1 local não encontrado em ${WRANGLER_STATE}
 
-Rode antes as migrações locais:
+Rode antes o setup local:
 
-  npm run db:migrate:local
-
-Depois execute o seed novamente:
-
-  npm run db:seed
+  npm run setup:local
 `);
     process.exit(1);
   }
