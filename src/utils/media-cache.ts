@@ -20,7 +20,8 @@ export async function getMediaFromCache(
   if (!kv) return undefined;
   try {
     const cached = (await kv.get(buildMediaIdCacheKey(mediaId), "json")) as unknown;
-    if (cached === null) return null;
+    // Negative lookups were cached as null in older versions; treat as miss and re-query D1.
+    if (cached === null) return undefined;
     if (!cached || typeof cached !== "object") return undefined;
     return cached as Media;
   } catch {
@@ -33,7 +34,7 @@ export async function putMediaCache(
   mediaId: number,
   media: Media | null,
 ): Promise<void> {
-  if (!kv) return;
+  if (!kv || media == null) return;
   try {
     await kv.put(buildMediaIdCacheKey(mediaId), JSON.stringify(media));
   } catch {

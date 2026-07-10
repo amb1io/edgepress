@@ -42,10 +42,7 @@ export async function getMediaById(
   if (cached !== undefined) return cached;
 
   const attachmentTypeId = await getAttachmentTypeId(db);
-  if (!attachmentTypeId) {
-    await putMediaCache(kv, mediaId, null);
-    return null;
-  }
+  if (!attachmentTypeId) return null;
   
   const [media] = await db
     .select({

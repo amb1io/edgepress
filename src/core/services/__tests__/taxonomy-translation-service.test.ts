@@ -43,6 +43,32 @@ describe("taxonomy-translation-service", () => {
     const term = await findTaxonomyByCanonicalSlug(db as never, "category", "tech");
     expect(term).toEqual({ id: 5, name: "Tech", slug: "tech", type: "category" });
   });
+
+  it("findTaxonomyByCanonicalSlug re-queries D1 when KV has stale null", async () => {
+    const store = new Map<string, string>();
+    const kv = {
+      get: vi.fn(async (key: string) => {
+        if (!store.has(key)) return undefined;
+        return JSON.parse(store.get(key)!);
+      }),
+      put: vi.fn(async (key: string, value: string) => {
+        store.set(key, value);
+      }),
+    };
+    store.set("taxonomy:term:category:diretores", "null");
+
+    const db = mockTaxonomyDb({
+      id: 8,
+      name: "Diretores",
+      slug: "diretores",
+      type: "category",
+    });
+
+    const term = await findTaxonomyByCanonicalSlug(db as never, "category", "diretores", {
+      kv,
+    });
+    expect(term?.slug).toBe("diretores");
+  });
 });
 
 describe("taxonomy-translation-form", () => {
