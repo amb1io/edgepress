@@ -272,39 +272,166 @@ const TABLE_READERS: Record<EdgepressLogicalTable, (db: Database) => Promise<Row
 
 const TABLE_INSERTERS: Record<EdgepressLogicalTable, RowInserter> = {
   post_types: async (db, rows) => {
-    if (rows.length) await db.insert(postTypes).values(rows as typeof postTypes.$inferInsert[]);
+    if (!rows.length) return;
+    await db
+      .insert(postTypes)
+      .values(rows as typeof postTypes.$inferInsert[])
+      .onConflictDoUpdate({
+        target: postTypes.slug,
+        set: {
+          name: sql`excluded.name`,
+          meta_schema: sql`excluded.meta_schema`,
+          created_at: sql`excluded.created_at`,
+          updated_at: sql`excluded.updated_at`,
+        },
+      });
   },
   user: async (db, rows) => {
-    if (rows.length) await db.insert(user).values(rows.map(normalizeUserImportRow));
+    if (!rows.length) return;
+    await db
+      .insert(user)
+      .values(rows.map(normalizeUserImportRow))
+      .onConflictDoUpdate({
+        target: user.id,
+        set: {
+          name: sql`excluded.name`,
+          email: sql`excluded.email`,
+          emailVerified: sql`excluded.email_verified`,
+          image: sql`excluded.image`,
+          description: sql`excluded.description`,
+          role: sql`excluded.role`,
+          createdAt: sql`excluded.created_at`,
+          updatedAt: sql`excluded.updated_at`,
+        },
+      });
   },
   account: async (db, rows) => {
-    if (rows.length) await db.insert(account).values(rows.map(normalizeAccountImportRow));
+    if (!rows.length) return;
+    await db
+      .insert(account)
+      .values(rows.map(normalizeAccountImportRow))
+      .onConflictDoUpdate({
+        target: account.id,
+        set: {
+          userId: sql`excluded.user_id`,
+          accountId: sql`excluded.account_id`,
+          providerId: sql`excluded.provider_id`,
+          accessToken: sql`excluded.access_token`,
+          refreshToken: sql`excluded.refresh_token`,
+          accessTokenExpiresAt: sql`excluded.access_token_expires_at`,
+          refreshTokenExpiresAt: sql`excluded.refresh_token_expires_at`,
+          scope: sql`excluded.scope`,
+          idToken: sql`excluded.id_token`,
+          password: sql`excluded.password`,
+          createdAt: sql`excluded.created_at`,
+          updatedAt: sql`excluded.updated_at`,
+        },
+      });
   },
   taxonomies: async (db, rows) => {
     if (!rows.length) return;
     // Insert with parent_id = null to avoid self-referential FK violations on D1.
     // A second pass in restoreImport will update parent_id after all rows are inserted.
     const nullified = rows.map((r) => ({ ...(r as typeof taxonomies.$inferInsert), parent_id: null }));
-    await db.insert(taxonomies).values(nullified);
+    await db
+      .insert(taxonomies)
+      .values(nullified)
+      .onConflictDoUpdate({
+        target: taxonomies.id,
+        set: {
+          name: sql`excluded.name`,
+          slug: sql`excluded.slug`,
+          description: sql`excluded.description`,
+          type: sql`excluded.type`,
+          parent_id: sql`excluded.parent_id`,
+          id_locale_code: sql`excluded.id_locale_code`,
+          created_at: sql`excluded.created_at`,
+          updated_at: sql`excluded.updated_at`,
+        },
+      });
   },
   settings: async (db, rows) => {
-    if (rows.length) await db.insert(settings).values(rows as typeof settings.$inferInsert[]);
+    if (!rows.length) return;
+    await db
+      .insert(settings)
+      .values(rows as typeof settings.$inferInsert[])
+      .onConflictDoUpdate({
+        target: settings.name,
+        set: {
+          value: sql`excluded.value`,
+          autoload: sql`excluded.autoload`,
+        },
+      });
   },
   posts: async (db, rows) => {
     if (!rows.length) return;
     // Insert with parent_id = null to avoid self-referential FK violations on D1.
     // A second pass in restoreImport will update parent_id after all rows are inserted.
     const nullified = rows.map((r) => ({ ...(r as typeof posts.$inferInsert), parent_id: null }));
-    await db.insert(posts).values(nullified);
+    await db
+      .insert(posts)
+      .values(nullified)
+      .onConflictDoUpdate({
+        target: posts.id,
+        set: {
+          post_type_id: sql`excluded.post_type_id`,
+          parent_id: sql`excluded.parent_id`,
+          author_id: sql`excluded.author_id`,
+          id_locale_code: sql`excluded.id_locale_code`,
+          title: sql`excluded.title`,
+          slug: sql`excluded.slug`,
+          excerpt: sql`excluded.excerpt`,
+          body: sql`excluded.body`,
+          body_blocks: sql`excluded.body_blocks`,
+          status: sql`excluded.status`,
+          meta_values: sql`excluded.meta_values`,
+          published_at: sql`excluded.published_at`,
+          created_at: sql`excluded.created_at`,
+          updated_at: sql`excluded.updated_at`,
+        },
+      });
   },
   seo_metadata: async (db, rows) => {
-    if (rows.length) await db.insert(seoMetadata).values(rows as typeof seoMetadata.$inferInsert[]);
+    if (!rows.length) return;
+    await db
+      .insert(seoMetadata)
+      .values(rows as typeof seoMetadata.$inferInsert[])
+      .onConflictDoUpdate({
+        target: seoMetadata.post_id,
+        set: {
+          seo_title: sql`excluded.seo_title`,
+          seo_description: sql`excluded.seo_description`,
+          seo_canonical: sql`excluded.seo_canonical`,
+          created_at: sql`excluded.created_at`,
+          updated_at: sql`excluded.updated_at`,
+        },
+      });
   },
   posts_taxonomies: async (db, rows) => {
-    if (rows.length) await db.insert(postsTaxonomies).values(rows as typeof postsTaxonomies.$inferInsert[]);
+    if (!rows.length) return;
+    await db
+      .insert(postsTaxonomies)
+      .values(rows as typeof postsTaxonomies.$inferInsert[])
+      .onConflictDoUpdate({
+        target: [postsTaxonomies.post_id, postsTaxonomies.term_id],
+        set: {
+          post_id: sql`excluded.post_id`,
+          term_id: sql`excluded.term_id`,
+        },
+      });
   },
   posts_media: async (db, rows) => {
-    if (rows.length) await db.insert(postsMedia).values(rows as typeof postsMedia.$inferInsert[]);
+    if (!rows.length) return;
+    await db
+      .insert(postsMedia)
+      .values(rows as typeof postsMedia.$inferInsert[])
+      .onConflictDoUpdate({
+        target: [postsMedia.post_id, postsMedia.media_id],
+        set: {
+          post_id: sql`excluded.post_id`,
+          media_id: sql`excluded.media_id`,
+        },
+      });
   },
 };
 
