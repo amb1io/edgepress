@@ -21,7 +21,7 @@ describe("taxonomy-cache", () => {
     expect(buildTaxonomyTypeOriginalCacheKey("category")).toBe("taxonomy:type-original:category");
   });
 
-  it("stores and reads taxonomy terms including null", async () => {
+  it("stores and reads taxonomy terms; skips negative cache", async () => {
     const store = new Map<string, string>();
     const kv = {
       get: vi.fn(async (key: string) => {
@@ -34,8 +34,11 @@ describe("taxonomy-cache", () => {
     };
     const key = buildTaxonomyTermCacheKey("category", "news");
     expect(await getTaxonomyTermFromCache(kv, key)).toBeUndefined();
+    store.set(key, "null");
+    expect(await getTaxonomyTermFromCache(kv, key)).toBeUndefined();
+    store.delete(key);
     await putTaxonomyTermCache(kv, key, null);
-    expect(await getTaxonomyTermFromCache(kv, key)).toBeNull();
+    expect(store.has(key)).toBe(false);
     await putTaxonomyTermCache(kv, key, {
       id: 1,
       name: "News",

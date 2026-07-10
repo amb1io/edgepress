@@ -58,10 +58,7 @@ export async function findTaxonomyByCanonicalSlug(
     .where(and(eq(taxonomies.type, type), eq(taxonomies.slug, canonical)))
     .limit(1);
 
-  if (!row) {
-    await putTaxonomyTermCache(options.kv, cacheKey, null);
-    return null;
-  }
+  if (!row) return null;
   const term = {
     id: row.id,
     name: String(row.name ?? ""),
