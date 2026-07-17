@@ -14,6 +14,8 @@ export type ThemeManifest = {
   home_content_key?: string;
   /** When true, home is a post listing (`posts`); when false/absent, home uses `home_content_key` as singular content */
   home_list_posts?: boolean;
+  /** Public locale for single-language sites (e.g. "en"). Default: "pt-br". */
+  default_locale?: string;
 };
 
 export type ThemePackageRecord = {

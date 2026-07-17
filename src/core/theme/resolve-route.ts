@@ -26,13 +26,19 @@ export function localeToHtmlLang(locale: string): string {
 
 export const PUBLIC_THEME_LOCALES = ["pt-br", "en"] as const;
 
-export function publicLocaleUrlPrefix(locale: string): string {
-  const normalized = normalizePublicLocale(locale);
-  return normalized === "pt-br" ? "" : `/${normalized}`;
+export function themeDefaultLocale(raw?: string | null): string {
+  return normalizePublicLocale(raw ?? "pt-br");
 }
 
-export function publicLocaleHomeUrl(locale: string): string {
-  const prefix = publicLocaleUrlPrefix(locale);
+export function publicLocaleUrlPrefix(locale: string, defaultLocale = "pt-br"): string {
+  const normalized = normalizePublicLocale(locale);
+  const defaultNormalized = themeDefaultLocale(defaultLocale);
+  if (normalized === defaultNormalized) return "";
+  return `/${normalized}`;
+}
+
+export function publicLocaleHomeUrl(locale: string, defaultLocale = "pt-br"): string {
+  const prefix = publicLocaleUrlPrefix(locale, defaultLocale);
   return prefix || "/";
 }
 
@@ -53,7 +59,10 @@ export type PreRoute = {
   matched: MatchedRoute | null;
 };
 
-function parsePathSegments(pathname: string): { locale: string; segments: string[]; path: string } {
+function parsePathSegments(
+  pathname: string,
+  defaultLocale = "pt-br",
+): { locale: string; segments: string[]; path: string } {
   let path = pathname.trim();
   if (!path.startsWith("/")) path = `/${path}`;
   if (path.length > 1 && path.endsWith("/")) {
@@ -61,7 +70,7 @@ function parsePathSegments(pathname: string): { locale: string; segments: string
   }
 
   const segments = path.split("/").filter(Boolean);
-  let locale = "pt-br";
+  let locale = themeDefaultLocale(defaultLocale);
   let rest = segments;
 
   if (segments.length > 0) {
@@ -80,8 +89,9 @@ export function resolvePreRoute(
   pathname: string,
   searchParams: URLSearchParams,
   templateKeys: string[],
+  defaultLocale = "pt-br",
 ): PreRoute {
-  const { locale, segments, path } = parsePathSegments(pathname);
+  const { locale, segments, path } = parsePathSegments(pathname, defaultLocale);
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
   const searchQuery = searchParams.get("q")?.trim() ?? "";
   const table = buildRouteTable(templateKeys);
@@ -101,8 +111,9 @@ export function resolvePublicRoute(
   pathname: string,
   searchParams: URLSearchParams,
   templateKeys: string[] = [],
+  defaultLocale = "pt-br",
 ): ResolvedPublicRoute {
-  const pre = resolvePreRoute(pathname, searchParams, templateKeys);
+  const pre = resolvePreRoute(pathname, searchParams, templateKeys, defaultLocale);
   if (!pre.matched) {
     return { kind: "404", locale: pre.locale, path: pre.path, page: pre.page, params: {} };
   }

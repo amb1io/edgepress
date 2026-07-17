@@ -8,8 +8,9 @@ export async function resolveThemeRoute(
   searchParams: URLSearchParams,
   templateKeys: string[],
   deps: RouteKindResolverDeps,
+  defaultLocale = "pt-br",
 ): Promise<ResolvedPublicRoute> {
-  const pre = resolvePreRoute(pathname, searchParams, templateKeys);
+  const pre = resolvePreRoute(pathname, searchParams, templateKeys, defaultLocale);
   const resolved = await resolveRouteKind(pre.matched, deps);
 
   let templateKey = resolved.templateKey;

@@ -56,6 +56,7 @@ export async function handlePublicThemeRequest(
     url.pathname,
     url.searchParams,
     Object.keys(pkg.templates),
+    pkg.manifest.default_locale,
   );
 
   if (!authenticated && isHtmlCacheableRouteKind(route.kind)) {
