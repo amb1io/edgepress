@@ -9,6 +9,9 @@ import {
   settings as settingsTable,
 } from "../db/schema.ts";
 import type { Database } from "./types/database.ts";
+import { flattenPostHierarchy } from "../core/services/post-hierarchy-list.ts";
+
+const HIERARCHICAL_LIST_TYPES = new Set(["post", "page"]);
 
 export type ListItem = {
   id: number;
@@ -92,6 +95,7 @@ export async function getListItems(
   params: GetListItemsParams = {},
 ): Promise<GetListItemsResult> {
   const typeSlug = params.type ?? "post";
+  const useHierarchy = HIERARCHICAL_LIST_TYPES.has(typeSlug);
   const status = params.status;
   const orderEntries: ListOrderEntry[] =
     params.orders && params.orders.length > 0
@@ -153,6 +157,16 @@ export async function getListItems(
   if (params.authorId) {
     conditions.push(eq(posts.author_id, params.authorId));
   }
+  if (filter.taxonomy_id && /^\d+$/.test(filter.taxonomy_id)) {
+    const termId = parseInt(filter.taxonomy_id, 10);
+    conditions.push(
+      sql`${posts.id} IN (
+        SELECT ${postsTaxonomies.post_id}
+        FROM ${postsTaxonomies}
+        WHERE ${postsTaxonomies.term_id} = ${termId}
+      )`,
+    );
+  }
 
   if (filter.categories) {
     const categoryPostIds = await db
@@ -201,6 +215,7 @@ export async function getListItems(
     .select({
       id: posts.id,
       title: posts.title,
+      parent_id: posts.parent_id,
       language: locales.language,
       order: sql<string>`COALESCE(CAST(json_extract(${posts.meta_values}, '$.order') AS TEXT), '')`,
       status: posts.status,
@@ -213,6 +228,74 @@ export async function getListItems(
     .leftJoin(user, eq(posts.author_id, user.id))
     .leftJoin(locales, eq(posts.id_locale_code, locales.id))
     .where(whereClause);
+
+  if (useHierarchy) {
+    const allRows = await baseQuery;
+    const flatRows = flattenPostHierarchy(
+      allRows.map((row) => ({
+        id: row.id,
+        title: row.title ?? "",
+        parent_id: row.parent_id ?? null,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      })),
+    );
+    const total = flatRows.length;
+    const pageRows = flatRows.slice(offset, offset + limit);
+    const postIds = pageRows.map((r) => r.id);
+    const rowById = new Map(allRows.map((row) => [row.id, row]));
+
+    const termRows =
+      postIds.length > 0
+        ? await db
+            .select({
+              post_id: postsTaxonomies.post_id,
+              name: taxonomies.name,
+              type: taxonomies.type,
+            })
+            .from(postsTaxonomies)
+            .innerJoin(taxonomies, eq(postsTaxonomies.term_id, taxonomies.id))
+            .where(inArray(postsTaxonomies.post_id, postIds))
+        : [];
+
+    const categoriesByPost: Record<number, string[]> = {};
+    const tagsByPost: Record<number, string[]> = {};
+    for (const id of postIds) {
+      categoriesByPost[id] = [];
+      tagsByPost[id] = [];
+    }
+    for (const row of termRows) {
+      if (row.type === "tag") {
+        tagsByPost[row.post_id]?.push(row.name ?? "");
+      } else {
+        categoriesByPost[row.post_id]?.push(row.name ?? "");
+      }
+    }
+
+    const items: ListItem[] = pageRows.map((flatRow) => {
+      const r = rowById.get(flatRow.id);
+      return {
+        id: flatRow.id,
+        title: flatRow.displayTitle,
+        language: r?.language ?? "",
+        order: r?.order ?? "",
+        categories: (categoriesByPost[flatRow.id] ?? []).join(", "),
+        tags: (tagsByPost[flatRow.id] ?? []).join(", "),
+        author: r?.author ?? "",
+        status: r?.status ?? null,
+        created_at: r?.created_at ?? null,
+        updated_at: r?.updated_at ?? null,
+      };
+    });
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+    };
+  }
 
   const [countResult] = await db
     .select({ count: sql<number>`count(*)` })

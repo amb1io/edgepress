@@ -34,6 +34,7 @@ export type ServerFetchAjaxOptions = {
   sortableColumnKeys: string[];
   columnIndexOffset: number;
   linkColumnKey: string;
+  columnLinkKeys?: Record<string, string>;
   actionTemplates: DataListActionTemplates | null;
   hasActions: boolean;
 };
@@ -55,12 +56,18 @@ function formatCellHtml(
   item: Record<string, unknown>,
   linkColumnKey: string,
   actionTemplates: DataListActionTemplates | null,
+  columnLinkKeys?: Record<string, string>,
 ): string {
   const raw = String(item[key] ?? "—");
   const escaped = escapeCell(raw);
   if (key === linkColumnKey && actionTemplates) {
     const href = expandTemplate(actionTemplates.editLinkTemplate, item);
     return `<a href="${href}" class="link link-hover text-blue-600">${escaped}</a>`;
+  }
+  const hrefKey = columnLinkKeys?.[key];
+  const href = hrefKey && item[hrefKey] ? String(item[hrefKey]) : "";
+  if (href) {
+    return `<a href="${escapeCell(href)}" class="link link-hover text-blue-600">${escaped}</a>`;
   }
   return escaped;
 }
@@ -176,7 +183,13 @@ export function createServerFetchAjax(
 
         const rows: string[][] = json.data.map((item) => {
           const cells = options.displayColumnKeys.map((key) =>
-            formatCellHtml(key, item, options.linkColumnKey, options.actionTemplates),
+            formatCellHtml(
+              key,
+              item,
+              options.linkColumnKey,
+              options.actionTemplates,
+              options.columnLinkKeys,
+            ),
           );
           if (options.hasActions && options.actionTemplates) {
             cells.push(

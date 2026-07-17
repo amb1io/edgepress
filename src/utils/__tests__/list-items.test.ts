@@ -83,6 +83,39 @@ describe("getListItems", () => {
     expect(pagesResult.items[0]?.title).toBe("About Page");
   });
 
+  it("filters by taxonomy_id", async () => {
+    const now = Date.now();
+    const [term] = await db
+      .insert(taxonomies)
+      .values({
+        name: "News Category",
+        slug: "news-category",
+        type: "category",
+        parent_id: null,
+        created_at: now,
+        updated_at: now,
+      })
+      .returning({ id: taxonomies.id });
+
+    await db.insert(postsTaxonomies).values([
+      { post_id: 1, term_id: term.id },
+      { post_id: 2, term_id: term.id },
+    ]);
+
+    const filtered = await getListItems(db, {
+      type: "post",
+      limit: 10,
+      page: 1,
+      filter: { taxonomy_id: String(term.id) },
+    });
+
+    expect(filtered.total).toBe(2);
+    expect(filtered.items.map((item) => item.title).sort()).toEqual([
+      "First Post",
+      "Second Post",
+    ]);
+  });
+
   it("filters by status", async () => {
     const published = await getListItems(db, { type: "post", status: "published", limit: 10, page: 1 });
     const draft = await getListItems(db, { type: "post", status: "draft", limit: 10, page: 1 });

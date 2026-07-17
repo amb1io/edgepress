@@ -70,10 +70,17 @@ const orders = parseDataListOrderParams(
 
 const sourceKind = await getSourceKind(db, type);
 const loadFromTable = sourceKind === "table";
+const useHierarchicalList = !loadFromTable && (type === "post" || type === "page");
 
 const authorId =
   isAuthorRole(roleId) && (currentUser as { id?: string })?.id
     ? (currentUser as { id: string }).id
+    : undefined;
+
+const filterTaxonomyId = Astro.url.searchParams.get("filter_taxonomy_id") ?? "";
+const listFilter =
+  filterTaxonomyId && /^\d+$/.test(filterTaxonomyId)
+    ? { taxonomy_id: filterTaxonomyId }
     : undefined;
 
 const listPage = await getAdminListPage(
@@ -85,6 +92,7 @@ const listPage = await getAdminListPage(
     orders,
     ...(status !== undefined && status !== "" ? { status } : {}),
     ...(authorId ? { authorId } : {}),
+    ...(listFilter ? { filter: listFilter } : {}),
   },
   locale,
 );
@@ -100,6 +108,19 @@ if (loadFromTable) {
     label: formatColumnLabel(col.key),
   }));
   deletePathTemplate = TABLE_DELETE_TEMPLATE[type] || "";
+} else if (useHierarchicalList) {
+  listColumns = [
+    { key: "title", label: t(locale, "admin.list.titleColumn"), sortable: false },
+    { key: "language", label: t(locale, "admin.list.language"), sortable: false },
+    { key: "order", label: t(locale, "admin.list.order"), sortable: false },
+    { key: "categories", label: t(locale, "admin.list.categories"), sortable: false },
+    { key: "tags", label: t(locale, "admin.list.tags"), sortable: false },
+    { key: "author", label: t(locale, "admin.list.author"), sortable: false },
+    { key: "status", label: t(locale, "admin.list.status"), sortable: false },
+    { key: "created_at", label: t(locale, "admin.list.createdAt"), sortable: false },
+    { key: "updated_at", label: t(locale, "admin.list.updatedAt"), sortable: false },
+  ];
+  deletePathTemplate = "/api/posts/{id}";
 } else {
   listColumns = [
     { key: "title", label: t(locale, "admin.list.titleColumn") },
@@ -168,6 +189,7 @@ const serverFetch = {
     type,
     locale,
     ...(status !== undefined && status !== "" ? { status } : {}),
+    ...(listFilter ? { filter: listFilter } : {}),
   },
 };
 ---
@@ -178,6 +200,7 @@ const serverFetch = {
       <DataList
       columns={listColumns}
       items={listItems}
+      ordering={!useHierarchicalList}
       emptyMessage={t(locale, "admin.list.noItems")}
       emptyColspan={listEmptyColspan}
       pageLength={listLimit}

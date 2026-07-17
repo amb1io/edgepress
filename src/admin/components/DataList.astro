@@ -100,6 +100,10 @@ interface Props {
   /** Paginação via POST (/api/admin/list) sem recarregar a página. */
   serverFetch?: DataListServerFetchConfig;
   actionTemplatesForFetch?: DataListActionTemplates;
+  /** Habilita ordenação por coluna no DataTables (default true). */
+  ordering?: boolean;
+  /** Coluna → campo do item com URL para renderizar link na célula. */
+  columnLinkKeys?: Record<string, string>;
 }
 
 const {
@@ -136,6 +140,8 @@ const {
   serverFetch,
   actionTemplatesForFetch,
   emptyColspan: emptyColspanProp,
+  ordering = true,
+  columnLinkKeys = {},
 } = Astro.props;
 
 const displayColumns = columns.filter((col) => col.key !== "id");
@@ -158,6 +164,7 @@ const dtConfig: DataListTableConfig = {
   emptyMessage,
   serverPagination: Boolean(pagination) && !serverFetch,
   serverBackedOrder,
+  ordering,
   ...(serverFetch ? { serverFetch } : {}),
   selectable,
   hasActions: Boolean(actionConfig),
@@ -202,6 +209,7 @@ const dtConfig: DataListTableConfig = {
     ? { limitUrlTemplate: toLimitUrlTemplate(pagination.buildLimitUrl) }
     : {}),
   ...(selectable && selectAllId ? { selectAllId } : {}),
+  ...(Object.keys(columnLinkKeys).length > 0 ? { columnLinkKeys } : {}),
 };
 
 function expandTemplate(
@@ -266,6 +274,11 @@ function expandTemplate(
             {displayColumns.map((col) => {
               const cellValue = String(item[col.key] ?? "—");
               const shouldLinkTitle = col.key === linkColumnKey && actionConfig;
+              const columnHrefKey = columnLinkKeys[col.key];
+              const columnHref =
+                columnHrefKey && item[columnHrefKey]
+                  ? String(item[columnHrefKey])
+                  : "";
 
               return (
                 <td>
@@ -274,6 +287,10 @@ function expandTemplate(
                       href={expandTemplate(actionConfig.editLinkTemplate, item)}
                       class="link link-hover text-blue-600"
                     >
+                      {cellValue}
+                    </a>
+                  ) : columnHref ? (
+                    <a href={columnHref} class="link link-hover text-blue-600">
                       {cellValue}
                     </a>
                   ) : (

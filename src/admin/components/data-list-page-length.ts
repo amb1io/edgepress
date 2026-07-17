@@ -32,6 +32,10 @@ export interface DataListTableConfig {
   serverFetch?: DataListServerFetchConfig;
   /** Ordenação feita no servidor (DataTables sincroniza via URL). */
   serverBackedOrder: boolean;
+  /** Habilita ordenação por coluna no DataTables (default true). */
+  ordering?: boolean;
+  /** Coluna → campo do item com URL para renderizar link na célula. */
+  columnLinkKeys?: Record<string, string>;
   selectable: boolean;
   hasActions: boolean;
   dataColumnCount: number;

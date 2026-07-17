@@ -1,0 +1,193 @@
+---
+/**
+ * Dropdown reutilizável para selecionar item pai (posts, taxonomias, etc.).
+ */
+export interface ParentItem {
+  id: number;
+  label: string;
+  sublabel?: string;
+}
+
+export interface Props {
+  items?: ParentItem[];
+  /** ID do item selecionado na UI (null = opção "sem pai"). */
+  selectedId?: number | null;
+  fieldName?: string;
+  /** Valor enviado no hidden quando "sem pai" está selecionado. */
+  noParentValue?: number | string | null;
+  searchPlaceholder?: string;
+  noParentLabel?: string;
+  selectPlaceholder?: string;
+  noResultsLabel?: string;
+  compact?: boolean;
+}
+
+const {
+  items = [],
+  selectedId = null,
+  fieldName = "parent_id",
+  noParentValue = "",
+  searchPlaceholder = "Buscar...",
+  noParentLabel = "Sem pai",
+  selectPlaceholder = "Selecione um pai",
+  noResultsLabel = "Nenhum item encontrado",
+  compact = false,
+} = Astro.props;
+
+const itemsJson = JSON.stringify(items);
+const initialSelectedId = selectedId ?? "";
+const noParentValueAttr =
+  noParentValue === null || noParentValue === undefined ? "" : String(noParentValue);
+const inputClass = compact
+  ? "input input-bordered input-sm w-full flex items-center cursor-pointer"
+  : "input input-bordered w-full flex items-center cursor-pointer";
+---
+
+<div
+  class="dropdown w-full parent-selector-dropdown-field"
+  data-items={itemsJson}
+  data-initial-selected-id={initialSelectedId}
+  data-no-parent-value={noParentValueAttr}
+  data-select-placeholder={selectPlaceholder}
+  :class="{ 'dropdown-open': dropdownOpen }"
+  x-on:click.outside="dropdownOpen = false"
+  x-data="parentSelectorDropdown"
+>
+  <input type="hidden" name={fieldName} :value="submittedValue" />
+  <label tabindex="0" class={inputClass} @click="toggleDropdown()">
+    <span x-show="selectedItem" class="flex-1 flex flex-col min-w-0 text-left">
+      <span class="truncate font-medium text-sm" x-text="selectedItem ? selectedItem.label : selectPlaceholder"></span>
+      <span
+        class="truncate text-xs text-base-content/60 font-mono"
+        x-text="selectedItem && selectedItem.sublabel ? selectedItem.sublabel : ''"
+        x-show="selectedItem && selectedItem.sublabel"
+      ></span>
+    </span>
+    <span x-show="!selectedItem" class="flex-1 text-base-content/50 text-sm">
+      {selectPlaceholder}
+    </span>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      class="h-5 w-5 shrink-0"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+    </svg>
+  </label>
+  <div
+    tabindex="0"
+    class="dropdown-content bg-base-100 rounded-box z-[9999] w-full border border-base-300 p-2 shadow-lg mt-1 max-h-96 overflow-y-auto"
+    x-show="dropdownOpen"
+    x-transition
+    @click.stop
+  >
+    <div class="w-full mb-2">
+      <input
+        type="text"
+        placeholder={searchPlaceholder}
+        class="input input-bordered input-sm w-full"
+        x-model="search"
+        @click.stop
+        @keydown.escape="dropdownOpen = false"
+      />
+    </div>
+    <div class="flex flex-col gap-1">
+      <a
+        href="#"
+        @click.prevent="clearSelection()"
+        class="rounded px-2 py-2 text-sm hover:bg-base-200 transition-colors text-base-content/70"
+      >
+        {noParentLabel}
+      </a>
+      <template x-for="item in filteredItems" :key="item.id">
+        <a
+          href="#"
+          @click.prevent="selectItem(item.id)"
+          class="flex flex-col gap-0.5 rounded px-2 py-2 hover:bg-base-200 transition-colors"
+        >
+          <span class="font-medium text-sm truncate" x-text="item.label"></span>
+          <span
+            class="text-xs text-base-content/60 font-mono truncate"
+            x-text="item.sublabel ?? ''"
+            x-show="item.sublabel"
+          ></span>
+        </a>
+      </template>
+    </div>
+    <div
+      x-show="filteredItems.length === 0 && search.trim() !== ''"
+      class="text-base-content/50 text-sm py-2 px-4 text-center"
+    >
+      {noResultsLabel}
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("alpine:init", () => {
+    const win = window as Window & { __parentSelectorDropdownRegistered?: boolean };
+    if (win.__parentSelectorDropdownRegistered) return;
+    win.__parentSelectorDropdownRegistered = true;
+
+    (window.Alpine as { data: (name: string, fn: () => unknown) => void }).data(
+      "parentSelectorDropdown",
+      () => ({
+        selectedItemId: null as number | null,
+        search: "",
+        dropdownOpen: false,
+        items: [] as { id: number; label: string; sublabel?: string }[],
+        noParentValue: "" as string,
+        selectPlaceholder: "Selecione um pai",
+        init() {
+          const el = (this as unknown as { $el: HTMLElement }).$el;
+          const raw = el.dataset["items"] ?? "[]";
+          try {
+            this.items = JSON.parse(raw);
+          } catch {
+            this.items = [];
+          }
+          this.noParentValue = el.dataset["noParentValue"] ?? "";
+          this.selectPlaceholder = el.dataset["selectPlaceholder"] ?? "Selecione um pai";
+          const initial = el.dataset["initialSelectedId"];
+          if (initial !== undefined && initial !== "") {
+            const n = parseInt(initial, 10);
+            this.selectedItemId = Number.isNaN(n) ? null : n;
+          }
+        },
+        get filteredItems() {
+          if (!this.search.trim()) return this.items;
+          const q = this.search.toLowerCase();
+          return this.items.filter(
+            (item) =>
+              item.label.toLowerCase().includes(q) ||
+              (item.sublabel ?? "").toLowerCase().includes(q),
+          );
+        },
+        get selectedItem() {
+          if (this.selectedItemId == null) return null;
+          return this.items.find((item) => item.id === this.selectedItemId) ?? null;
+        },
+        get submittedValue() {
+          if (this.selectedItemId == null) return this.noParentValue;
+          return String(this.selectedItemId);
+        },
+        selectItem(itemId: number) {
+          this.selectedItemId = itemId;
+          this.search = "";
+          this.dropdownOpen = false;
+        },
+        clearSelection() {
+          this.selectedItemId = null;
+          this.search = "";
+          this.dropdownOpen = false;
+        },
+        toggleDropdown() {
+          this.dropdownOpen = !this.dropdownOpen;
+        },
+      }),
+    );
+  });
+</script>

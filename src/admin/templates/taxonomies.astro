@@ -7,10 +7,12 @@
 import AdminTwoColumns from "../components/admin/AdminTwoColumns.astro";
 import TranslationLocalesCollapse from "../components/admin/TranslationLocalesCollapse.astro";
 import DataList from "../components/DataList.astro";
+import ParentSelectorDropdown from "../../components/ParentSelectorDropdown.astro";
 import { db } from "../../db/index.ts";
 import { settings, taxonomies, locales as localesTable } from "../../db/schema.ts";
-import { and, eq, isNull } from "drizzle-orm";
-import { getTaxonomyTypeRootId } from "../../core/services/taxonomy-service.ts";
+import { and, eq, isNull, isNotNull, ne } from "drizzle-orm";
+import { getTaxonomyTypeRootId, getPostCountsByTermIds, resolveListPostTypeForTaxonomy } from "../../core/services/taxonomy-service.ts";
+import { flattenTaxonomyHierarchy } from "../../core/services/taxonomy-hierarchy-list.ts";
 import { t, type Locale } from "../../i18n/index.ts";
 import type { MenuItem } from "../../utils/menu.ts";
 import { resolveSiteTranslationLocales } from "../../utils/admin-locales.ts";
@@ -116,33 +118,68 @@ const taxonomyRows = isAllScope
         name: taxonomies.name,
         slug: taxonomies.slug,
         type: taxonomies.type,
+        parent_id: taxonomies.parent_id,
         language: localesTable.language,
       })
       .from(taxonomies)
       .leftJoin(localesTable, eq(taxonomies.id_locale_code, localesTable.id))
       .where(isNull(taxonomies.parent_id))
       .orderBy(taxonomies.type, taxonomies.name)
-  : type && parentId != null
+  : type
     ? await db
         .select({
           id: taxonomies.id,
           name: taxonomies.name,
           slug: taxonomies.slug,
           type: taxonomies.type,
+          parent_id: taxonomies.parent_id,
+          created_at: taxonomies.created_at,
+          updated_at: taxonomies.updated_at,
           language: localesTable.language,
         })
         .from(taxonomies)
         .leftJoin(localesTable, eq(taxonomies.id_locale_code, localesTable.id))
-        .where(and(eq(taxonomies.type, type), eq(taxonomies.parent_id, parentId)))
-        .orderBy(taxonomies.name)
+        .where(and(eq(taxonomies.type, type), isNotNull(taxonomies.parent_id)))
     : [];
 
-const columns = [
-  { key: "name", label: t(currentLocale, "admin.taxonomy.formName") },
-  { key: "slug", label: t(currentLocale, "admin.taxonomy.formSlug") },
-  { key: "type", label: t(currentLocale, "admin.taxonomy.typeColumn") },
-  { key: "language", label: t(currentLocale, "admin.content.language") },
-];
+const parentTaxonomyOptions =
+  !isAllScope && type && parentId != null
+    ? (
+        await db
+          .select({
+            id: taxonomies.id,
+            name: taxonomies.name,
+            slug: taxonomies.slug,
+          })
+          .from(taxonomies)
+          .where(
+            and(
+              eq(taxonomies.type, type),
+              isNotNull(taxonomies.parent_id),
+              editTaxonomy ? ne(taxonomies.id, editTaxonomy.id) : undefined,
+            ),
+          )
+          .orderBy(taxonomies.name)
+      ).map((row) => ({
+        id: row.id,
+        label: row.name,
+        sublabel: row.slug,
+      }))
+    : [];
+
+const columns = isAllScope
+  ? [
+      { key: "name", label: t(currentLocale, "admin.taxonomy.formName") },
+      { key: "slug", label: t(currentLocale, "admin.taxonomy.formSlug") },
+      { key: "type", label: t(currentLocale, "admin.taxonomy.typeColumn") },
+      { key: "language", label: t(currentLocale, "admin.content.language") },
+    ]
+  : [
+      { key: "name", label: t(currentLocale, "admin.taxonomy.formName"), sortable: false },
+      { key: "slug", label: t(currentLocale, "admin.taxonomy.formSlug"), sortable: false },
+      { key: "posts_count", label: t(currentLocale, "admin.taxonomy.postsCount"), sortable: false },
+      { key: "language", label: t(currentLocale, "admin.content.language"), sortable: false },
+    ];
 
 const baseUrl = isAllScope
   ? `/admin/${locale}/${slug}?domain=${domain}&scope=all`
@@ -155,6 +192,13 @@ const initialSlug = editTaxonomy?.slug ?? "";
 const initialDescription = editTaxonomy?.description ?? "";
 const initialType = editTaxonomy?.type ?? type;
 const initialParentId = editTaxonomy?.parent_id ?? parentId ?? null;
+const initialSelectedParentId =
+  editTaxonomy &&
+  editTaxonomy.parent_id != null &&
+  parentId != null &&
+  editTaxonomy.parent_id !== parentId
+    ? editTaxonomy.parent_id
+    : null;
 const deleteConfirmText = isAllScope
   ? t(currentLocale, "admin.taxonomy.deleteConfirmCascade")
   : t(locale, "admin.list.deleteConfirm");
@@ -173,13 +217,42 @@ if (editTaxonomy?.slug) {
   );
 }
 
-const taxonomyItems = taxonomyRows.map((r) => ({
-  id: r.id,
-  name: r.name,
-  slug: r.slug,
-  type: taxonomyTypeDisplayLabel(currentLocale, r.type),
-  language: r.language ?? "—",
-}));
+const flatTaxonomyRows =
+  !isAllScope && parentId != null
+    ? flattenTaxonomyHierarchy(taxonomyRows, parentId)
+    : [];
+
+const listPostTypeSlug =
+  !isAllScope && type ? await resolveListPostTypeForTaxonomy(db, type) : "post";
+
+const postCountsByTermId =
+  !isAllScope && flatTaxonomyRows.length > 0
+    ? await getPostCountsByTermIds(
+        db,
+        flatTaxonomyRows.map((row) => row.id),
+      )
+    : new Map<number, number>();
+
+const taxonomyItems = isAllScope
+  ? taxonomyRows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      slug: r.slug,
+      type: taxonomyTypeDisplayLabel(currentLocale, r.type),
+      language: r.language ?? "—",
+    }))
+  : flatTaxonomyRows.map((r) => {
+      const count = postCountsByTermId.get(r.id) ?? 0;
+      const postsListUrl = `/admin/${locale}/list?type=${encodeURIComponent(listPostTypeSlug)}&filter_taxonomy_id=${r.id}`;
+      return {
+        id: r.id,
+        name: r.displayName,
+        slug: r.slug,
+        posts_count: String(count),
+        posts_list_url: count > 0 ? postsListUrl : "",
+        language: r.language ?? "—",
+      };
+    });
 
 const emptyColspan = columns.length + 1;
 ---
@@ -305,7 +378,26 @@ const emptyColspan = columns.length + 1;
           ) : (
             <>
               <input type="hidden" name="type" value={type} />
-              {parentId != null && <input type="hidden" name="parent_id" value={parentId} />}
+              {parentId != null && (
+                <div class="form-control">
+                  <label class="label py-0">
+                    <span class="label-text">{t(currentLocale, "admin.taxonomy.parent")}</span>
+                  </label>
+                  <ParentSelectorDropdown
+                    items={parentTaxonomyOptions}
+                    selectedId={initialSelectedParentId}
+                    fieldName="parent_id"
+                    noParentValue={parentId}
+                    compact
+                    searchPlaceholder={t(currentLocale, "admin.taxonomy.parentSearch")}
+                    noParentLabel={t(currentLocale, "admin.taxonomy.noParent")}
+                    selectPlaceholder={t(currentLocale, "admin.taxonomy.parentSelect")}
+                  />
+                  <p class="text-xs text-base-content/50 mt-1">
+                    {t(currentLocale, "admin.taxonomy.parentHint")}
+                  </p>
+                </div>
+              )}
             </>
           )
         }
@@ -396,6 +488,8 @@ const emptyColspan = columns.length + 1;
         columns={columns}
         items={taxonomyItems}
         linkColumnKey="name"
+        ordering={isAllScope}
+        columnLinkKeys={!isAllScope ? { posts_count: "posts_list_url" } : undefined}
         emptyMessage={t(currentLocale, "admin.list.noItems")}
         emptyColspan={emptyColspan}
         pageLength={datalistPageLength}
@@ -421,88 +515,16 @@ const emptyColspan = columns.length + 1;
 
 <script is:inline>
   (function () {
-    function escapeHtml(s) {
-      if (s == null) return "—";
-      const t = String(s);
-      return t
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-    }
-
-    function resetTaxonomyForm() {
-      window.dispatchEvent(new CustomEvent("taxonomy-form-reset"));
-    }
-
     window.addEventListener("taxonomy-added", function (ev) {
       const d = ev.detail;
       if (!d || typeof d.id === "undefined") return;
-
-      const wrapper = document.getElementById("taxonomy-list-wrapper");
-      const dl = window.edgepressDataList;
-      if (!wrapper || !dl) return;
-
-      const editLink =
-        wrapper.getAttribute("data-edit-link-template")?.replace("{id}", String(d.id)) ?? "#";
-      const deletePath =
-        wrapper.getAttribute("data-delete-path-template")?.replace("{id}", String(d.id)) ?? "#";
-
-      const isAll = wrapper.getAttribute("data-all-scope") === "true";
-      const rowCells = isAll
-        ? [
-            escapeHtml(d.name),
-            escapeHtml(d.slug),
-            escapeHtml(d.typeLabel ?? d.type),
-            escapeHtml(d.language),
-          ]
-        : [
-            escapeHtml(d.name),
-            escapeHtml(d.slug),
-            escapeHtml(d.type),
-            escapeHtml(d.language),
-          ];
-
-      dl.addDataListRow(wrapper, rowCells,
-        dl.buildDataListActionsHtml({
-          editLink,
-          deletePath,
-          deleteConfirm: wrapper.getAttribute("data-delete-confirm") ?? "",
-          editLabel: wrapper.getAttribute("data-edit-label") ?? "Editar",
-          deleteLabel: wrapper.getAttribute("data-delete-label") ?? "Deletar",
-          actionsLabel: wrapper.getAttribute("data-actions-label") ?? "Actions",
-        }),
-      );
-
-      const form = document.querySelector("form.taxonomy-form");
-      if (form instanceof HTMLFormElement) resetTaxonomyForm();
+      window.location.reload();
     });
 
     window.addEventListener("taxonomy-updated", function (ev) {
       const d = ev.detail;
       if (!d || typeof d.id === "undefined") return;
-
-      const wrapper = document.getElementById("taxonomy-list-wrapper");
-      const dl = window.edgepressDataList;
-      if (!wrapper || !dl) return;
-
-      const isAll = wrapper.getAttribute("data-all-scope") === "true";
-      const rowCells = isAll
-        ? [
-            d.name ?? "—",
-            d.slug ?? "—",
-            d.typeLabel ?? d.type ?? "—",
-            d.language ?? "—",
-          ]
-        : [d.name ?? "—", d.slug ?? "—", d.type ?? "—", d.language ?? "—"];
-
-      dl.updateDataListRowByEditId(wrapper, d.id, rowCells);
-
-      const form = document.querySelector("form.taxonomy-form");
-      if (window.history && window.history.replaceState) {
-        const baseUrl = form?.getAttribute("data-base-url") ?? "";
-        if (baseUrl) window.history.replaceState(null, "", baseUrl);
-      }
+      window.location.reload();
     });
   })();
 </script>
