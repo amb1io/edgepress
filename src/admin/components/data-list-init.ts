@@ -148,6 +148,7 @@ export async function initDataListTable(
           sortableColumnKeys: config.sortableColumnKeys ?? [],
           columnIndexOffset: config.selectable ? 1 : 0,
           linkColumnKey: table.dataset.linkColumnKey ?? "title",
+          columnLinkKeys: config.columnLinkKeys,
           actionTemplates,
           hasActions: Boolean(config.hasActions),
         };
@@ -157,7 +158,7 @@ export async function initDataListTable(
   const dt = new DataTable(table, {
     paging: showTableChrome,
     searching: true,
-    ordering: orderingEnabled,
+    ordering: config.ordering !== false && orderingEnabled,
     orderMulti: true,
     info: showTableChrome,
     lengthChange: true,

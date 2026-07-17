@@ -25,6 +25,7 @@ import {
   normalizePublicLocale,
   publicLocaleHomeUrl,
   publicLocaleUrlPrefix,
+  themeDefaultLocale,
 } from "./resolve-route.ts";
 import { buildLocaleSwitcher } from "./locale-switcher.ts";
 import { filterPublicThemeListPosts, isPublicThemeListPost } from "./post-filters.ts";
@@ -370,10 +371,11 @@ export async function buildThemeRenderContext(
 
   const siteName = String(settings["site_name"] ?? "").trim() || "Site";
   const siteDescription = String(settings["site_description"] ?? "").trim();
+  const defaultLocale = themeDefaultLocale(pkg.manifest.default_locale);
   const locale = normalizePublicLocale(route.locale);
   const dbLocale = adminUrlLocaleToDbCode(locale);
-  const localePrefix = publicLocaleUrlPrefix(locale);
-  const homeUrl = publicLocaleHomeUrl(locale);
+  const localePrefix = publicLocaleUrlPrefix(locale, defaultLocale);
+  const homeUrl = publicLocaleHomeUrl(locale, defaultLocale);
   const assetBase = `${baseUrl}/themes-assets/${pkg.manifest.slug}`;
   const themeSupports = pkg.manifest.supports ?? [];
   const homeContentKey = pkg.manifest.home_content_key ?? "hello-world";

@@ -8,6 +8,7 @@ import { getCacheKvFromLocals, getKvFromLocals } from "../../utils/runtime-local
 import { adminUrlLocaleToDbCode } from "../../utils/admin-locale-constants.ts";
 import type { RouteKindResolverDeps } from "./resolve-route-kind.ts";
 import { resolveThemeRoute } from "./resolve-theme-route.ts";
+import { resolvePreRoute, themeDefaultLocale } from "./resolve-route.ts";
 import { getArchivablePostTypes } from "./post-type-routes.ts";
 import { getExistingTaxonomyTypes, getPublicTaxonomyTerm } from "./taxonomy-routes.ts";
 import type { ResolvedPublicRoute } from "./types.ts";
@@ -17,15 +18,13 @@ export async function resolveThemeRouteForRequest(
   pathname: string,
   searchParams: URLSearchParams,
   templateKeys: string[],
+  defaultLocale = "pt-br",
 ): Promise<ResolvedPublicRoute> {
   const kv = getKvFromLocals(locals);
   const cacheKv = getCacheKvFromLocals(locals);
-  const preLocale = pathname.startsWith("/en")
-    ? "en"
-    : pathname.startsWith("/es")
-      ? "es"
-      : "pt-br";
-  const dbLocale = adminUrlLocaleToDbCode(preLocale);
+  const normalizedDefault = themeDefaultLocale(defaultLocale);
+  const pre = resolvePreRoute(pathname, searchParams, templateKeys, normalizedDefault);
+  const dbLocale = adminUrlLocaleToDbCode(pre.locale);
   const content = createEdgepressContent(locals, { baseUrl: "http://localhost" });
   const taxonomyCache = { kv: cacheKv };
 
@@ -61,5 +60,5 @@ export async function resolveThemeRouteForRequest(
     },
   };
 
-  return resolveThemeRoute(pathname, searchParams, templateKeys, deps);
+  return resolveThemeRoute(pathname, searchParams, templateKeys, deps, normalizedDefault);
 }

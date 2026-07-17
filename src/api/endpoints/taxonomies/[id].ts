@@ -127,11 +127,13 @@ async function handleTaxonomyUpdate(
     let parent_name = "—";
     if (parent_id != null) {
       const [parentRow] = await db
-        .select({ name: taxonomies.name })
+        .select({ name: taxonomies.name, parent_id: taxonomies.parent_id })
         .from(taxonomies)
         .where(eq(taxonomies.id, parent_id))
         .limit(1);
-      if (parentRow?.name) parent_name = parentRow.name;
+      if (parentRow?.name && parentRow.parent_id != null) {
+        parent_name = parentRow.name;
+      }
     }
 
     return jsonResponse(

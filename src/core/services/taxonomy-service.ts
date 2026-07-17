@@ -1,7 +1,9 @@
-import { eq, and, like, inArray, or, isNull, ne, sql, desc } from "drizzle-orm";
+import { eq, and, like, inArray, or, isNull, ne, sql, desc, notInArray } from "drizzle-orm";
 import { taxonomies, postsTaxonomies, posts, postTypes, locales } from "../../db/schema.ts";
 import type { Database } from "../../shared/types/database.ts";
 import type { Taxonomy, TaxonomyCreatePayload, TaxonomyUpdatePayload } from "../../shared/types/taxonomy.ts";
+import { getMetaSchemaTaxonomyTypes } from "../../utils/meta-parser.ts";
+import { MENU_SEARCH_EXCLUDED_POST_TYPE_SLUGS } from "./menu-items-service.ts";
 
 /**
  * Cria uma nova taxonomia
@@ -338,4 +340,63 @@ export async function getTaxonomyTypeRootId(
     .returning({ id: taxonomies.id });
 
   return inserted?.id ?? null;
+}
+
+/**
+ * Contagem de posts por termo (exclui posts na lixeira).
+ */
+export async function getPostCountsByTermIds(
+  db: Database,
+  termIds: number[],
+): Promise<Map<number, number>> {
+  const counts = new Map<number, number>();
+  if (termIds.length === 0) return counts;
+
+  const rows = await db
+    .select({
+      term_id: postsTaxonomies.term_id,
+      count: sql<number>`count(*)`.mapWith(Number),
+    })
+    .from(postsTaxonomies)
+    .innerJoin(posts, eq(postsTaxonomies.post_id, posts.id))
+    .where(and(inArray(postsTaxonomies.term_id, termIds), ne(posts.status, "trash")))
+    .groupBy(postsTaxonomies.term_id);
+
+  for (const row of rows) {
+    counts.set(row.term_id, row.count);
+  }
+  return counts;
+}
+
+/**
+ * Resolve o post type da listagem admin para filtrar posts de uma taxonomia.
+ */
+export async function resolveListPostTypeForTaxonomy(
+  db: Database,
+  taxonomyType: string,
+): Promise<string> {
+  const type = taxonomyType.trim();
+  if (!type) return "post";
+
+  const rows = await db
+    .select({ slug: postTypes.slug, meta_schema: postTypes.meta_schema })
+    .from(postTypes)
+    .where(notInArray(postTypes.slug, [...MENU_SEARCH_EXCLUDED_POST_TYPE_SLUGS]));
+
+  for (const row of rows) {
+    let metaSchema: unknown = row.meta_schema;
+    if (typeof metaSchema === "string") {
+      try {
+        metaSchema = JSON.parse(metaSchema) as unknown;
+      } catch {
+        continue;
+      }
+    }
+    const taxonomyTypes = getMetaSchemaTaxonomyTypes(metaSchema);
+    if (taxonomyTypes.includes(type)) {
+      return row.slug;
+    }
+  }
+
+  return "post";
 }
